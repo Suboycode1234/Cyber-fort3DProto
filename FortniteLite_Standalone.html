@@ -209,8 +209,11 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                         <span class="label" style="font-size:10px;">YOUR LOBBY IDENTIFIER:</span>
                         <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Connecting...</span>
                     </div>
-                    <label class="section-label">Callsign</label>
-                    <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="margin-bottom:15px;" maxlength="12">
+                    <label class="section-label">Callsign / Profile Name</label>
+                    <div style="display:flex; gap:10px; margin-bottom:15px;">
+                        <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="flex:1;" maxlength="12">
+                        <button id="btn-profile-auth" class="deploy-btn" style="padding:0 15px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa;">LOAD / SAVE</button>
+                    </div>
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select">
                         <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
@@ -258,8 +261,8 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                 <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[C]</span> Crouch<br>
+                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint (Toggle) &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[C]</span> Crouch (Toggle)<br>
                     <span style="color:#00f3ff;">[E]</span> Ability (Uses NRG) &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[V]</span> Change POV &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[R]</span> Wallrun &nbsp;&bull;&nbsp; 
@@ -540,6 +543,7 @@ const WEAPON_STATS = {
 };
 
 let myInventory = ['default', null, null, null, null];
+let myOwnedWeapons = ['default'];
 let currentSlot = 0;
 let flatDamageBonus = 0;
 let flatFireRateBonus = 0;
@@ -548,6 +552,30 @@ let myCoinSteal = false;
 let fireCooldown = 0;
 let myKills = 0, myDeaths = 0, lastHitBy = null;
 let adminSelectedPeer = null;
+
+function saveProfile() {
+    const un = myUsername.trim();
+    if(!un || un.startsWith("Player_")) return;
+    const data = { coins: myCoins, kills: myKills, deaths: myDeaths, weapons: myOwnedWeapons };
+    localStorage.setItem('cyberfort_profile_' + un, JSON.stringify(data));
+}
+
+function loadProfile(un) {
+    const data = localStorage.getItem('cyberfort_profile_' + un);
+    if(data) {
+        try {
+            const p = JSON.parse(data);
+            myCoins = p.coins || 0;
+            myKills = p.kills || 0;
+            myDeaths = p.deaths || 0;
+            if(p.weapons) myOwnedWeapons = p.weapons;
+            updateUI();
+            alert('Profile Loaded: ' + un + '\nCoins: ' + myCoins);
+        } catch(e) {}
+    } else {
+        alert('New Profile Created: ' + un);
+    }
+}
 
 function formatTime(ms) { const s = Math.floor(ms/1000); const m = Math.floor(s/60); return `${m}m ${s%60}s`; }
 function adminLog(msg) {
@@ -680,6 +708,17 @@ function init() {
         if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } else { if(!controls.isLocked) controls.lock(); } 
         applyClass(document.getElementById('player-class').value); connectTo(targetId);
     });
+    
+    if(document.getElementById('btn-profile-auth')) {
+        document.getElementById('btn-profile-auth').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const un = document.getElementById('my-username').value.trim();
+            if(!un) { alert("Please enter a Callsign to load/save."); return; }
+            myUsername = un;
+            loadProfile(un);
+        });
+    }
     
     document.getElementById('btn-host').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -862,6 +901,7 @@ function generateCards() {
 
 function die() {
     myDeaths++;
+    saveProfile();
     connections.forEach(conn => { if(conn.open) conn.send({ type: 'killed', victim: myId, killer: lastHitBy }); });
     lastHitBy = null;
     if(!isMobileDeploy) controls.unlock();
@@ -988,22 +1028,36 @@ function setupUIEvents() {
     
     document.querySelectorAll('.buy-btn').forEach(btn => {
         btn.onclick = (e) => {
-            const cost = parseInt(e.currentTarget.getAttribute('data-cost')); const type = e.currentTarget.getAttribute('data-type');
+            const btnEl = e.currentTarget;
+            const cost = parseInt(btnEl.getAttribute('data-cost')); 
+            const type = btnEl.getAttribute('data-type');
+            
+            if (type === 'weapon') {
+                const wid = btnEl.getAttribute('data-id');
+                if (myOwnedWeapons.includes(wid)) {
+                    let slotIdx = myInventory.indexOf(null);
+                    if(slotIdx === -1) slotIdx = currentSlot;
+                    myInventory[slotIdx] = wid;
+                    updateHotbarUI(); window.equipSlot(slotIdx);
+                    return; 
+                }
+            }
+
             if(myCoins >= cost || isNaN(cost)) {
                 if(!isNaN(cost)) myCoins -= cost;
+                
                 if(type === 'card') { 
-                    const rankStr = e.currentTarget.getAttribute('data-rank');
+                    const rankStr = btnEl.getAttribute('data-rank');
                     let pool = (!rankStr || rankStr === 'Random') ? availableCards : availableCards.filter(c => c.rank === rankStr);
                     if(pool.length === 0) pool = availableCards;
                     const c = pool[Math.floor(Math.random() * pool.length)]; 
                     c.apply(); 
-                    if (rankStr === 'Random' || !rankStr) {
-                        alert(`CARD UNLOCKED: ${c.name}\nRank: ${c.rank}\n\n${c.desc}`);
-                    }
+                    if (rankStr === 'Random' || !rankStr) alert(`CARD UNLOCKED: ${c.name}\nRank: ${c.rank}\n\n${c.desc}`);
                 }
-                else if(type === 'specific_card') { const cid = parseInt(e.currentTarget.getAttribute('data-id')); availableCards[cid].apply(); }
+                else if(type === 'specific_card') { const cid = parseInt(btnEl.getAttribute('data-id')); availableCards[cid].apply(); }
                 else if(type === 'weapon') { 
-                    const wid = e.currentTarget.getAttribute('data-id');
+                    const wid = btnEl.getAttribute('data-id');
+                    myOwnedWeapons.push(wid);
                     let slotIdx = myInventory.indexOf(null);
                     if(slotIdx === -1) slotIdx = currentSlot;
                     myInventory[slotIdx] = wid;
@@ -1013,6 +1067,9 @@ function setupUIEvents() {
                     myHp = myMaxHp;
                 }
                 updateUI();
+                saveProfile();
+            } else {
+                alert("Not enough coins!");
             }
         };
     });
@@ -1030,6 +1087,15 @@ function updateUI() {
     
     document.getElementById('coin-text').innerText = myCoins; 
     document.getElementById('shop-coins').innerText = myCoins;
+    
+    document.querySelectorAll('.buy-btn[data-type="weapon"]').forEach(btn => {
+        const wid = btn.getAttribute('data-id');
+        if (myOwnedWeapons.includes(wid)) {
+            btn.innerHTML = `<span style="font-size:18px;">🛠️</span> Equip`;
+            btn.style.background = "rgba(0,255,170,0.2)";
+            btn.style.borderColor = "#00ffaa";
+        }
+    });
 }
 
 function onKeyDown(e) {
@@ -1037,7 +1103,11 @@ function onKeyDown(e) {
     switch(e.code) {
         case 'KeyW': moveForward = true; break; case 'KeyA': moveLeft = true; break; case 'KeyS': moveBackward = true; break; case 'KeyD': moveRight = true; break;
         case 'Space': if(myJumpsLeft > 0) { playerBody.velocity.y = 25; jumpAntiGravityTimer = 0.5; myJumpsLeft--; canJump = false; } break;
-        case 'ShiftLeft': if(!isSprinting && !isCrouching) { isSprinting = true; mySpeed = baseSpeed * 1.8; myMaxSpeed = baseMaxSpeed * 1.8; if(!isScoped) { camera.fov = 85; camera.updateProjectionMatrix(); } } break;
+        case 'ShiftLeft': 
+            isSprinting = !isSprinting; 
+            if(isSprinting) { isCrouching = false; mySpeed = baseSpeed * 1.8; myMaxSpeed = baseMaxSpeed * 1.8; if(!isScoped) { camera.fov = 85; camera.updateProjectionMatrix(); } }
+            else { mySpeed = baseSpeed; myMaxSpeed = baseMaxSpeed; if(!isScoped) { camera.fov = 75; camera.updateProjectionMatrix(); } }
+            break;
         case 'ControlLeft': case 'MetaLeft': case 'MetaRight': case 'KeyC': toggleCrouch(); break; case 'KeyE': triggerAbility(); break; case 'KeyV': isThirdPerson = !isThirdPerson; break;
         case 'Digit1': window.equipSlot(0); break; case 'Digit2': window.equipSlot(1); break; case 'Digit3': window.equipSlot(2); break; case 'Digit4': window.equipSlot(3); break; case 'Digit5': window.equipSlot(4); break;
     }
@@ -1046,8 +1116,6 @@ function onKeyUp(e) {
     if(e.code === 'KeyR') isWallRunning = false;
     switch(e.code) {
         case 'KeyW': moveForward = false; break; case 'KeyA': moveLeft = false; break; case 'KeyS': moveBackward = false; break; case 'KeyD': moveRight = false; break;
-        case 'ShiftLeft': isSprinting = false; mySpeed = baseSpeed; myMaxSpeed = baseMaxSpeed; if(!isScoped) { camera.fov = 75; camera.updateProjectionMatrix(); } break;
-        case 'ControlLeft': case 'MetaLeft': case 'MetaRight': case 'KeyC': toggleCrouch(); break;
     }
 }
 
@@ -1249,6 +1317,7 @@ function setupConnection(conn) {
                     let idx = prog.indexOf(myGun) + 1;
                     if(idx < prog.length) { myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); }
                 }
+                saveProfile();
             } 
             else if(remotePlayers[data.killer]) { remotePlayers[data.killer].kills++; adminLog(`${remotePlayers[data.killer].username} eliminated ${remote.username}.`); }
             

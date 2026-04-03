@@ -72,8 +72,11 @@
                         <span class="label" style="font-size:10px;">YOUR LOBBY IDENTIFIER:</span>
                         <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Connecting...</span>
                     </div>
-                    <label class="section-label">Callsign</label>
-                    <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="margin-bottom:15px;" maxlength="12">
+                    <label class="section-label">Callsign / Profile Name</label>
+                    <div style="display:flex; gap:10px; margin-bottom:15px;">
+                        <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="flex:1;" maxlength="12">
+                        <button id="btn-profile-auth" class="deploy-btn" style="padding:0 15px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa;">LOAD / SAVE</button>
+                    </div>
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select">
                         <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
@@ -121,8 +124,8 @@
                 <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[C]</span> Crouch<br>
+                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint (Toggle) &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[C]</span> Crouch (Toggle)<br>
                     <span style="color:#00f3ff;">[E]</span> Ability (Uses NRG) &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[V]</span> Change POV &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[R]</span> Wallrun &nbsp;&bull;&nbsp; 
