@@ -102,16 +102,36 @@ function updateAdminDashboard() {
         container.appendChild(barWraps);
     });
 }
+let joysticksInitialized = false;
+function showMobileControls() {
+    if(!isMobile) return;
+    document.getElementById('mobile-buttons').style.display = 'flex'; 
+    document.getElementById('touch-zones').style.display = 'block';
+    if (!joysticksInitialized) {
+        initJoysticks();
+        joysticksInitialized = true;
+    }
+}
+function hideMobileControls() {
+    if(!isMobile) return;
+    document.getElementById('mobile-buttons').style.display = 'none'; 
+    document.getElementById('touch-zones').style.display = 'none';
+}
 
 function init() {
     peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } }); 
     peer.on('open', id => { myId = id; document.getElementById('my-id-display').innerText = id; }); peer.on('connection', conn => setupConnection(conn));
-    window.addEventListener('touchstart', () => { if(!isMobile) { isMobile = true; document.getElementById('mobile-buttons').style.display = 'flex'; document.getElementById('touch-zones').style.display = 'block'; initJoysticks(); } }, {once: true});
+    window.addEventListener('touchstart', () => { if(!isMobile) { isMobile = true; } }, {once: true});
+    document.addEventListener('touchstart', (e) => {
+        if (!isMobileDeploy || myHp <= 0) return;
+        if (e.target.closest('#mobile-buttons') || e.target.closest('#touch-zones') || e.target.closest('.modal') || e.target.closest('#hotbar') || e.target.closest('#ui-triggers') || e.target.closest('.menu-bg')) return;
+        shoot();
+    });
     document.getElementById('btn-join').addEventListener('click', (e) => { 
         e.stopPropagation(); const targetId = document.getElementById('join-id').value; 
         const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
         myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
-        if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; } else { if(!controls.isLocked) controls.lock(); } 
+        if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } else { if(!controls.isLocked) controls.lock(); } 
         if(targetId) { applyClass(document.getElementById('player-class').value); connectTo(targetId); } 
     });
     document.getElementById('blocker').addEventListener('click', (e) => { 
@@ -119,7 +139,7 @@ function init() {
             const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
             myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
             applyClass(document.getElementById('player-class').value); 
-            if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; } else { if(!controls.isLocked && myHp > 0) controls.lock(); } 
+            if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } else { if(!controls.isLocked && myHp > 0) controls.lock(); } 
         } 
     });
     document.body.oncontextmenu = () => false;
@@ -167,7 +187,7 @@ function initJoysticks() {
     joyLook.on('move', (evt, data) => { gpLookX = data.vector.x; gpLookY = -data.vector.y; }); joyLook.on('end', () => { gpLookX = 0; gpLookY = 0; });
     const bindTouch = (id, fn) => { const el = document.getElementById(id); el.addEventListener('touchstart', (e)=>{e.preventDefault(); e.stopPropagation(); fn();}, {passive:false}); };
     bindTouch('btn-m-jump', () => { if(myJumpsLeft>0){ playerBody.velocity.y = 25; jumpAntiGravityTimer = 0.5; myJumpsLeft--; canJump = false;} });
-    bindTouch('btn-m-shoot', () => shoot()); bindTouch('btn-m-ability', () => triggerAbility()); bindTouch('btn-m-scope', () => toggleScope());
+    bindTouch('btn-m-ability', () => triggerAbility()); bindTouch('btn-m-scope', () => toggleScope());
 }
 
 function updateGamepads() {
@@ -282,11 +302,12 @@ function die() {
     if(!isMobileDeploy) controls.unlock();
     isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); document.getElementById('scope-overlay').classList.add('hidden');
     document.getElementById('blocker').style.display = 'none'; document.getElementById('draft-modal').classList.remove('hidden'); document.getElementById('hotbar').style.display = 'none';
+    hideMobileControls();
     const opts = document.getElementById('draft-options'); opts.innerHTML = '';
     const shuffled = [...availableCards].sort(() => 0.5 - Math.random()).slice(0, 3);
     shuffled.forEach(c => {
         const btn = document.createElement('div'); btn.className = 'draft-card'; btn.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
-        btn.onclick = () => { c.apply(); myHp = myMaxHp; updateUI(); playerBody.position.set(0, 80, 0); playerBody.velocity.set(0,0,0); document.getElementById('draft-modal').classList.add('hidden'); if(!isMobileDeploy) document.getElementById('blocker').style.display = 'flex'; else document.getElementById('hotbar').style.display = 'flex'; }; opts.appendChild(btn);
+        btn.onclick = () => { c.apply(); myHp = myMaxHp; updateUI(); playerBody.position.set(0, 80, 0); playerBody.velocity.set(0,0,0); document.getElementById('draft-modal').classList.add('hidden'); if(!isMobileDeploy) document.getElementById('blocker').style.display = 'flex'; else { document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } }; opts.appendChild(btn);
     });
 }
 
@@ -333,13 +354,13 @@ function updateHotbarUI() {
 }
 
 function setupUIEvents() {
-    document.getElementById('shop-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); document.getElementById('shop-modal').classList.remove('hidden'); };
-    document.getElementById('btn-shop-close').onclick = () => document.getElementById('shop-modal').classList.add('hidden');
-    document.getElementById('vip-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); document.getElementById('vip-modal').classList.remove('hidden'); };
-    document.getElementById('btn-vip-close').onclick = () => document.getElementById('vip-modal').classList.add('hidden');
-    document.getElementById('btn-vip-login').onclick = () => { if(document.getElementById('vip-password').value === 'Seth1234@!') { document.getElementById('vip-modal').classList.add('hidden'); opCards.forEach(c => c.apply()); updateUI(); alert("VIP UNLOCKED!"); connections.forEach(conn => { if(conn.open) conn.send({type: 'vip'}); }); } };
-    document.getElementById('admin-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); document.getElementById('admin-modal').classList.remove('hidden'); };
-    document.getElementById('btn-admin-close').onclick = () => document.getElementById('admin-modal').classList.add('hidden');
+    document.getElementById('shop-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); else hideMobileControls(); document.getElementById('shop-modal').classList.remove('hidden'); };
+    document.getElementById('btn-shop-close').onclick = () => { document.getElementById('shop-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
+    document.getElementById('vip-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); else hideMobileControls(); document.getElementById('vip-modal').classList.remove('hidden'); };
+    document.getElementById('btn-vip-close').onclick = () => { document.getElementById('vip-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
+    document.getElementById('btn-vip-login').onclick = () => { if(document.getElementById('vip-password').value === 'Seth1234@!') { document.getElementById('vip-modal').classList.add('hidden'); opCards.forEach(c => c.apply()); updateUI(); alert("VIP UNLOCKED!"); connections.forEach(conn => { if(conn.open) conn.send({type: 'vip'}); }); if(isMobileDeploy && myHp > 0) showMobileControls(); } };
+    document.getElementById('admin-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); else hideMobileControls(); document.getElementById('admin-modal').classList.remove('hidden'); };
+    document.getElementById('btn-admin-close').onclick = () => { document.getElementById('admin-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
     document.getElementById('btn-admin-login').onclick = () => { if(document.getElementById('admin-password').value === 'Seth1234@!') { 
         document.getElementById('admin-modal').classList.add('hidden'); 
         document.getElementById('admin-dashboard').classList.remove('hidden'); 
@@ -353,7 +374,7 @@ function setupUIEvents() {
         document.getElementById('my-set-speed').value = Math.floor(baseSpeed);
     } };
     if(document.getElementById('btn-admin-dash-close')) {
-        document.getElementById('btn-admin-dash-close').onclick = () => { document.getElementById('admin-dashboard').classList.add('hidden'); };
+        document.getElementById('btn-admin-dash-close').onclick = () => { document.getElementById('admin-dashboard').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
         document.getElementById('btn-admin-apply-stats').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
                 const spd = document.getElementById('admin-set-speed').value;
