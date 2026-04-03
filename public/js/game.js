@@ -580,8 +580,8 @@ function createGunMesh(type) {
         const body = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.7), gunMat); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), gunMat); barrel.rotation.x = Math.PI/2; barrel.position.z = -0.8;
         const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.15), accentMat); drum.rotation.z = Math.PI/2; drum.position.y = -0.2; group.add(body, barrel, drum);
     } else if(type === 'katana') {
-        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4), accentMat); handle.rotation.x = Math.PI/2;
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 1.4), new THREE.MeshStandardMaterial({color:0xffffff, metalness:0.9, roughness:0.1})); blade.position.z = -0.9; group.add(handle, blade);
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.25), accentMat); handle.rotation.x = Math.PI/2;
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 2.0), new THREE.MeshStandardMaterial({color:0xffffff, metalness:0.9, roughness:0.1})); blade.position.z = -1.125; group.add(handle, blade);
     } else if(type === 'medkit') {
         const box = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.2), new THREE.MeshStandardMaterial({color:0x00ff00}));
         const cross = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.21), new THREE.MeshBasicMaterial({color:0xffffff}));
@@ -601,15 +601,23 @@ function createHumanoid() {
     
     const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.8), matTorso); torso.position.y = 2.0; torso.castShadow = true; torso.receiveShadow = true; group.add(torso);
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead); head.position.y = 1.3; head.castShadow = true; head.receiveShadow = true; torso.add(head);
-    const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.6, 0.35), matTorso); lArm.position.set(-0.8, -0.1, 0); lArm.castShadow = true; lArm.receiveShadow = true; torso.add(lArm);
+    
+    const lArm = new THREE.Group(); lArm.position.set(-0.8, 0.7, 0); torso.add(lArm);
+    const lArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.6, 0.35), matTorso); lArmMesh.position.y = -0.8; lArmMesh.castShadow = true; lArmMesh.receiveShadow = true; lArm.add(lArmMesh);
+    
     const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.6, 0.35), matTorso); rArm.position.set(0.8, 0.2, -0.4); rArm.rotation.x = -Math.PI/3; rArm.castShadow = true; rArm.receiveShadow = true; torso.add(rArm);
-    const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin); lHand.position.y = -0.8; lArm.add(lHand);
+    const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin); lHand.position.y = -0.8; lArmMesh.add(lHand);
     const rHand = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin); rHand.position.y = -0.8; rArm.add(rHand);
     
     const gunContainer = new THREE.Group(); gunContainer.position.set(0, -0.2, -0.6); rHand.add(gunContainer); gunContainer.add(createGunMesh('default'));
-    const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); lLeg.position.set(-0.35, -1.8, 0); lLeg.castShadow = true; lLeg.receiveShadow = true; torso.add(lLeg);
-    const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); rLeg.position.set(0.35, -1.8, 0); rLeg.castShadow = true; rLeg.receiveShadow = true; torso.add(rLeg);
-    return { group, head, torso, rArm, gunContainer, matTorso, matPants, currentGun: 'default' };
+    
+    const lLeg = new THREE.Group(); lLeg.position.set(-0.35, -0.9, 0); torso.add(lLeg);
+    const lLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); lLegMesh.position.y = -0.9; lLegMesh.castShadow = true; lLegMesh.receiveShadow = true; lLeg.add(lLegMesh);
+    
+    const rLeg = new THREE.Group(); rLeg.position.set(0.35, -0.9, 0); torso.add(rLeg);
+    const rLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); rLegMesh.position.y = -0.9; rLegMesh.castShadow = true; rLegMesh.receiveShadow = true; rLeg.add(rLegMesh);
+    
+    return { group, head, torso, lArm, rArm, lLeg, rLeg, gunContainer, matTorso, matPants, currentGun: 'default' };
 }
 
 function connectTo(id) { const conn = peer.connect(id); setupConnection(conn); }
@@ -631,8 +639,12 @@ function setupConnection(conn) {
             remote.nametag = createNametag(data.username); remote.nametag.position.y = 4.5; remote.mesh.add(remote.nametag);
         }
         if(data.type === 'pos') {
+            const oldPos = remote.mesh.position.clone();
             remote.hp = data.hp; remote.maxHp = data.maxHp; remote.coins = data.coins; remote.speed = data.speed;
             remote.mesh.position.copy(data.pos); const q = new THREE.Quaternion(data.rot.x, data.rot.y, data.rot.z, data.rot.w); const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+            
+            remote.moving = oldPos.distanceTo(data.pos) > 0.05;
+            
             remote.mesh.rotation.y = euler.y; remote.head.rotation.x = euler.x; remote.rArm.rotation.x = -Math.PI/3 + euler.x;
             if(data.isCrouching) { remote.mesh.scale.y = 0.5; remote.nametag.visible = false; } else { remote.mesh.scale.y = 1.0; remote.nametag.visible = true; remote.nametag.quaternion.copy(camera.quaternion); }
             if(data.gun && remote.currentGun !== data.gun) { updateWeaponVisuals(remote, data.gun); }
@@ -750,14 +762,38 @@ function animate() {
         inputDir.normalize();
         
         if(inputDir.lengthSq() > 0) {
+            let tryVelX = inputDir.x * mySpeed;
+            let tryVelZ = inputDir.z * mySpeed;
+            
+            if(isCrouching && isGrounded) {
+                let nextPos = playerBody.position.clone();
+                nextPos.x += tryVelX * (1/60);
+                nextPos.z += tryVelZ * (1/60);
+                downRay.set(nextPos, downVector);
+                downRay.far = 1.8;
+                if(downRay.intersectObjects(mapMeshes).length === 0) {
+                    tryVelX = 0;
+                    tryVelZ = 0;
+                }
+            }
+            
             const currentSpeed = Math.sqrt(playerBody.velocity.x**2 + playerBody.velocity.z**2);
-            if(currentSpeed <= myMaxSpeed) { playerBody.velocity.x = inputDir.x * mySpeed; playerBody.velocity.z = inputDir.z * mySpeed; }
+            if(currentSpeed <= myMaxSpeed) { playerBody.velocity.x = tryVelX; playerBody.velocity.z = tryVelZ; }
+        } else if (isCrouching && isGrounded) {
+            playerBody.velocity.x = 0; 
+            playerBody.velocity.z = 0;
         }
 
         if(Math.abs(gpLookX) > 0.05 || Math.abs(gpLookY) > 0.05) {
             const euler = new THREE.Euler(0, 0, 0, 'YXZ'); euler.setFromQuaternion(camera.quaternion);
             euler.y -= gpLookX * 0.05; euler.x -= gpLookY * 0.04; euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x)); camera.quaternion.setFromEuler(euler);
         }
+
+        let walkTime = Date.now() / 1000 * (isSprinting ? 15 : 10);
+        let pSpeed = Math.sqrt(playerBody.velocity.x**2 + playerBody.velocity.z**2);
+        let movingAmt = (isGrounded && pSpeed > 2 && inputDir.lengthSq() > 0) ? 1 : 0;
+        let swing = Math.sin(walkTime) * 0.6 * movingAmt;
+        if(isCrouching) swing *= 0.5;
 
         const trueThirdPerson = isThirdPerson && !isScoped;
         if(trueThirdPerson) {
@@ -770,6 +806,10 @@ function animate() {
             myAvatar.group.position.copy(playerBody.position); myAvatar.group.position.y -= 1.5; myAvatar.group.scale.y = isCrouching ? 0.5 : 1.0;
             const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
             myAvatar.group.rotation.y = euler.y; myAvatar.head.rotation.x = euler.x; myAvatar.rArm.rotation.x = -Math.PI/3 + euler.x;
+            
+            myAvatar.lLeg.rotation.x = swing;
+            myAvatar.rLeg.rotation.x = -swing;
+            myAvatar.lArm.rotation.x = -swing;
         } else {
             myAvatar.group.visible = false; 
             if(viewModelContainer) viewModelContainer.visible = !isScoped;
@@ -791,7 +831,9 @@ function animate() {
                 viewModelContainer.rotation.y = 0;
                 viewModelContainer.rotation.z = 0;
             } else {
-                viewModelContainer.position.set(0.4, -0.3, -0.6);
+                let bobY = (movingAmt > 0 && isGrounded) ? Math.abs(Math.sin(walkTime)) * 0.05 : 0;
+                let bobX = (movingAmt > 0 && isGrounded) ? Math.sin(walkTime * 0.5) * 0.03 : 0;
+                viewModelContainer.position.set(0.4 + bobX, -0.3 + bobY, -0.6);
                 if (myGun === 'katana') {
                     viewModelContainer.rotation.set(0, 0.4, 0.4);
                 } else {
@@ -799,6 +841,16 @@ function animate() {
                 }
             }
         }
+
+        Object.values(remotePlayers).forEach(r => {
+            let rWalkTime = Date.now() / 1000 * 10;
+            let rSwing = r.moving ? Math.sin(rWalkTime) * 0.6 : 0;
+            if(r.mesh.scale.y < 1.0) rSwing *= 0.5;
+            
+            if (r.lLeg) r.lLeg.rotation.x = rSwing;
+            if (r.rLeg) r.rLeg.rotation.x = -rSwing;
+            if (r.lArm) r.lArm.rotation.x = -rSwing;
+        });
 
         for(let i=activeBullets.length-1; i>=0; i--) {
             const b = activeBullets[i]; const dist = b.start.distanceTo(b.end); const step = dist > 0.001 ? 5 / dist : 1.0; 
