@@ -121,7 +121,7 @@ function hideMobileControls() {
 function init() {
     peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } }); 
     peer.on('open', id => { myId = id; document.getElementById('my-id-display').innerText = id; }); peer.on('connection', conn => setupConnection(conn));
-    window.addEventListener('touchstart', () => { if(!isMobile) { isMobile = true; } }, {once: true});
+    window.addEventListener('touchstart', () => { if(!isMobile) { isMobile = true; document.body.classList.add('mobile-mode'); } }, {once: true});
     document.addEventListener('touchstart', (e) => {
         if (!isMobileDeploy || myHp <= 0) return;
         if (e.target.closest('#mobile-buttons') || e.target.closest('#touch-zones') || e.target.closest('.modal') || e.target.closest('#hotbar') || e.target.closest('#ui-triggers') || e.target.closest('.menu-bg')) return;
@@ -182,7 +182,8 @@ function init() {
 
 function initJoysticks() {
     if(typeof nipplejs === 'undefined') return;
-    const joyMove = nipplejs.create({ zone: document.getElementById('zone-left'), mode: 'dynamic', color: 'cyan' }); const joyLook = nipplejs.create({ zone: document.getElementById('zone-right'), mode: 'dynamic', color: 'red' });
+    const joyMove = nipplejs.create({ zone: document.getElementById('zone-left'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'cyan' }); 
+    const joyLook = nipplejs.create({ zone: document.getElementById('zone-right'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'red' });
     joyMove.on('move', (evt, data) => { gpMoveX = data.vector.x; gpMoveY = -data.vector.y; }); joyMove.on('end', () => { gpMoveX = 0; gpMoveY = 0; });
     joyLook.on('move', (evt, data) => { gpLookX = data.vector.x; gpLookY = -data.vector.y; }); joyLook.on('end', () => { gpLookX = 0; gpLookY = 0; });
     const bindTouch = (id, fn) => { const el = document.getElementById(id); el.addEventListener('touchstart', (e)=>{e.preventDefault(); e.stopPropagation(); fn();}, {passive:false}); };
