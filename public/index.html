@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Voxel Shooter - Cyberpunk Edition</title>
+    <link rel="stylesheet" href="css/style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    
+    <!-- RTX Post-Processing -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+</head>
+<body>
+    
+    <div id="crosshair">
+        <div class="ch-line ch-h"></div>
+        <div class="ch-line ch-v"></div>
+    </div>
+
+    <!-- UI Overlays -->
+    <div id="hud-container">
+        <p>HP <span id="hp-text">100 / 100</span></p>
+        <div id="hp-bar-bg"><div id="hp-bar"></div></div>
+        
+        <p style="margin-top:8px; font-weight:bold; color:#00f3ff; text-shadow:0 0 5px rgba(0,243,255,0.5);">NRG <span id="energy-text">100 / 100</span></p>
+        <div id="energy-bar-bg" style="width:100%; height:8px; background:rgba(0,255,255,0.2); border-radius:4px; margin-top:3px;"><div id="energy-bar" style="width:100%; height:100%; background:#00f3ff; border-radius:4px; box-shadow:0 0 10px #00f3ff;"></div></div>
+        
+        <p style="margin-top:12px; color:#FFD700; font-weight:bold; text-shadow:0 0 5px rgba(255,215,0,0.5);">Coins: <span id="coin-text">0</span></p>
+    </div>
+
+    <div id="ui-triggers">
+        <div id="admin-trigger" title="Admin">⚙️ ADMIN</div>
+        <div id="vip-trigger" title="VIP Status">👑 VIP</div>
+        <div id="shop-trigger" title="Shop">🛒 SHOP</div>
+    </div>
+    
+    <!-- Scope Overlay -->
+    <div id="scope-overlay" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:90; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.98) 60%);">
+        <div class="ch-line ch-h" style="top:50%; width:100px; left:calc(50% - 50px); background:red; height:1px;"></div>
+        <div class="ch-line ch-v" style="left:50%; height:100px; top:calc(50% - 50px); background:red; width:1px;"></div>
+    </div>
+    
+    <!-- Network Lobby GUI -->
+    <div id="blocker" class="menu-bg">
+        <div class="menu-container glass-heavy">
+            <h1 class="neon-title" style="letter-spacing:10px; font-style:italic;">CYBER-FORT 3D</h1>
+            
+            <div class="menu-grid">
+                <!-- Left Panel: Your Info -->
+                <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding-right:30px;">
+                    <h3>DEPLOYMENT STATUS</h3>
+                    <div class="id-box">
+                        <span class="label">YOUR LOBBY IDENTIFIER:</span>
+                        <span id="my-id-display" class="id-value glow-text">Connecting...</span>
+                    </div>
+                    
+                    <label class="section-label">Callsign (Optional)</label>
+                    <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="margin-bottom:15px;" maxlength="12">
+
+                    <label class="section-label">Select Loadout</label>
+                    <select id="player-class" class="tech-select">
+                        <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
+                        <option value="tank" style="background:#111;">Tank 🛡️ (Shield - 70 NRG)</option>
+                        <option value="ninja" style="background:#111;">Ninja 🥷 (Shuriken - 40 NRG)</option>
+                    </select>
+                </div>
+
+                <!-- Right Panel: Join -->
+                <div class="menu-section join-section" style="padding-left:10px;">
+                    <h3>SQUAD LINK</h3>
+                    <p class="desc">Transmit your Lobby Identifier to squadmates, or enter a target ID below to phase directly into an active simulation.</p>
+                    <input type="text" id="join-id" placeholder="Enter Target ID" class="tech-input">
+                    <button id="btn-join" class="deploy-btn">DEPLOY LINK</button>
+                    <p id="connection-status" class="status-msg"></p>
+                </div>
+            </div>
+
+            <div class="launch-hint">
+                <p>CLICK ANYWHERE OUTSIDE THIS PANEL TO DEPLOY SOLO</p>
+                <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
+                    <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[C]</span> Crouch<br>
+                    <span style="color:#00f3ff;">[E]</span> Ability (Uses NRG) &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[V]</span> Change POV &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[R]</span> Wallrun &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[Click]</span> Shoot &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[Right Click]</span> AIM
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="shop-modal" class="modal hidden">
+        <div class="modal-content glass" style="max-width:800px; width:100%; border-color:#00f3ff; box-shadow:0 0 40px rgba(0,243,255,0.4);">
+            <h2 class="neon-title" style="color:#00f3ff; text-shadow:0 0 15px #00f3ff; text-align:center; font-size:2.5rem; margin-top:0; margin-bottom:10px; letter-spacing:3px;">CYBER SHOP</h2>
+            <p style="color:#ddd; text-align:center; font-size:18px;">Balance: <span id="shop-coins" class="highlight-text" style="color:#FFD700; text-shadow:0 0 10px rgba(255,215,0,0.8);">0</span> Coins</p>
+            
+            <div style="display:flex; flex-wrap:wrap; gap:20px; margin-top:25px; justify-content:center;">
+                <!-- Weapons -->
+                <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,0,0,0.3); padding:15px; border-radius:8px;">
+                    <h3 style="color:#ff3333; text-align:center; margin-top:0;">WEAPONS</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="pistol" data-cost="50" style="border-color:rgba(255,0,0,0.4); color:#ffaaaa;">Pistol (50c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="smg" data-cost="100" style="border-color:rgba(255,0,0,0.4); color:#00ff00;">SMG (100c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="shotgun" data-cost="150" style="border-color:rgba(255,0,0,0.4); color:#ffff00;">Pump Shotgun (150c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="lmg" data-cost="180" style="border-color:rgba(255,0,0,0.4); color:#ff8800;">LMG (180c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="sniper" data-cost="200" style="border-color:rgba(255,0,0,0.4); color:#ff0000;">Sniper Rifle (200c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="katana" data-cost="400" style="border-color:rgba(255,0,0,0.4); color:#ffffff; font-weight:bold;">Katana (400c)</button>
+                    </div>
+                </div>
+                
+                <!-- Upgrades / Cards -->
+                <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,255,170,0.3); padding:15px; border-radius:8px;">
+                    <h3 style="color:#00ffaa; text-align:center; margin-top:0;">UPGRADES</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <button class="shop-btn buy-btn" data-type="card" data-rank="Common" data-cost="50" style="border-color: #aaaaaa; color: #aaaaaa;">Common Card (50c)</button>
+                        <button class="shop-btn buy-btn" data-type="card" data-rank="Rare" data-cost="150" style="border-color: #0055ff; color: #0055ff;">Rare Card (150c)</button>
+                        <button class="shop-btn buy-btn" data-type="card" data-rank="Epic" data-cost="350" style="border-color: #aa00ff; color: #aa00ff;">Epic Card (350c)</button>
+                        <button class="shop-btn buy-btn" data-type="card" data-rank="Legendary" data-cost="800" style="border-color: #ffd700; color: #ffd700;">Legendary Card (800c)</button>
+                        <button class="shop-btn buy-btn" data-type="card" data-rank="Random" data-cost="200" style="border-color:rgba(0,255,170,0.4); color:#fff; font-weight:bold;">Random Card (200c)</button>
+                    </div>
+                </div>
+
+                <!-- Support -->
+                <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.3); padding:15px; border-radius:8px;">
+                    <h3 style="color:#00f3ff; text-align:center; margin-top:0;">SUPPORT</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <button class="shop-btn buy-btn" data-type="heal" data-cost="30" style="border-color:rgba(0,243,255,0.4); color:#00f3ff;">Max Heal (30c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="medkit" data-cost="100" style="border-color:rgba(0,243,255,0.4); color:#00f3ff;">Buy Medkit (100c)</button>
+                    </div>
+                </div>
+            </div>
+            <button id="btn-shop-close" class="deploy-btn" style="margin-top:25px; background:linear-gradient(135deg, #aa0000, #ff0000); border:none; color:white; font-weight:bold; letter-spacing:2px;">LEAVE SHOP</button>
+        </div>
+    </div>
+
+    <div id="vip-modal" class="modal hidden">
+        <div class="modal-content glass vip-border" style="max-width:350px; width:100%;">
+            <h2 class="neon-text vip-text">VIP Access</h2>
+            <p class="desc" style="text-align:center; color:#aaa;">Enter clearance code to override statistics.</p>
+            <input type="password" id="vip-password" placeholder="Enter Access Key" class="glass-input">
+            <button id="btn-vip-login" class="shop-btn vip-border vip-text">Unlock VIP</button>
+            <button id="btn-vip-close" class="close-btn" style="margin-top:10px;">Close</button>
+        </div>
+    </div>
+
+    <div id="admin-modal" class="modal hidden">
+        <div class="modal-content glass" style="border-color:#ff0055; box-shadow: 0 0 20px rgba(255,0,85,0.3); max-width:350px; width:100%;">
+            <h2 class="neon-text" style="color:#ff0055; text-shadow:0 0 10px #ff0055;">Admin Terminal</h2>
+            <p class="desc" style="text-align:center; color:#aaa;">Server-side environmental adjustments.</p>
+            <input type="password" id="admin-password" placeholder="Enter Access Key" class="glass-input">
+            <button id="btn-admin-login" class="shop-btn" style="border-color:#ff0055; color:#ff0055;">Access System</button>
+            <button id="btn-admin-close" class="close-btn" style="margin-top:20px;">Close</button>
+        </div>
+    </div>
+
+    <div id="admin-dashboard" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,5,15,0.95); z-index:9000; display:flex; flex-direction:column; padding:20px; box-sizing:border-box; font-family:monospace; color:#0f0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ff0055; padding-bottom:10px; margin-bottom:20px;">
+            <h1 class="neon-text" style="margin:0; color:#ff0055; text-shadow:0 0 10px #ff0055;">ADMINEX OS v2.0 - ROOT ACCESS</h1>
+            <div>
+                <button id="btn-admin-dash-close" class="deploy-btn" style="background:#440000; color:white; border:1px solid #ff0000; padding:5px 15px;">CLOSE CONNECTION</button>
+            </div>
+        </div>
+        
+        <div style="display:flex; flex:1; gap:20px; overflow:hidden;">
+            <!-- SIDEBAR -->
+            <div style="width:250px; border-right:1px solid #00f3ff; display:flex; flex-direction:column; overflow-y:auto; padding-right:10px;">
+                <h3 style="color:#00f3ff; margin-top:0;">CONNECTED ENTITIES</h3>
+                <div id="admin-player-list" style="display:flex; flex-direction:column; gap:8px;">
+                    <!-- Player items will be appended here -->
+                </div>
+            </div>
+            
+            <!-- MAIN CONTENT -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:20px;">
+                
+                <!-- TOP: LIVE FEED -->
+                <div style="flex:1; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.5); padding:10px; display:flex; flex-direction:column;">
+                    <h3 style="margin-top:0; color:#fff;">SYSTEM LOG</h3>
+                    <div id="admin-live-feed" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:14px; padding-right:5px;">
+                        <span style="color:#aaa;">[SYSTEM] Admin access granted. Listening to mesh network...</span>
+                    </div>
+                </div>
+                
+                <!-- BOTTOM ROW: CHARTS AND INSPECTOR -->
+                <div style="height:450px; display:flex; gap:20px;">
+                    
+                    <!-- LEFT: CHART -->
+                    <div style="flex:1; border:1px solid #ffff00; background:rgba(20,20,0,0.5); padding:10px; display:flex; flex-direction:column;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="margin:0; color:#ffff00;">METRICS</h3>
+                            <select id="admin-chart-type" style="background:#000; color:#ffff00; border:1px solid #ffff00;">
+                                <option value="coins">Wealth (Coins)</option>
+                                <option value="hp">Health Points</option>
+                            </select>
+                        </div>
+                        <div id="admin-chart-container" style="flex:1; margin-top:10px; display:flex; align-items:flex-end; gap:5px; padding-left:10px; border-bottom:1px solid rgba(255,255,255,0.2); border-left:1px solid rgba(255,255,255,0.2);">
+                            <!-- Bars drawn here -->
+                        </div>
+                    </div>
+                    
+                    <!-- RIGHT: INSPECTORS -->
+                    <div style="width:400px; display:flex; flex-direction:column; gap:10px;">
+                        
+                        <!-- TARGET INSPECTOR -->
+                        <div style="flex:1; border:1px solid #00ffaa; background:rgba(0,20,10,0.5); padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:0;">
+                        <h3 style="margin:0; color:#00ffaa; text-align:center;">ENTITY INSPECTOR</h3>
+                        <p id="inspector-name" style="text-align:center; color:#fff; font-size:20px; margin:5px 0;">[NO TARGET SELECTED]</p>
+                        
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label style="width:70px;">Set HP:</label>
+                            <input type="number" id="admin-set-hp" class="glass-input" style="flex:1; padding:5px; height:auto; margin:0;" value="100">
+                            <label style="width:70px;">Max HP:</label>
+                            <input type="number" id="admin-set-maxhp" class="glass-input" style="flex:1; padding:5px; height:auto; margin:0;" value="100">
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label style="width:70px;">Coins:</label>
+                            <input type="number" id="admin-set-coins" class="glass-input" style="flex:1; padding:5px; height:auto; margin:0;" value="0">
+                            <label style="width:70px;">Speed:</label>
+                            <input type="number" id="admin-set-speed" class="glass-input" style="flex:1; padding:5px; height:auto; margin:0;" value="25">
+                        </div>
+                        
+                        <button id="btn-admin-apply-stats" class="shop-btn" style="border-color:#00ffaa; color:#00ffaa; padding:10px;">FORCE OVERRIDE STATS</button>
+                        
+                        <hr style="width:100%; border-color:rgba(255,255,255,0.2);">
+                        
+                        <div style="display:flex; gap:10px;">
+                            <select id="admin-give-weapon-sel" style="flex:1; background:#000; color:#fff; border:1px solid #aaa;">
+                                <option value="default">Assault</option>
+                                <option value="sniper">Sniper</option>
+                                <option value="shotgun">Shotgun</option>
+                                <option value="smg">SMG</option>
+                                <option value="lmg">LMG</option>
+                                <option value="katana">Katana</option>
+                                <option value="medkit">Medkit</option>
+                            </select>
+                            <button id="btn-admin-give-weapon" class="shop-btn" style="border-color:#fff; color:#fff; padding:5px 10px;">GIVE WEP</button>
+                        </div>
+                        
+                        <button id="btn-admin-give-card" class="shop-btn" style="border-color:#aa00ff; color:#aa00ff; padding:10px;">INJECT RANDOM EPIC CARD</button>
+                        
+                        <div style="display:flex; gap:10px; margin-top:auto;">
+                            <button id="btn-admin-vip" class="shop-btn" style="flex:1; border-color:#ffd700; color:#ffd700; background:rgba(255,215,0,0.1);">GRANT VIP</button>
+                            <button id="btn-admin-kick" class="shop-btn" style="flex:1; border-color:#ff0000; color:#ff0000; background:rgba(255,0,0,0.1);">TERMINATE (KICK)</button>
+                        </div>
+                        </div>
+                        
+                        <!-- MY STATS -->
+                        <div style="flex:1; border:1px solid #00f3ff; background:rgba(0,10,20,0.5); padding:10px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:0;">
+                            <h3 style="margin:0; color:#00f3ff; text-align:center;">MY STATS</h3>
+                            <p id="my-inspector-name" style="text-align:center; color:#fff; font-size:16px; margin:2px 0;">[YOUR CALLSIGN]</p>
+                            
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <label style="width:60px; font-size:12px;">Set HP:</label>
+                                <input type="number" id="my-set-hp" class="glass-input" style="flex:1; padding:3px; height:auto; margin:0;" value="100">
+                                <label style="width:60px; font-size:12px;">Max HP:</label>
+                                <input type="number" id="my-set-maxhp" class="glass-input" style="flex:1; padding:3px; height:auto; margin:0;" value="100">
+                            </div>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <label style="width:60px; font-size:12px;">Coins:</label>
+                                <input type="number" id="my-set-coins" class="glass-input" style="flex:1; padding:3px; height:auto; margin:0;" value="0">
+                                <label style="width:60px; font-size:12px;">Speed:</label>
+                                <input type="number" id="my-set-speed" class="glass-input" style="flex:1; padding:3px; height:auto; margin:0;" value="25">
+                            </div>
+                            
+                            <button id="btn-my-apply-stats" class="shop-btn" style="border-color:#00f3ff; color:#00f3ff; padding:8px; margin-top:auto;">APPLY TO SELF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="draft-modal" class="modal hidden">
+        <div class="modal-content glass" style="max-width:800px; width:100%; border-color:#ff0055; box-shadow:0 0 30px rgba(255,0,85,0.4);">
+            <h2 id="draft-title" class="neon-text" style="color:#ff0055; text-shadow:0 0 10px #ff0055; font-size:2rem;">SYSTEM FAILURE</h2>
+            <p style="text-align:center; color:#ccc; letter-spacing:2px;">SELECT A POWERUP MODULE FOR REDEPLOYMENT</p>
+            <div id="draft-options" style="display:flex; gap:15px; margin-top:30px; flex-wrap:wrap; justify-content:center;">
+                <!-- Cards injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/game.js"></script>
+    <style>
+        .hotbar-slot {
+            width: 60px; height: 60px;
+            background: rgba(0,0,0,0.6); border: 2px solid #333; border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff; font-family: 'Courier New', monospace; font-size: 10px;
+            position: relative; transition: 0.2s; user-select: none; cursor: pointer; text-align: center;
+        }
+        .hotbar-slot.active { border-color: #00f3ff; box-shadow: 0 0 15px #00f3ff; background: rgba(0, 243, 255, 0.2); }
+        .slot-num { position:absolute; top:2px; left:4px; font-weight:bold; color: #888; }
+        .hotbar-slot.active .slot-num { color: #00f3ff; }
+    </style>
+    <!-- Hotbar UI -->
+    <div id="hotbar" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:none; gap:10px; z-index:100;">
+        <div class="hotbar-slot active" id="slot-0" onclick="window.equipSlot(0)"><div class="slot-num">1</div><span id="slot-name-0">Assault</span></div>
+        <div class="hotbar-slot" id="slot-1" onclick="window.equipSlot(1)"><div class="slot-num">2</div><span id="slot-name-1">Empty</span></div>
+        <div class="hotbar-slot" id="slot-2" onclick="window.equipSlot(2)"><div class="slot-num">3</div><span id="slot-name-2">Empty</span></div>
+        <div class="hotbar-slot" id="slot-3" onclick="window.equipSlot(3)"><div class="slot-num">4</div><span id="slot-name-3">Empty</span></div>
+        <div class="hotbar-slot" id="slot-4" onclick="window.equipSlot(4)"><div class="slot-num">5</div><span id="slot-name-4">Empty</span></div>
+    </div>
+
+    <!-- Mobile Controls UI -->
+    <div id="touch-zones">
+        <div id="zone-left"></div>
+        <div id="zone-right"></div>
+    </div>
+    <div id="mobile-buttons">
+        <button class="m-btn" id="btn-m-jump">JUMP</button>
+        <button class="m-btn" id="btn-m-shoot">FIRE</button>
+        <button class="m-btn" id="btn-m-ability">SKILL</button>
+        <button class="m-btn" id="btn-m-scope">AIM</button>
+    </div>
+</body>
+</html>
