@@ -17,7 +17,38 @@ let myAvatar;
 let viewModelContainer = null;
 let recoilAnimTimer = 0;
 let meleeAnimTimer = 0;
-const mapMeshes = [];
+let mapMeshes = [];
+let mapBodies = [];
+
+let gameState = {
+    mode: 'FFA',
+    timer: 300,
+    scoreRed: 0,
+    scoreBlue: 0,
+    myTeam: 'none',
+    started: false
+};
+
+function updateMatchHUD() {
+    const m = Math.floor(gameState.timer / 60);
+    const s = gameState.timer % 60;
+    document.getElementById('match-timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    document.getElementById('match-score-red').innerText = gameState.scoreRed;
+    document.getElementById('match-score-blue').innerText = gameState.scoreBlue;
+}
+
+function matchTimerTick() {
+    if(!gameState.started || gameState.timer <= 0) return;
+    gameState.timer--;
+    updateMatchHUD();
+    if(isHost && gameState.timer <= 0) {
+        gameState.started = false;
+        connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over' }); });
+        alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
+    }
+}
+setInterval(matchTimerTick, 1000);
+
 
 // Networking
 let peer = null, myId = "", connections = [], remotePlayers = {}; 
@@ -118,6 +149,55 @@ function hideMobileControls() {
     document.getElementById('touch-zones').style.display = 'none';
 }
 
+let isHost = false;
+let currentGamemode = 'FFA';
+
+function fetchLobbies() {
+    if(document.getElementById('blocker').style.display === 'none') return;
+    fetch('/api/lobbies').then(r=>r.json()).then(list => {
+        const sl = document.getElementById('server-list');
+        sl.innerHTML = '';
+        if(list.length === 0) { sl.innerHTML = '<p style="color:#aaa; font-size:12px; text-align:center;">No active servers found.</p>'; }
+        list.forEach(l => {
+            const div = document.createElement('div'); div.className = 'server-item';
+            div.innerHTML = `<span>[${l.gamemode}] ${l.hostName}</span><span style="color:#FFD700;">${l.players} Player(s)</span>`;
+            div.onclick = (e) => { e.stopPropagation(); document.getElementById('join-id').value = l.hostId; document.getElementById('btn-join').click(); };
+            sl.appendChild(div);
+        });
+    }).catch(e=>{});
+}
+setInterval(fetchLobbies, 5000);
+
+function pingLobby() {
+    if(!isHost) return;
+    if(document.getElementById('host-visibility') && document.getElementById('host-visibility').value !== 'public') return;
+    const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
+    fetch('/api/lobbies', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ hostId: myId, hostName: un || 'Host', gamemode: currentGamemode, players: connections.length + 1 })
+    }).catch(e=>{});
+}
+setInterval(pingLobby, 10000);
+
+function initGamemode(mode, isNewGame=true) {
+    console.log("Initialized Gamemode:", mode);
+    document.getElementById('match-hud').style.display = 'flex';
+    document.getElementById('match-mode-text').innerText = mode;
+    
+    if (isNewGame) {
+        gameState.started = true;
+        gameState.timer = 5 * 60;
+        gameState.scoreRed = 0;
+        gameState.scoreBlue = 0;
+    }
+    
+    for (const ob of mapMeshes) scene.remove(ob);
+    for (const ob of mapBodies) world.removeBody(ob);
+    mapMeshes = []; mapBodies = [];
+    buildMap(mode);
+    updateMatchHUD();
+}
+
 function init() {
     peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } }); 
     peer.on('open', id => { myId = id; document.getElementById('my-id-display').innerText = id; }); peer.on('connection', conn => setupConnection(conn));
@@ -129,16 +209,35 @@ function init() {
     });
     document.getElementById('btn-join').addEventListener('click', (e) => { 
         e.stopPropagation(); const targetId = document.getElementById('join-id').value; 
+        if(!targetId) return;
         const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
         myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
         if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } else { if(!controls.isLocked) controls.lock(); } 
-        if(targetId) { applyClass(document.getElementById('player-class').value); connectTo(targetId); } 
+        applyClass(document.getElementById('player-class').value); connectTo(targetId);
     });
+    
+    document.getElementById('btn-host').addEventListener('click', (e) => {
+        e.stopPropagation();
+        isHost = true;
+        currentGamemode = document.getElementById('host-gamemode').value;
+        const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
+        myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
+        applyClass(document.getElementById('player-class').value); 
+        
+        if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } 
+        else { if(!controls.isLocked) controls.lock(); } 
+        
+        pingLobby();
+        initGamemode(currentGamemode, true);
+    });
+
     document.getElementById('blocker').addEventListener('click', (e) => { 
         if(e.target.id === 'blocker') { 
+            // Dev solo deploy if clicked outside
             const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
             myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
             applyClass(document.getElementById('player-class').value); 
+            isHost = true; currentGamemode = 'FFA'; initGamemode(currentGamemode, true);
             if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } else { if(!controls.isLocked && myHp > 0) controls.lock(); } 
         } 
     });
@@ -627,8 +726,19 @@ function setupConnection(conn) {
         document.getElementById('connection-status').innerText = "Connected to: " + conn.peer;
         const humanoid = createHumanoid(); const nametag = createNametag("Loading..."); nametag.position.y = 4.5; humanoid.group.add(nametag);
         humanoid.group.userData.peerId = conn.peer;
-        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25 };
+        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none' };
         conn.send({ type: 'init', username: myUsername });
+        if (isHost) {
+            // Assign team if TDM or CTF
+            let t = 'none';
+            if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
+                const reds = Object.values(remotePlayers).filter(r => r.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
+                const blues = Object.values(remotePlayers).filter(r => r.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
+                t = (reds <= blues) ? 'red' : 'blue';
+            }
+            remotePlayers[conn.peer].team = t;
+            conn.send({ type: 'init_game', mode: currentGamemode, timer: gameState.timer, scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, team: t });
+        }
         adminLog(`New connection: ${conn.peer}`);
     });
     conn.on('data', data => {
@@ -649,12 +759,44 @@ function setupConnection(conn) {
             if(data.isCrouching) { remote.mesh.scale.y = 0.5; remote.nametag.visible = false; } else { remote.mesh.scale.y = 1.0; remote.nametag.visible = true; remote.nametag.quaternion.copy(camera.quaternion); }
             if(data.gun && remote.currentGun !== data.gun) { updateWeaponVisuals(remote, data.gun); }
         }
+        if (data.type === 'init_game') {
+            currentGamemode = data.mode;
+            gameState.mode = data.mode;
+            gameState.timer = data.timer;
+            gameState.scoreRed = data.scoreRed;
+            gameState.scoreBlue = data.scoreBlue;
+            gameState.myTeam = data.team;
+            initGamemode(currentGamemode, false);
+            gameState.started = true;
+        }
+        if (data.type === 'match_over') {
+            gameState.started = false;
+            alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
+        }
         if(data.type === 'vip') { remote.mat.color.setHex(0xFFD700); remote.mat.emissive.setHex(0x554400); remote.matPants.color.setHex(0xFFD700); }
         if(data.type === 'hit') { if(data.target === myId) { if(myShield) return; myHp -= data.damage || 25; lastHitBy = conn.peer; updateUI(); if(myHp <= 0) die(); } }
         if(data.type === 'killed') {
             if(data.victim === conn.peer && remote) remote.deaths++;
-            if(data.killer === myId) { myKills++; myCoins += 100; updateUI(); adminLog(`You eliminated ${remote.username}!`); } 
+            if(data.killer === myId) { 
+                myKills++; myCoins += 100; updateUI(); adminLog(`You eliminated ${remote.username}!`); 
+                if (currentGamemode === 'Gun Game' || currentGamemode === 'GUN_GAME') {
+                    const prog = ['default', 'pistol', 'smg', 'shotgun', 'lmg', 'sniper', 'katana'];
+                    let idx = prog.indexOf(myGun) + 1;
+                    if(idx < prog.length) { myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); }
+                }
+            } 
             else if(remotePlayers[data.killer]) { remotePlayers[data.killer].kills++; adminLog(`${remotePlayers[data.killer].username} eliminated ${remote.username}.`); }
+            
+            if (currentGamemode === 'TDM') {
+                if (remote && remote.team === 'red') gameState.scoreBlue++;
+                else if (remote && remote.team === 'blue') gameState.scoreRed++;
+                // If the victim was ME
+                else if (data.victim === myId) {
+                    if(gameState.myTeam === 'red') gameState.scoreBlue++;
+                    else if(gameState.myTeam === 'blue') gameState.scoreRed++;
+                }
+                updateMatchHUD();
+            }
         }
         if(data.type === 'admin_cmd') {
             if(data.action === 'kick') { peer.destroy(); window.location.reload(); }
@@ -673,13 +815,27 @@ function createNeonGridTexture(hexColor, glowColor) {
     const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; return tex;
 }
 
-function buildMap() {
+function buildMap(mode) {
+    // Add Floor first
     const floorShape = new CANNON.Plane(); const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
-    floorBody.addShape(floorShape); floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2); world.addBody(floorBody);
+    floorBody.addShape(floorShape); floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2); world.addBody(floorBody); mapBodies.push(floorBody);
     const floorGeo = new THREE.PlaneGeometry(300, 300, 1, 1); floorGeo.rotateX(-Math.PI/2);
     const fTex = createNeonGridTexture(0x111111, '#00ffaa'); fTex.repeat.set(60, 60); const floorMat = new THREE.MeshStandardMaterial({ map: fTex, emissiveMap: fTex, emissive: 0x00ffaa, emissiveIntensity: 0.3, roughness: 0.2 });
-    const floorMesh = new THREE.Mesh(floorGeo, floorMat); floorMesh.receiveShadow = true; scene.add(floorMesh);
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat); floorMesh.receiveShadow = true; scene.add(floorMesh); mapMeshes.push(floorMesh);
 
+    // Outer Walls
+    addBox(300, 100, 5, 0, 50, -150, 0x050510, '#444444'); addBox(300, 100, 5, 0, 50, 150, 0x050510, '#444444'); addBox(5, 100, 300, -150, 50, 0, 0x050510, '#444444'); addBox(5, 100, 300, 150, 50, 0, 0x050510, '#444444');
+
+    if (mode === 'FFA') buildMapFFA();
+    else if (mode === 'TDM') buildMapTDM();
+    else if (mode === 'CTF') buildMapCTF();
+    else if (mode === 'KOTH') buildMapKOTH();
+    else if (mode === 'Gun Game' || mode === 'GUN_GAME') buildMapGunGame();
+    else if (mode === 'Zombies' || mode === 'ZOMBIES') buildMapZombies();
+    else buildMapFFA();
+}
+
+function buildMapFFA() {
     // TITAN SPIRE (Center)
     addBox(40, 40, 40, 0, 20, 0, 0x111111, '#ff0055'); 
     addBox(20, 40, 20, 0, 60, 0, 0x111111, '#ff0055');
@@ -696,29 +852,93 @@ function buildMap() {
     addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x222222, '#ffff00'); addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x222222, '#ffff00'); addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x222222, '#ffff00'); addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x222222, '#ffff00'); 
     addBox(40, 2, 10, s, 40, 0, 0x222222, '#00ffaa'); addBox(40, 2, 10, -s, 40, 0, 0x222222, '#00ffaa'); addBox(10, 2, 40, 0, 40, s, 0x222222, '#00ffaa'); addBox(10, 2, 40, 0, 40, -s, 0x222222, '#00ffaa');
 
-    // GROUND COVER & OBSTACLES 
+    // GROUND COVER
     const coverColors = ['#ff00ff', '#00ffff', '#ffff00', '#ff8800'];
     for(let i=0; i<15; i++) {
         const x = (Math.random() - 0.5) * 240; const z = (Math.random() - 0.5) * 240;
         if(Math.abs(x) < 45 && Math.abs(z) < 45) continue;
-        const w = 10 + Math.random() * 15; const d = 10 + Math.random() * 15; const h = 5 + Math.random() * 15;
-        const color = coverColors[Math.floor(Math.random() * coverColors.length)];
-        addBox(w, h, d, x, h/2, z, 0x1a1a1a, color);
+        const w = 10 + Math.random() * 15; const h = 5 + Math.random() * 15;
+        addBox(w, h, w, x, h/2, z, 0x1a1a1a, coverColors[i%coverColors.length]);
     }
+}
 
-    addBox(300, 100, 5, 0, 50, -150, 0x050510, '#444444'); addBox(300, 100, 5, 0, 50, 150, 0x050510, '#444444'); addBox(5, 100, 300, -150, 50, 0, 0x050510, '#444444'); addBox(5, 100, 300, 150, 50, 0, 0x050510, '#444444');
+function buildMapTDM() {
+    // Red Fortress
+    addBox(60, 20, 60, 100, 10, 0, 0x331111, '#ff0000');
+    addBox(20, 30, 20, 100, 15, 0, 0x331111, '#ff0000');
+    addRamp(20, 2, 40, 70, 10, 0, 0, -Math.PI/6, 0x222222, '#ff0000');
+
+    // Blue Fortress
+    addBox(60, 20, 60, -100, 10, 0, 0x111133, '#0000ff');
+    addBox(20, 30, 20, -100, 15, 0, 0x111133, '#0000ff');
+    addRamp(20, 2, 40, -70, 10, 0, 0, Math.PI/6, 0x222222, '#0000ff');
+
+    // Center Chokepoint Bridges
+    addBox(40, 10, 40, 0, 5, 50, 0x222222, '#ffff00');
+    addBox(40, 10, 40, 0, 5, -50, 0x222222, '#ffff00');
+    addBox(20, 20, 20, 0, 10, 0, 0x111111, '#ffffff');
+}
+
+function buildMapCTF() {
+    buildMapTDM(); // Reuses TDM map bases
+    // We'll spawn the flags logic in the GameState manager
+}
+
+function buildMapKOTH() {
+    // Giant central hill
+    addBox(80, 20, 80, 0, 10, 0, 0x222211, '#ffff00');
+    addRamp(30, 2, 40, 0, 10, 60, -Math.PI/6, 0, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, 0, 10, -60, Math.PI/6, 0, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, 60, 10, 0, 0, -Math.PI/6, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, -60, 10, 0, 0, Math.PI/6, 0x222222, '#ffff00');
+    
+    // Corner spawns
+    const s = 100;
+    addBox(20, 10, 20, s, 5, s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, -s, 5, s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, s, 5, -s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, -s, 5, -s, 0x111111, '#00ffff');
+}
+
+function buildMapGunGame() {
+    // Dense, close-quarters maze-like layout
+    for(let i=0; i<30; i++) {
+        const x = (Math.random() - 0.5) * 200; 
+        const z = (Math.random() - 0.5) * 200;
+        const w = 5 + Math.random() * 20; 
+        const h = 20 + Math.random() * 20;
+        addBox(w, h, 5, x, h/2, z, 0x111111, '#ff00ff');
+    }
+    // High walkways
+    addBox(200, 2, 10, 0, 30, 0, 0x111111, '#00f3ff');
+    addBox(10, 2, 200, 0, 30, 0, 0x111111, '#00f3ff');
+}
+
+function buildMapZombies() {
+    // Darker environment, central safe zone, outer barricades
+    addBox(60, 40, 60, 0, 20, 0, 0x050505, '#00ff00');
+    addRamp(20, 2, 60, 0, 20, 60, -Math.PI/5, 0, 0x111111, '#555555');
+    addRamp(20, 2, 60, 0, 20, -60, Math.PI/5, 0, 0x111111, '#555555');
+    
+    // Scattered small covers
+    for(let i=0; i<40; i++) {
+        const x = (Math.random() - 0.5) * 250; 
+        const z = (Math.random() - 0.5) * 250;
+        if(Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+        addBox(10, 10, 10, x, 5, z, 0x1a1a1a, '#115511');
+    }
 }
 
 function addBox(w, h, d, x, y, z, color, glow) {
     const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)); const body = new CANNON.Body({ mass: 0, material: physicsMaterial }); body.addShape(shape); body.position.set(x, y, z); world.addBody(body);
     const geo = new THREE.BoxGeometry(w, h, d); const tex = createNeonGridTexture(color, glow); tex.repeat.set(Math.max(1, w/10), Math.max(1, h/10));
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); mapMeshes.push(mesh);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); mapMeshes.push(mesh); mapBodies.push(body);
 }
 function addRamp(w, h, d, x, y, z, angleX, angleZ, color, glow) {
     const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)); const body = new CANNON.Body({ mass: 0, material: physicsMaterial }); body.addShape(shape); body.position.set(x, y, z);
     const qX = new CANNON.Quaternion(); qX.setFromAxisAngle(new CANNON.Vec3(1,0,0), angleX); const qZ = new CANNON.Quaternion(); qZ.setFromAxisAngle(new CANNON.Vec3(0,0,1), angleZ); body.quaternion = qX.mult(qZ); world.addBody(body);
     const geo = new THREE.BoxGeometry(w, h, d); const tex = createNeonGridTexture(color, glow); tex.repeat.set(Math.max(1, w/10), Math.max(1, d/10));
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, y, z); mesh.quaternion.copy(body.quaternion); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); mapMeshes.push(mesh);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); const mesh = new THREE.Mesh(geo, mat); mesh.position.set(x, y, z); mesh.quaternion.copy(body.quaternion); mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh); mapMeshes.push(mesh); mapBodies.push(body);
 }
 
 function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize( window.innerWidth, window.innerHeight ); composer.setSize( window.innerWidth, window.innerHeight ); }

@@ -118,6 +118,10 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
 .m-btn { width:60px; height:60px; border-radius:50%; background:rgba(0,0,0,0.5); border:2px solid #00f3ff; color:#fff; font-weight:bold; outline:none; cursor:pointer; }
 .m-btn:active { background:rgba(0,243,255,0.4); }
 
+.server-item { display:flex; justify-content:space-between; align-items:center; padding:5px 8px; margin-bottom:5px; background:rgba(0,243,255,0.1); border:1px solid #00f3ff; border-radius:3px; cursor:pointer; color:#fff; font-size:12px; transition:0.2s; }
+.server-item:hover { background:rgba(0,243,255,0.3); }
+.server-item select { display:none; }
+
 .mobile-mode #hud-container {
     bottom: auto !important;
     top: 80px !important;

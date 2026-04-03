@@ -44,6 +44,15 @@
         <div id="shop-trigger" title="Shop">🛒 SHOP</div>
     </div>
     
+    <div id="match-hud" style="position:fixed; top:20px; left:50%; transform:translateX(-50%); display:none; flex-direction:column; align-items:center; z-index:80; pointer-events:none;">
+        <div style="background:rgba(0,0,0,0.6); border:2px solid #00f3ff; border-radius:8px; padding:10px 20px; display:flex; gap:20px; align-items:center;">
+            <div style="text-align:center; color:#ff0055; font-weight:bold; font-size:24px;" id="match-score-red">0</div>
+            <div style="text-align:center; color:#fff; font-size:20px; font-family:monospace; margin:0 10px;" id="match-timer">05:00</div>
+            <div style="text-align:center; color:#0055ff; font-weight:bold; font-size:24px;" id="match-score-blue">0</div>
+        </div>
+        <div id="match-mode-text" style="color:#00f3ff; font-size:14px; margin-top:5px; font-weight:bold; text-transform:uppercase; text-shadow:0 0 5px #00f3ff;">FREE FOR ALL</div>
+    </div>
+    
     <!-- Scope Overlay -->
     <div id="scope-overlay" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:90; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.98) 60%);">
         <div class="ch-line ch-h" style="top:50%; width:100px; left:calc(50% - 50px); background:red; height:1px;"></div>
@@ -55,18 +64,16 @@
         <div class="menu-container glass-heavy">
             <h1 class="neon-title" style="letter-spacing:10px; font-style:italic;">CYBER-FORT 3D</h1>
             
-            <div class="menu-grid">
+            <div class="menu-grid" style="grid-template-columns: 1fr 1fr 1fr; max-width:1200px;">
                 <!-- Left Panel: Your Info -->
-                <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding-right:30px;">
-                    <h3>DEPLOYMENT STATUS</h3>
+                <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding-right:10px;">
+                    <h3>IDENTITY & LOADOUT</h3>
                     <div class="id-box">
-                        <span class="label">YOUR LOBBY IDENTIFIER:</span>
-                        <span id="my-id-display" class="id-value glow-text">Connecting...</span>
+                        <span class="label" style="font-size:10px;">YOUR LOBBY IDENTIFIER:</span>
+                        <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Connecting...</span>
                     </div>
-                    
-                    <label class="section-label">Callsign (Optional)</label>
+                    <label class="section-label">Callsign</label>
                     <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="margin-bottom:15px;" maxlength="12">
-
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select">
                         <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
@@ -74,19 +81,43 @@
                         <option value="ninja" style="background:#111;">Ninja 🥷 (Shuriken - 40 NRG)</option>
                     </select>
                 </div>
+                
+                <!-- Middle Panel: Host Game -->
+                <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding:0 15px;">
+                    <h3>HOST MATCH</h3>
+                    <label class="section-label">Gamemode</label>
+                    <select id="host-gamemode" class="tech-select" style="margin-bottom:15px;">
+                        <option value="FFA">Free For All</option>
+                        <option value="TDM">Team Deathmatch</option>
+                        <option value="CTF">Capture the Flag</option>
+                        <option value="KOTH">King of the Hill</option>
+                        <option value="GUN_GAME">Gun Game</option>
+                        <option value="ZOMBIES">Infection / Zombies</option>
+                    </select>
+                    <label class="section-label">Visibility</label>
+                    <select id="host-visibility" class="tech-select" style="margin-bottom:20px;">
+                        <option value="public">Public Listing</option>
+                        <option value="private">Private (ID Only)</option>
+                    </select>
+                    <button id="btn-host" class="deploy-btn" style="width:100%;">DEPLOY AS HOST</button>
+                    <p class="desc" style="margin-top:10px;">Starts a fresh simulation and awaits connections.</p>
+                </div>
 
                 <!-- Right Panel: Join -->
-                <div class="menu-section join-section" style="padding-left:10px;">
-                    <h3>SQUAD LINK</h3>
-                    <p class="desc">Transmit your Lobby Identifier to squadmates, or enter a target ID below to phase directly into an active simulation.</p>
-                    <input type="text" id="join-id" placeholder="Enter Target ID" class="tech-input">
-                    <button id="btn-join" class="deploy-btn">DEPLOY LINK</button>
+                <div class="menu-section join-section" style="padding-left:15px;">
+                    <h3>SERVER BROWSER</h3>
+                    <div id="server-list" style="height:120px; overflow-y:auto; background:rgba(0,0,0,0.4); border:1px solid #00f3ff; border-radius:5px; margin-bottom:15px; padding:5px;">
+                        <p style="color:#aaa; font-size:12px; text-align:center;">Fetching servers...</p>
+                    </div>
+                    <h3>PRIVATE JOIN</h3>
+                    <input type="text" id="join-id" placeholder="Enter Target ID" class="tech-input" style="margin-bottom:10px;">
+                    <button id="btn-join" class="deploy-btn" style="background:rgba(255,0,255,0.2); border-color:#ff00ff; color:#ff00ff; box-shadow:0 0 10px #ff00ff;">JOIN PRIVATE</button>
                     <p id="connection-status" class="status-msg"></p>
                 </div>
             </div>
 
             <div class="launch-hint">
-                <p>CLICK ANYWHERE OUTSIDE THIS PANEL TO DEPLOY SOLO</p>
+                <p>DO NOT CLICK OUTSIDE UNLESS PLAYING SOLO / DEV MODE</p>
                 <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 

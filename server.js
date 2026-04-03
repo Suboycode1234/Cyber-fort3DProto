@@ -10,10 +10,47 @@ const io = new Server(server, {
   }
 });
 
+app.use(express.json());
+
 // Serve the standalone HTML file directly when hitting root
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/FortniteLite_Standalone.html');
 });
+
+// --- LOBBY TRACKER ---
+let activeLobbies = {};
+
+// Clean up dead lobbies every 15 seconds
+setInterval(() => {
+    const now = Date.now();
+    for (const hostId in activeLobbies) {
+        if (now - activeLobbies[hostId].lastPing > 30000) { // 30 seconds without ping = dead
+            delete activeLobbies[hostId];
+        }
+    }
+}, 15000);
+
+// Fetch all public lobbies
+app.get('/api/lobbies', (req, res) => {
+    res.json(Object.values(activeLobbies));
+});
+
+// Create or Ping a lobby (Host calls this every 10 seconds)
+app.post('/api/lobbies', (req, res) => {
+    const { hostId, hostName, gamemode, players } = req.body;
+    if (!hostId) return res.status(400).json({error: 'Missing hostId'});
+    
+    activeLobbies[hostId] = {
+        hostId,
+        hostName: hostName || 'Unknown Host',
+        gamemode: gamemode || 'FFA',
+        players: players || 1,
+        lastPing: Date.now()
+    };
+    
+    res.json({success: true});
+});
+// ----------------------
 
 const players = {};
 
