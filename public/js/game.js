@@ -40,6 +40,25 @@ function updateMatchHUD() {
 function matchTimerTick() {
     if(!gameState.started || gameState.timer <= 0) return;
     gameState.timer--;
+    
+    if(isHost && gameState.mode === 'KOTH') {
+        let redOnHill = 0;
+        let blueOnHill = 0;
+        const checkHill = (pos, team) => {
+            if(Math.abs(pos.x) < 40 && Math.abs(pos.z) < 40 && pos.y > 5 && pos.y < 30) {
+                if(team === 'red') redOnHill++;
+                if(team === 'blue') blueOnHill++;
+            }
+        };
+        checkHill(playerBody.position, gameState.myTeam);
+        Object.values(remotePlayers).forEach(r => checkHill(r.mesh.position, r.team));
+        
+        if(redOnHill > 0 && blueOnHill === 0) gameState.scoreRed += 1;
+        else if(blueOnHill > 0 && redOnHill === 0) gameState.scoreBlue += 1;
+        
+        connections.forEach(conn => { if(conn.open) conn.send({ type: 'sync_score', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue }); });
+    }
+    
     updateMatchHUD();
     if(isHost && gameState.timer <= 0) {
         gameState.started = false;
@@ -838,6 +857,11 @@ function setupConnection(conn) {
             gameState.started = false;
             alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
         }
+        if (data.type === 'sync_score') {
+            gameState.scoreRed = data.scoreRed;
+            gameState.scoreBlue = data.scoreBlue;
+            updateMatchHUD();
+        }
         if(data.type === 'vip') { remote.mat.color.setHex(0xFFD700); remote.mat.emissive.setHex(0x554400); remote.matPants.color.setHex(0xFFD700); }
         if(data.type === 'hit') { if(data.target === myId) { if(myShield) return; myHp -= data.damage || 25; lastHitBy = conn.peer; updateUI(); if(myHp <= 0) die(); } }
         if(data.type === 'killed') {
@@ -882,15 +906,18 @@ function createNeonGridTexture(hexColor, glowColor) {
 }
 
 function buildMap(mode) {
+    let size = 300;
+    if (mode === 'TDM' || mode === 'CTF') size = 600;
+
     // Add Floor first
     const floorShape = new CANNON.Plane(); const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
     floorBody.addShape(floorShape); floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2); world.addBody(floorBody); mapBodies.push(floorBody);
-    const floorGeo = new THREE.PlaneGeometry(300, 300, 1, 1); floorGeo.rotateX(-Math.PI/2);
-    const fTex = createNeonGridTexture(0x111111, '#00ffaa'); fTex.repeat.set(60, 60); const floorMat = new THREE.MeshStandardMaterial({ map: fTex, emissiveMap: fTex, emissive: 0x00ffaa, emissiveIntensity: 0.3, roughness: 0.2 });
+    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1); floorGeo.rotateX(-Math.PI/2);
+    const fTex = createNeonGridTexture(0x111111, '#00ffaa'); fTex.repeat.set(size/5, size/5); const floorMat = new THREE.MeshStandardMaterial({ map: fTex, emissiveMap: fTex, emissive: 0x00ffaa, emissiveIntensity: 0.3, roughness: 0.2 });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat); floorMesh.receiveShadow = true; scene.add(floorMesh); mapMeshes.push(floorMesh);
 
     // Outer Walls
-    addBox(300, 100, 5, 0, 50, -150, 0x050510, '#444444'); addBox(300, 100, 5, 0, 50, 150, 0x050510, '#444444'); addBox(5, 100, 300, -150, 50, 0, 0x050510, '#444444'); addBox(5, 100, 300, 150, 50, 0, 0x050510, '#444444');
+    addBox(size, 100, 5, 0, 50, -size/2, 0x050510, '#444444'); addBox(size, 100, 5, 0, 50, size/2, 0x050510, '#444444'); addBox(5, 100, size, -size/2, 50, 0, 0x050510, '#444444'); addBox(5, 100, size, size/2, 50, 0, 0x050510, '#444444');
 
     if (mode === 'FFA') buildMapFFA();
     else if (mode === 'TDM') buildMapTDM();
@@ -929,20 +956,33 @@ function buildMapFFA() {
 }
 
 function buildMapTDM() {
-    // Red Fortress
-    addBox(60, 20, 60, 100, 10, 0, 0x331111, '#ff0000');
-    addBox(20, 30, 20, 100, 15, 0, 0x331111, '#ff0000');
-    addRamp(20, 2, 40, 70, 10, 0, 0, -Math.PI/6, 0x222222, '#ff0000');
+    // Red Fortress - Massive
+    addBox(120, 30, 120, 180, 15, 0, 0x331111, '#ff0000'); // Main Base
+    addBox(40, 50, 40, 220, 25, 0, 0x331111, '#ff0000');   // Inner Keep
+    // Walls and Parapets
+    addBox(150, 20, 10, 180, 10, 65, 0x220000, '#ff0000'); // Front Wall Right
+    addBox(150, 20, 10, 180, 10, -65, 0x220000, '#ff0000'); // Front Wall Left
+    addBox(10, 20, 140, 105, 10, 0, 0x220000, '#ff0000'); // Front Entrance Wall
+    addRamp(40, 2, 80, 120, 15, 0, 0, -Math.PI/6, 0x222222, '#ff0000'); // Huge Ramp Entrance
+    addBox(20, 40, 20, 105, 20, 60, 0x441111, '#ff0000'); // Guard Tower Right
+    addBox(20, 40, 20, 105, 20, -60, 0x441111, '#ff0000'); // Guard Tower Left
 
-    // Blue Fortress
-    addBox(60, 20, 60, -100, 10, 0, 0x111133, '#0000ff');
-    addBox(20, 30, 20, -100, 15, 0, 0x111133, '#0000ff');
-    addRamp(20, 2, 40, -70, 10, 0, 0, Math.PI/6, 0x222222, '#0000ff');
+    // Blue Fortress - Massive
+    addBox(120, 30, 120, -180, 15, 0, 0x111133, '#0000ff'); // Main Base
+    addBox(40, 50, 40, -220, 25, 0, 0x111133, '#0000ff');   // Inner Keep
+    // Walls and Parapets
+    addBox(150, 20, 10, -180, 10, 65, 0x000022, '#0000ff'); // Front Wall Right
+    addBox(150, 20, 10, -180, 10, -65, 0x000022, '#0000ff'); // Front Wall Left
+    addBox(10, 20, 140, -105, 10, 0, 0x000022, '#0000ff'); // Front Entrance Wall
+    addRamp(40, 2, 80, -120, 15, 0, 0, Math.PI/6, 0x222222, '#0000ff'); // Huge Ramp Entrance
+    addBox(20, 40, 20, -105, 20, 60, 0x111144, '#0000ff'); // Guard Tower Right
+    addBox(20, 40, 20, -105, 20, -60, 0x111144, '#0000ff'); // Guard Tower Left
 
-    // Center Chokepoint Bridges
-    addBox(40, 10, 40, 0, 5, 50, 0x222222, '#ffff00');
-    addBox(40, 10, 40, 0, 5, -50, 0x222222, '#ffff00');
-    addBox(20, 20, 20, 0, 10, 0, 0x111111, '#ffffff');
+    // Center Chokepoint Bridges and Cover
+    addBox(60, 10, 60, 0, 5, 80, 0x222222, '#ffff00');  
+    addBox(60, 10, 60, 0, 5, -80, 0x222222, '#ffff00'); 
+    addBox(40, 30, 40, 0, 15, 0, 0x111111, '#ffffff');  
+    addBox(140, 2, 60, 0, 15, 0, 0x111111, '#ffffff');  
 }
 
 function buildMapCTF() {
