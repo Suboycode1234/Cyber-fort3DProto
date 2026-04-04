@@ -317,6 +317,7 @@ function initGamemode(mode, isNewGame=true) {
     console.log("Initialized Gamemode:", mode);
     document.getElementById('match-hud').style.display = 'flex';
     document.getElementById('match-mode-text').innerText = mode;
+    gameState.mode = mode;
     
     if (isNewGame) {
         gameState.started = true;
