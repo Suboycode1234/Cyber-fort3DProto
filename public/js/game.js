@@ -174,6 +174,7 @@ let lastNetTime = 0;
 let isMobileDeploy = false, isMobile = false;
 let gpMoveX = 0, gpMoveY = 0, gpLookX = 0, gpLookY = 0, gpBtnPrev = [];
 let myUsername = "Player";
+let myPassword = "";
 
 // Physical Bullets
 const activeBullets = [];
@@ -201,28 +202,54 @@ let fireCooldown = 0;
 let myKills = 0, myDeaths = 0, lastHitBy = null;
 let adminSelectedPeer = null;
 
-function saveProfile() {
+async function saveProfile() {
     const un = myUsername.trim();
-    if(!un || un.startsWith("Player_")) return;
+    if(!un || un.startsWith("Player_") || !myPassword) return;
     const data = { coins: myCoins, kills: myKills, deaths: myDeaths, weapons: myOwnedWeapons };
-    localStorage.setItem('cyberfort_profile_' + un, JSON.stringify(data));
+    try {
+        await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: un, password: myPassword, profile: data })
+        });
+    } catch(e) { console.error('Error saving profile:', e); }
 }
 
-function loadProfile(un) {
-    const data = localStorage.getItem('cyberfort_profile_' + un);
-    if(data) {
-        try {
-            const p = JSON.parse(data);
-            myCoins = p.coins || 0;
-            myKills = p.kills || 0;
-            myDeaths = p.deaths || 0;
-            if(p.weapons) myOwnedWeapons = p.weapons;
+async function loadProfile(un, pw) {
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: un, password: pw })
+        });
+        const data = await res.json();
+        if(data.success) {
+            myCoins = data.profile.coins || 0;
+            myKills = data.profile.kills || 0;
+            myDeaths = data.profile.deaths || 0;
+            if(data.profile.weapons) myOwnedWeapons = data.profile.weapons;
             updateUI();
-            alert('Profile Loaded: ' + un + '\nCoins: ' + myCoins);
-        } catch(e) {}
-    } else {
-        alert('New Profile Created: ' + un);
-    }
+            alert('Profile Loaded: ' + un + '\\nCoins: ' + myCoins);
+        } else {
+            alert('Login Failed: ' + data.error);
+        }
+    } catch(e) { alert('Error contacting server.'); }
+}
+
+async function registerProfile(un, pw) {
+    try {
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: un, password: pw })
+        });
+        const data = await res.json();
+        if(data.success) {
+            alert('Registration Successful! You can now login.');
+        } else {
+            alert('Registration Failed: ' + data.error);
+        }
+    } catch(e) { alert('Error contacting server.'); }
 }
 
 function formatTime(ms) { const s = Math.floor(ms/1000); const m = Math.floor(s/60); return `${m}m ${s%60}s`; }
@@ -409,14 +436,22 @@ function init() {
         applyClass(document.getElementById('player-class').value); connectTo(targetId);
     });
     
-    if(document.getElementById('btn-profile-auth')) {
-        document.getElementById('btn-profile-auth').addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+    if(document.getElementById('btn-profile-login')) {
+        document.getElementById('btn-profile-login').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
             const un = document.getElementById('my-username').value.trim();
-            if(!un) { alert("Please enter a Callsign to load/save."); return; }
+            const pw = document.getElementById('my-password').value;
+            if(!un || !pw) { alert("Please enter Callsign and Password."); return; }
             myUsername = un;
-            loadProfile(un);
+            myPassword = pw;
+            loadProfile(un, pw);
+        });
+        document.getElementById('btn-profile-register').addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const un = document.getElementById('my-username').value.trim();
+            const pw = document.getElementById('my-password').value;
+            if(!un || !pw) { alert("Please enter Callsign and Password."); return; }
+            registerProfile(un, pw);
         });
     }
     

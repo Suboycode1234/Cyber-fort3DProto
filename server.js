@@ -1,14 +1,10 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const { kv } = require('@vercel/kv'); // Works natively on Vercel
+const crypto = require('crypto');     // For basic password hashing
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-  }
-});
 
 app.use(express.json());
 
@@ -16,6 +12,9 @@ app.use(express.json());
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/FortniteLite_Standalone.html');
 });
+
+// Serve static files from main dir
+app.use(express.static(__dirname));
 
 // --- LOBBY TRACKER ---
 let activeLobbies = {};
@@ -50,63 +49,98 @@ app.post('/api/lobbies', (req, res) => {
     
     res.json({success: true});
 });
-// ----------------------
 
-const players = {};
+// --- AUTHENTICATION & PROFILE SYSTEM (VERCEL KV) ---
 
-io.on('connection', (socket) => {
-    console.log('A player connected:', socket.id);
-    
-    socket.on('init', (data) => {
-        players[socket.id] = { id: socket.id, username: data.username, pos: {x:0, y:80, z:0}, rot: {x:0,y:0,z:0,w:1}, isCrouching: false, gun: 'default' };
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+        const userKey = `user:${username}`;
+        const existing = await kv.exists(userKey);
         
-        // Tell this player about everyone else
-        for(const id in players) {
-            if(id !== socket.id) {
-                socket.emit('player_joined', { id: id, username: players[id].username });
-            }
+        if (existing) {
+            return res.status(400).json({ error: 'Username already taken' });
         }
-        
-        // Tell everyone else about this player
-        socket.broadcast.emit('player_joined', { id: socket.id, username: data.username });
-        console.log(`Player initialized: ${data.username} (${socket.id})`);
-    });
 
-    socket.on('pos', (data) => {
-        if(players[socket.id]) {
-            players[socket.id].pos = data.pos;
-            players[socket.id].rot = data.rot;
-            players[socket.id].isCrouching = data.isCrouching;
-            players[socket.id].gun = data.gun;
-            socket.broadcast.emit('player_pos', { id: socket.id, ...data });
-        }
-    });
+        const hashedPassword = hashPassword(password);
+        await kv.hset(userKey, {
+            password: hashedPassword,
+            coins: 0,
+            kills: 0,
+            deaths: 0,
+            weapons: JSON.stringify(['default'])
+        });
 
-    socket.on('gun_switch', (data) => {
-        if(players[socket.id]) {
-            players[socket.id].gun = data.gun;
-            socket.broadcast.emit('player_gun', { id: socket.id, gun: data.gun });
-        }
-    });
-
-    socket.on('hit', (data) => {
-        // data should be { target: socketId, damage: amount }
-        console.log(`Hit! ${socket.id} hit ${data.target} for ${data.damage}`);
-        socket.to(data.target).emit('hit_registered', { source: socket.id, damage: data.damage });
-    });
-
-    socket.on('vip_status', () => {
-        socket.broadcast.emit('player_vip', { id: socket.id });
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Player disconnected:', socket.id);
-        delete players[socket.id];
-        socket.broadcast.emit('player_left', { id: socket.id });
-    });
+        res.json({ success: true, message: 'Registration successful' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
-const PORT = 3000;
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+        const userKey = `user:${username}`;
+        const user = await kv.hgetall(userKey);
+
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid username or password' });
+        }
+
+        if (user.password !== hashPassword(password)) {
+            return res.status(400).json({ error: 'Invalid username or password' });
+        }
+
+        const profileData = {
+            coins: parseInt(user.coins) || 0,
+            kills: parseInt(user.kills) || 0,
+            deaths: parseInt(user.deaths) || 0,
+            weapons: typeof user.weapons === 'string' ? JSON.parse(user.weapons) : (user.weapons || ['default'])
+        };
+
+        res.json({ success: true, profile: profileData });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/profile', async (req, res) => {
+    try {
+        const { username, password, profile } = req.body;
+        if (!username || !password || !profile) return res.status(400).json({ error: 'Missing parameters' });
+
+        const userKey = `user:${username}`;
+        const user = await kv.hgetall(userKey);
+
+        if (!user || user.password !== hashPassword(password)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        await kv.hset(userKey, {
+            coins: profile.coins,
+            kills: profile.kills,
+            deaths: profile.deaths,
+            weapons: JSON.stringify(profile.weapons)
+        });
+
+        res.json({ success: true, message: 'Profile updated' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });

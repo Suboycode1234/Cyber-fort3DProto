@@ -78,10 +78,14 @@
                         <span class="label" style="font-size:10px;">YOUR LOBBY IDENTIFIER:</span>
                         <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Connecting...</span>
                     </div>
-                    <label class="section-label">Callsign / Profile Name</label>
-                    <div style="display:flex; gap:10px; margin-bottom:15px;">
-                        <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="flex:1;" maxlength="12">
-                        <button id="btn-profile-auth" class="deploy-btn" style="padding:0 15px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa;">LOAD / SAVE</button>
+                    <label class="section-label">Callsign / Authentication</label>
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px;">
+                        <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="width:100%; box-sizing:border-box;" maxlength="12">
+                        <input type="password" id="my-password" placeholder="Enter Password..." class="tech-input" style="width:100%; box-sizing:border-box;">
+                        <div style="display:flex; gap:10px;">
+                            <button id="btn-profile-login" class="deploy-btn" style="flex:1; padding:5px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:14px;">LOGIN / SYNC</button>
+                            <button id="btn-profile-register" class="deploy-btn" style="flex:1; padding:5px; background:rgba(0,85,255,0.2); border-color:#0055ff; color:#0055ff; font-size:14px;">REGISTER</button>
+                        </div>
                     </div>
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select" style="margin-bottom:15px;">
