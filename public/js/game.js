@@ -88,36 +88,43 @@ function matchTimerTick() {
     
     if (isHost && gameState.mode === 'CTF') {
         const checkFlag = (flag, flagName, basePos) => {
-            if (flag.home) {
+            if (!flag.carrier) {
                 let pickedUpBy = null;
-                if (gameState.myTeam !== flagName && playerBody.position.distanceTo(flag.pos) < 15) pickedUpBy = myId;
+                if (gameState.myTeam !== flagName && playerBody.position.distanceTo(flag.pos) < 15 && myHp > 0) pickedUpBy = myId;
                 else {
                     Object.keys(remotePlayers).forEach(id => {
-                        if (remotePlayers[id].team !== flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15) pickedUpBy = id;
+                        if (remotePlayers[id].team !== flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15 && remotePlayers[id].hp > 0) pickedUpBy = id;
                     });
                 }
-                if (pickedUpBy) { flag.home = false; flag.carrier = pickedUpBy; }
-            } else if (flag.carrier) {
-                if (flag.carrier === myId) flag.pos = playerBody.position.clone();
-                else if (remotePlayers[flag.carrier]) flag.pos = remotePlayers[flag.carrier].mesh.position.clone();
-                else flag.carrier = null; // Carrier dc
                 
-                let carrierTeam = flag.carrier === myId ? gameState.myTeam : (remotePlayers[flag.carrier] ? remotePlayers[flag.carrier].team : 'none');
-                let carrierBasePos = carrierTeam === 'red' ? {x:450, y:40, z:0} : {x:-450, y:40, z:0};
-                if (flag.pos && typeof flag.pos.distanceTo === 'function' && flag.pos.distanceTo(carrierBasePos) < 15) {
-                    if (carrierTeam === 'red') gameState.scoreRed++;
-                    if (carrierTeam === 'blue') gameState.scoreBlue++;
-                    flag.home = true; flag.carrier = null; flag.pos = basePos;
+                if (pickedUpBy) { 
+                    flag.home = false; flag.carrier = pickedUpBy; 
+                } else if (!flag.home) {
+                    let returnedBy = null;
+                    if (gameState.myTeam === flagName && playerBody.position.distanceTo(flag.pos) < 15 && myHp > 0) returnedBy = myId;
+                    else {
+                         Object.keys(remotePlayers).forEach(id => {
+                             if (remotePlayers[id].team === flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15 && remotePlayers[id].hp > 0) returnedBy = id;
+                         });
+                    }
+                    if (returnedBy) { flag.home = true; flag.pos = { x: basePos.x, y: basePos.y, z: basePos.z }; flag.carrier = null; }
                 }
             } else {
-                let returnedBy = null;
-                if (gameState.myTeam === flagName && playerBody.position.distanceTo(flag.pos) < 15) returnedBy = myId;
-                else {
-                     Object.keys(remotePlayers).forEach(id => {
-                         if (remotePlayers[id].team === flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15) returnedBy = id;
-                     });
+                if (flag.carrier === myId && myHp <= 0) flag.carrier = null;
+                else if (flag.carrier !== myId && remotePlayers[flag.carrier] && remotePlayers[flag.carrier].hp <= 0) flag.carrier = null;
+                else if (flag.carrier === myId) flag.pos = playerBody.position.clone();
+                else if (remotePlayers[flag.carrier]) flag.pos = remotePlayers[flag.carrier].mesh.position.clone();
+                else flag.carrier = null; 
+                
+                if (flag.carrier) {
+                    let carrierTeam = flag.carrier === myId ? gameState.myTeam : (remotePlayers[flag.carrier] ? remotePlayers[flag.carrier].team : 'none');
+                    let carrierBasePos = carrierTeam === 'red' ? new THREE.Vector3(300, 10, 0) : new THREE.Vector3(-300, 10, 0);
+                    if (flag.pos && typeof flag.pos.distanceTo === 'function' && flag.pos.distanceTo(carrierBasePos) < 25) {
+                        if (carrierTeam === 'red') gameState.scoreRed++;
+                        if (carrierTeam === 'blue') gameState.scoreBlue++;
+                        flag.home = true; flag.carrier = null; flag.pos = { x: basePos.x, y: basePos.y, z: basePos.z };
+                    }
                 }
-                if (returnedBy) { flag.home = true; flag.pos = basePos; flag.carrier = null; }
             }
         };
         
@@ -270,7 +277,7 @@ function updateAdminDashboard() {
     
     const allEntities = Object.keys(remotePlayers).map(peerId => {
         const r = remotePlayers[peerId];
-        return {id: peerId, name: r.username, val: (chartType === 'hp' ? r.hp : (chartType === 'kills' ? r.kills : (chartType === 'deaths' ? r.deaths : r.coins))) || 0};
+        return {id: peerId, name: r.username || "Player", val: (chartType === 'hp' ? r.hp : (chartType === 'kills' ? r.kills : (chartType === 'deaths' ? r.deaths : r.coins))) || 0};
     });
     allEntities.push({id: 'my-self', name: myUsername + " (You)", val: (chartType === 'hp' ? myHp : (chartType === 'kills' ? myKills : (chartType === 'deaths' ? myDeaths : myCoins)))});
     let maxVal = Math.max(1, ...allEntities.map(e => e.val));
@@ -367,6 +374,13 @@ function initGamemode(mode, isNewGame=true) {
         gameState.timer = 5 * 60;
         gameState.scoreRed = 0;
         gameState.scoreBlue = 0;
+        
+        if (mode === 'Gun Game' || mode === 'GUN_GAME') {
+            myInventory = ['default', null, null, null, null];
+            targetSlot = 0;
+            currentSlot = 0;
+            if (typeof window.equipSlot === 'function') window.equipSlot(0);
+        }
     }
     
     for (const ob of mapMeshes) scene.remove(ob);
@@ -991,7 +1005,7 @@ function setupConnection(conn) {
         document.getElementById('connection-status').innerText = "Connected to: " + conn.peer;
         const humanoid = createHumanoid(); const nametag = createNametag("Loading..."); nametag.position.y = 4.5; humanoid.group.add(nametag);
         humanoid.group.userData.peerId = conn.peer;
-        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0 };
+        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0, username: "Player" };
         conn.send({ type: 'init', username: myUsername, teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto' });
         adminLog(`New connection: ${conn.peer}`);
     });
@@ -1044,6 +1058,10 @@ function setupConnection(conn) {
             gameState.started = false;
             alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
         }
+        if (data.type === 'match_over_gungame') {
+            gameState.started = false;
+            alert("GUN GAME OVER! WINNER: " + data.winner);
+        }
         if (data.type === 'sync_score') {
             gameState.scoreRed = data.scoreRed;
             gameState.scoreBlue = data.scoreBlue;
@@ -1058,7 +1076,13 @@ function setupConnection(conn) {
                 if (currentGamemode === 'Gun Game' || currentGamemode === 'GUN_GAME') {
                     const prog = ['default', 'pistol', 'smg', 'shotgun', 'lmg', 'sniper', 'katana'];
                     let idx = prog.indexOf(myGun) + 1;
-                    if(idx < prog.length) { myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); }
+                    if(idx < prog.length) { 
+                        myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); 
+                    } else if (idx >= prog.length) {
+                        gameState.started = false;
+                        connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over_gungame', winner: myUsername }); });
+                        alert("GUN GAME WINNER: " + myUsername + "!");
+                    }
                 }
                 saveProfile();
             } 
