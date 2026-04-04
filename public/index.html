@@ -51,6 +51,12 @@
             <div style="text-align:center; color:#0055ff; font-weight:bold; font-size:24px;" id="match-score-blue">0</div>
         </div>
         <div id="match-mode-text" style="color:#00f3ff; font-size:14px; margin-top:5px; font-weight:bold; text-transform:uppercase; text-shadow:0 0 5px #00f3ff;">FREE FOR ALL</div>
+        <div id="ctf-flag-status" style="display:none; color:#ffff00; font-size:12px; margin-top:5px; font-weight:bold; text-transform:uppercase; text-shadow:0 0 5px #ffff00;">FLAGS SAFE</div>
+    </div>
+    
+    <div id="koth-leaderboard" style="position:fixed; top:80px; right:20px; display:none; flex-direction:column; width:200px; background:rgba(0,0,0,0.7); border:1px solid #ffff00; padding:10px; z-index:80; pointer-events:none;">
+        <h4 style="margin:0 0 10px 0; color:#ffff00; text-align:center; border-bottom:1px solid #ffff00; padding-bottom:5px;">KOTH STANDINGS</h4>
+        <div id="koth-lines" style="display:flex; flex-direction:column; gap:5px; font-family:monospace; font-size:14px;"></div>
     </div>
     
     <!-- Scope Overlay -->
@@ -78,10 +84,16 @@
                         <button id="btn-profile-auth" class="deploy-btn" style="padding:0 15px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa;">LOAD / SAVE</button>
                     </div>
                     <label class="section-label">Select Loadout</label>
-                    <select id="player-class" class="tech-select">
+                    <select id="player-class" class="tech-select" style="margin-bottom:15px;">
                         <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
                         <option value="tank" style="background:#111;">Tank 🛡️ (Shield - 70 NRG)</option>
                         <option value="ninja" style="background:#111;">Ninja 🥷 (Shuriken - 40 NRG)</option>
+                    </select>
+                    <label class="section-label">Select Team</label>
+                    <select id="team-select" class="tech-select">
+                        <option value="auto" style="background:#111;">Auto-Assign</option>
+                        <option value="red" style="background:#330000; color:#ff0000;">Crimson Legion (Red)</option>
+                        <option value="blue" style="background:#000033; color:#0055ff;">Cobalt Order (Blue)</option>
                     </select>
                 </div>
                 

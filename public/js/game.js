@@ -19,6 +19,8 @@ let recoilAnimTimer = 0;
 let meleeAnimTimer = 0;
 let mapMeshes = [];
 let mapBodies = [];
+let flagMeshRed = null;
+let flagMeshBlue = null;
 
 let gameState = {
     mode: 'FFA',
@@ -26,8 +28,30 @@ let gameState = {
     scoreRed: 0,
     scoreBlue: 0,
     myTeam: 'none',
-    started: false
+    started: false,
+    flagRed: { home: true, carrier: null, pos: { x: 450, y: 40, z: 0 } },
+    flagBlue: { home: true, carrier: null, pos: { x: -450, y: 40, z: 0 } }
 };
+
+let myKothScore = 0;
+
+function respawn() {
+    let spawnX = 0, spawnY = 80, spawnZ = 0;
+    if (gameState.mode === 'TDM' || gameState.mode === 'CTF') {
+        if (gameState.myTeam === 'red') { spawnX = 450; spawnY = 60; spawnZ = 0; }
+        else if (gameState.myTeam === 'blue') { spawnX = -450; spawnY = 60; spawnZ = 0; }
+        else { spawnX = (Math.random() < 0.5 ? 450 : -450); spawnY = 60; spawnZ = 0; }
+    } else if (gameState.mode === 'KOTH') {
+        spawnX = 0; spawnY = 40; spawnZ = (Math.random() < 0.5 ? 90 : -90); // Edges of KOTH platform
+    } else {
+        spawnX = (Math.random() - 0.5) * 100; spawnY = 80; spawnZ = (Math.random() - 0.5) * 100;
+    }
+    
+    if (playerBody) {
+        playerBody.position.set(spawnX, spawnY, spawnZ);
+        playerBody.velocity.set(0,0,0);
+    }
+}
 
 function updateMatchHUD() {
     const m = Math.floor(gameState.timer / 60);
@@ -38,35 +62,98 @@ function updateMatchHUD() {
 }
 
 function matchTimerTick() {
-    if(!gameState.started || gameState.timer <= 0) return;
-    gameState.timer--;
+    if(!gameState.started) return;
     
-    if(isHost && gameState.mode === 'KOTH') {
-        let redOnHill = 0;
-        let blueOnHill = 0;
-        const checkHill = (pos, team) => {
-            if(Math.abs(pos.x) < 40 && Math.abs(pos.z) < 40 && pos.y > 5 && pos.y < 30) {
-                if(team === 'red') redOnHill++;
-                if(team === 'blue') blueOnHill++;
+    // Modes with match timer: TDM, FFA, KOTH, ZOMBIES
+    const usesTimer = ['TDM', 'FFA', 'KOTH', 'ZOMBIES'].includes(gameState.mode);
+    if(usesTimer && gameState.timer > 0) gameState.timer--;
+    
+    if (gameState.mode === 'KOTH') {
+        if(Math.abs(playerBody.position.x) < 40 && Math.abs(playerBody.position.z) < 40 && playerBody.position.y > 5 && playerBody.position.y < 30) {
+            myKothScore++;
+        }
+        updateKothLeaderboard();
+        
+        if (isHost && gameState.timer <= 0) {
+            gameState.started = false;
+            let win = {name: myUsername, score: myKothScore};
+            Object.values(remotePlayers).forEach(r => { if((r.kothScore || 0) > win.score) win = {name: r.username, score: (r.kothScore || 0)}; });
+            connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over_koth', winner: win.name, score: win.score }); });
+            alert("KOTH MATCH OVER! WINNER: " + win.name + " with " + win.score + " points!");
+        }
+    }
+    
+    if (isHost && gameState.mode === 'CTF') {
+        const checkFlag = (flag, flagName, basePos) => {
+            if (flag.home) {
+                let pickedUpBy = null;
+                if (gameState.myTeam !== flagName && playerBody.position.distanceTo(flag.pos) < 15) pickedUpBy = myId;
+                else {
+                    Object.keys(remotePlayers).forEach(id => {
+                        if (remotePlayers[id].team !== flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15) pickedUpBy = id;
+                    });
+                }
+                if (pickedUpBy) { flag.home = false; flag.carrier = pickedUpBy; }
+            } else if (flag.carrier) {
+                if (flag.carrier === myId) flag.pos = playerBody.position.clone();
+                else if (remotePlayers[flag.carrier]) flag.pos = remotePlayers[flag.carrier].mesh.position.clone();
+                else flag.carrier = null; // Carrier dc
+                
+                let carrierTeam = flag.carrier === myId ? gameState.myTeam : (remotePlayers[flag.carrier] ? remotePlayers[flag.carrier].team : 'none');
+                let carrierBasePos = carrierTeam === 'red' ? {x:450, y:40, z:0} : {x:-450, y:40, z:0};
+                if (flag.pos && typeof flag.pos.distanceTo === 'function' && flag.pos.distanceTo(carrierBasePos) < 15) {
+                    if (carrierTeam === 'red') gameState.scoreRed++;
+                    if (carrierTeam === 'blue') gameState.scoreBlue++;
+                    flag.home = true; flag.carrier = null; flag.pos = basePos;
+                }
+            } else {
+                let returnedBy = null;
+                if (gameState.myTeam === flagName && playerBody.position.distanceTo(flag.pos) < 15) returnedBy = myId;
+                else {
+                     Object.keys(remotePlayers).forEach(id => {
+                         if (remotePlayers[id].team === flagName && remotePlayers[id].mesh.position.distanceTo(flag.pos) < 15) returnedBy = id;
+                     });
+                }
+                if (returnedBy) { flag.home = true; flag.pos = basePos; flag.carrier = null; }
             }
         };
-        checkHill(playerBody.position, gameState.myTeam);
-        Object.values(remotePlayers).forEach(r => checkHill(r.mesh.position, r.team));
         
-        if(redOnHill > 0 && blueOnHill === 0) gameState.scoreRed += 1;
-        else if(blueOnHill > 0 && redOnHill === 0) gameState.scoreBlue += 1;
+        checkFlag(gameState.flagRed, 'red', {x: 450, y: 40, z: 0});
+        checkFlag(gameState.flagBlue, 'blue', {x: -450, y: 40, z: 0});
         
-        connections.forEach(conn => { if(conn.open) conn.send({ type: 'sync_score', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue }); });
+        connections.forEach(conn => { if(conn.open) conn.send({ type: 'sync_ctf', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue }); });
+        
+        if (gameState.scoreRed >= 5 || gameState.scoreBlue >= 5) {
+            gameState.started = false;
+            connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over' }); });
+            alert("CTF MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
+        }
     }
     
     updateMatchHUD();
-    if(isHost && gameState.timer <= 0) {
+    if(isHost && usesTimer && gameState.timer <= 0 && gameState.mode !== 'KOTH') {
         gameState.started = false;
         connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over' }); });
         alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
     }
 }
 setInterval(matchTimerTick, 1000);
+
+function updateKothLeaderboard() {
+    if (gameState.mode !== 'KOTH') { document.getElementById('koth-leaderboard').style.display = 'none'; return; }
+    document.getElementById('koth-leaderboard').style.display = 'flex';
+    
+    let scores = [];
+    scores.push({name: myUsername, score: myKothScore});
+    Object.values(remotePlayers).forEach(r => scores.push({name: r.username, score: r.kothScore || 0}));
+    scores.sort((a,b) => b.score - a.score);
+    
+    const lines = document.getElementById('koth-lines');
+    lines.innerHTML = '';
+    scores.slice(0, 5).forEach((s, idx) => {
+        lines.innerHTML += `<div style="display:flex; justify-content:space-between; color:${idx===0?'#00ff00':'#ccc'};"><span>${s.name.substring(0,10)}</span><span>${s.score}</span></div>`;
+    });
+}
 
 
 // Networking
@@ -239,6 +326,7 @@ function initGamemode(mode, isNewGame=true) {
     for (const ob of mapBodies) world.removeBody(ob);
     mapMeshes = []; mapBodies = [];
     buildMap(mode);
+    respawn();
     updateMatchHUD();
 }
 
@@ -275,6 +363,14 @@ function init() {
         e.stopPropagation();
         isHost = true;
         currentGamemode = document.getElementById('host-gamemode').value;
+        
+        let pref = document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto';
+        if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
+            gameState.myTeam = (pref === 'auto') ? 'red' : pref; 
+        } else {
+            gameState.myTeam = 'none';
+        }
+        
         const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
         myUsername = un.trim() !== '' ? un.trim() : "Player_" + Math.floor(Math.random()*100);
         applyClass(document.getElementById('player-class').value); 
@@ -493,7 +589,15 @@ function die() {
     const shuffled = [...availableCards].sort(() => 0.5 - Math.random()).slice(0, 3);
     shuffled.forEach(c => {
         const btn = document.createElement('div'); btn.className = 'draft-card'; btn.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
-        btn.onclick = () => { c.apply(); myHp = myMaxHp; updateUI(); playerBody.position.set(0, 80, 0); playerBody.velocity.set(0,0,0); document.getElementById('draft-modal').classList.add('hidden'); if(!isMobileDeploy) document.getElementById('blocker').style.display = 'flex'; else { document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } }; opts.appendChild(btn);
+        btn.onclick = () => { 
+            c.apply(); 
+            myHp = myMaxHp; 
+            updateUI(); 
+            respawn(); 
+            document.getElementById('draft-modal').classList.add('hidden'); 
+            if(!isMobileDeploy) document.getElementById('blocker').style.display = 'flex'; else { document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } 
+        }; 
+        opts.appendChild(btn);
     });
 }
 
@@ -840,31 +944,37 @@ function setupConnection(conn) {
         document.getElementById('connection-status').innerText = "Connected to: " + conn.peer;
         const humanoid = createHumanoid(); const nametag = createNametag("Loading..."); nametag.position.y = 4.5; humanoid.group.add(nametag);
         humanoid.group.userData.peerId = conn.peer;
-        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none' };
-        conn.send({ type: 'init', username: myUsername });
-        if (isHost) {
-            // Assign team if TDM or CTF
-            let t = 'none';
-            if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
-                const reds = Object.values(remotePlayers).filter(r => r.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
-                const blues = Object.values(remotePlayers).filter(r => r.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
-                t = (reds <= blues) ? 'red' : 'blue';
-            }
-            remotePlayers[conn.peer].team = t;
-            conn.send({ type: 'init_game', mode: currentGamemode, timer: gameState.timer, scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, team: t });
-        }
+        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0 };
+        conn.send({ type: 'init', username: myUsername, teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto' });
         adminLog(`New connection: ${conn.peer}`);
     });
     conn.on('data', data => {
         const remote = remotePlayers[conn.peer]; if(!remote) return;
         if(data.type === 'init') {
             remote.username = data.username;
+            remote.teamPref = data.teamPref || 'auto';
             remote.mesh.remove(remote.nametag);
             remote.nametag = createNametag(data.username); remote.nametag.position.y = 4.5; remote.mesh.add(remote.nametag);
+            
+            if (isHost) {
+                let t = 'none';
+                if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
+                    if (remote.teamPref === 'red' || remote.teamPref === 'blue') {
+                        t = remote.teamPref;
+                    } else {
+                        const reds = Object.values(remotePlayers).filter(r => r.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
+                        const blues = Object.values(remotePlayers).filter(r => r.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
+                        t = (reds <= blues) ? 'red' : 'blue';
+                    }
+                }
+                remote.team = t;
+                conn.send({ type: 'init_game', mode: currentGamemode, timer: gameState.timer, scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, team: t, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue });
+            }
         }
         if(data.type === 'pos') {
             const oldPos = remote.mesh.position.clone();
             remote.hp = data.hp; remote.maxHp = data.maxHp; remote.coins = data.coins; remote.speed = data.speed;
+            remote.kothScore = data.kothScore || 0;
             remote.mesh.position.copy(data.pos); const q = new THREE.Quaternion(data.rot.x, data.rot.y, data.rot.z, data.rot.w); const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
             
             remote.moving = oldPos.distanceTo(data.pos) > 0.05;
@@ -1056,7 +1166,19 @@ function buildMapTDM() {
 
 function buildMapCTF() {
     buildMapTDM(); // Reuses TDM map bases
-    // We'll spawn the flags logic in the GameState manager
+    
+    // Create Flag Meshes
+    const flagGeo = new THREE.CylinderGeometry(2, 2, 8, 16);
+    const flagMatRed = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 1 });
+    const flagMatBlue = new THREE.MeshStandardMaterial({ color: 0x0000ff, emissive: 0x0000ff, emissiveIntensity: 1 });
+    
+    flagMeshRed = new THREE.Mesh(flagGeo, flagMatRed);
+    flagMeshBlue = new THREE.Mesh(flagGeo, flagMatBlue);
+    flagMeshRed.position.copy(gameState.flagRed.pos);
+    flagMeshBlue.position.copy(gameState.flagBlue.pos);
+    
+    scene.add(flagMeshRed); scene.add(flagMeshBlue);
+    mapMeshes.push(flagMeshRed); mapMeshes.push(flagMeshBlue);
 }
 
 function buildMapKOTH() {
@@ -1258,8 +1380,25 @@ function animate() {
         const myRot = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
         const now = Date.now();
         if (now - lastNetTime > 50) {
-            connections.forEach(conn => { if(conn.open) conn.send({ type: 'pos', pos: myPos, rot: myRot, isCrouching: isCrouching, gun: myGun, hp: myHp, maxHp: myMaxHp, coins: myCoins, speed: mySpeed }); });
+            connections.forEach(conn => { if(conn.open) conn.send({ type: 'pos', pos: myPos, rot: myRot, isCrouching: isCrouching, gun: myGun, hp: myHp, maxHp: myMaxHp, coins: myCoins, speed: mySpeed, kothScore: myKothScore }); });
             lastNetTime = now;
+        }
+        
+        if (gameState.mode === 'CTF') {
+            if (flagMeshRed && gameState.flagRed) flagMeshRed.position.copy(gameState.flagRed.pos);
+            if (flagMeshBlue && gameState.flagBlue) flagMeshBlue.position.copy(gameState.flagBlue.pos);
+            
+            const ctfHud = document.getElementById('ctf-flag-status');
+            if (ctfHud) {
+                ctfHud.style.display = 'block';
+                if (!gameState.flagRed.home && !gameState.flagBlue.home) { ctfHud.innerText = "BOTH FLAGS TAKEN!"; ctfHud.style.color = "#ff00ff"; }
+                else if (!gameState.flagRed.home) { ctfHud.innerText = "RED FLAG STOLEN!"; ctfHud.style.color = "#ff0000"; }
+                else if (!gameState.flagBlue.home) { ctfHud.innerText = "BLUE FLAG STOLEN!"; ctfHud.style.color = "#0055ff"; }
+                else { ctfHud.innerText = "FLAGS SAFE"; ctfHud.style.color = "#ffff00"; }
+            }
+        } else {
+            const ctfHud = document.getElementById('ctf-flag-status');
+            if (ctfHud) ctfHud.style.display = 'none';
         }
     }
     composer.render();
