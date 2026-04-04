@@ -715,16 +715,27 @@ function adminLog(msg) {
     feed.appendChild(item); feed.scrollTop = feed.scrollHeight;
 }
 
+let lastAdminDashboardUpdate = 0;
 function updateAdminDashboard() {
     if(!document.getElementById('admin-dashboard') || document.getElementById('admin-dashboard').classList.contains('hidden')) return;
-    const list = document.getElementById('admin-player-list');
-    list.innerHTML = '';
+    
     const now = Date.now();
+    if(now - lastAdminDashboardUpdate < 1000 && !window.forceAdminUpdate) return;
+    lastAdminDashboardUpdate = now;
+    window.forceAdminUpdate = false;
+
+    const list = document.getElementById('admin-player-list');
+    
     Object.keys(remotePlayers).forEach(peerId => {
         const rp = remotePlayers[peerId];
-        const btn = document.createElement('div');
-        btn.style.padding = '5px'; btn.style.border = '1px solid #00f3ff'; btn.style.cursor = 'pointer';
-        if(adminSelectedPeer === peerId) btn.style.background = 'rgba(0, 243, 255, 0.3)';
+        let btn = document.getElementById('admin-btn-' + peerId);
+        if(!btn) {
+            btn = document.createElement('div');
+            btn.id = 'admin-btn-' + peerId;
+            btn.style.padding = '5px'; btn.style.border = '1px solid #00f3ff'; btn.style.cursor = 'pointer';
+            list.appendChild(btn);
+        }
+        btn.style.background = (adminSelectedPeer === peerId) ? 'rgba(0, 243, 255, 0.3)' : 'transparent';
         btn.innerHTML = `<b style="color:#fff;">${rp.username}</b> <span style="color:#aaa; font-size:12px;">(${peerId.substring(0,6)}...)</span><br><span style="color:#0f0;">Uptime: ${formatTime(now - rp.connectedAt)}</span><br><span style="color:#ffff00;">K: ${rp.kills} | D: ${rp.deaths}</span>`;
         btn.onclick = () => {
             adminSelectedPeer = peerId;
@@ -733,27 +744,59 @@ function updateAdminDashboard() {
             document.getElementById('admin-set-maxhp').value = Math.floor(rp.maxHp || 100);
             document.getElementById('admin-set-coins').value = Math.floor(rp.coins || 0);
             document.getElementById('admin-set-speed').value = Math.floor(rp.speed || 25);
+            window.forceAdminUpdate = true;
+            updateAdminDashboard();
         };
-        list.appendChild(btn);
+    });
+    
+    Array.from(list.children).forEach(child => {
+        const id = child.id.replace('admin-btn-', '');
+        if(!remotePlayers[id]) list.removeChild(child);
     });
     
     const chartType = document.getElementById('admin-chart-type').value;
     const container = document.getElementById('admin-chart-container');
-    container.innerHTML = '';
     
-    const allEntities = Object.values(remotePlayers).map(r => ({name: r.username, val: (chartType === 'hp' ? r.hp : (chartType === 'kills' ? r.kills : (chartType === 'deaths' ? r.deaths : r.coins))) || 0}));
-    allEntities.push({name: myUsername + " (You)", val: (chartType === 'hp' ? myHp : (chartType === 'kills' ? myKills : (chartType === 'deaths' ? myDeaths : myCoins)))});
+    const allEntities = Object.keys(remotePlayers).map(peerId => {
+        const r = remotePlayers[peerId];
+        return {id: peerId, name: r.username, val: (chartType === 'hp' ? r.hp : (chartType === 'kills' ? r.kills : (chartType === 'deaths' ? r.deaths : r.coins))) || 0};
+    });
+    allEntities.push({id: 'my-self', name: myUsername + " (You)", val: (chartType === 'hp' ? myHp : (chartType === 'kills' ? myKills : (chartType === 'deaths' ? myDeaths : myCoins)))});
     let maxVal = Math.max(1, ...allEntities.map(e => e.val));
     
     allEntities.forEach(e => {
-        const barWraps = document.createElement('div'); barWraps.style.flex = "1"; barWraps.style.display = "flex"; barWraps.style.flexDirection = "column"; barWraps.style.justifyContent = "flex-end"; barWraps.style.alignItems = "center"; barWraps.style.height = "100%";
-        const bar = document.createElement('div');
+        let barWraps = document.getElementById('admin-chart-' + e.id);
+        let bar, valLbl, lbl;
+        if (!barWraps) {
+            barWraps = document.createElement('div');
+            barWraps.id = 'admin-chart-' + e.id;
+            barWraps.style.flex = "1"; barWraps.style.display = "flex"; barWraps.style.flexDirection = "column"; barWraps.style.justifyContent = "flex-end"; barWraps.style.alignItems = "center"; barWraps.style.height = "100%";
+            
+            valLbl = document.createElement('span'); valLbl.className = 'val-lbl'; valLbl.style.fontSize = "10px"; valLbl.style.color = "#fff"; valLbl.style.marginBottom = "2px";
+            
+            bar = document.createElement('div'); bar.className = 'bar';
+            bar.style.width = "100%"; bar.style.transition = "height 0.2s, background 0.2s";
+            
+            lbl = document.createElement('span'); lbl.className = 'name-lbl'; lbl.style.fontSize = "10px"; lbl.style.color = "#fff"; lbl.style.marginTop = "2px"; lbl.style.overflow = "hidden"; lbl.style.whiteSpace = "nowrap"; lbl.style.textOverflow = "ellipsis"; lbl.style.maxWidth = "100%";
+            
+            barWraps.appendChild(valLbl); barWraps.appendChild(bar); barWraps.appendChild(lbl);
+            container.appendChild(barWraps);
+        } else {
+            valLbl = barWraps.querySelector('.val-lbl');
+            bar = barWraps.querySelector('.bar');
+            lbl = barWraps.querySelector('.name-lbl');
+        }
+        
         const hPct = Math.max(2, (e.val / maxVal)*100);
-        bar.style.width = "100%"; bar.style.height = hPct + "%"; bar.style.background = chartType === 'hp' ? '#0f0' : (chartType === 'deaths' ? '#f00' : '#ff0'); bar.style.transition = "height 0.2s";
-        const lbl = document.createElement('span'); lbl.innerText = e.name.substring(0,5); lbl.style.fontSize = "10px"; lbl.style.color = "#fff"; lbl.style.marginTop = "2px"; lbl.style.overflow = "hidden"; lbl.style.whiteSpace = "nowrap"; lbl.style.textOverflow = "ellipsis"; lbl.style.maxWidth = "100%";
-        const valLbl = document.createElement('span'); valLbl.innerText = Math.floor(e.val); valLbl.style.fontSize = "10px"; valLbl.style.color = "#fff"; valLbl.style.marginBottom = "2px";
-        barWraps.appendChild(valLbl); barWraps.appendChild(bar); barWraps.appendChild(lbl);
-        container.appendChild(barWraps);
+        bar.style.height = hPct + "%"; 
+        bar.style.background = chartType === 'hp' ? '#0f0' : (chartType === 'deaths' ? '#f00' : '#ff0');
+        lbl.innerText = e.name.substring(0,5);
+        valLbl.innerText = Math.floor(e.val);
+    });
+
+    Array.from(container.children).forEach(child => {
+        const id = child.id.replace('admin-chart-', '');
+        if (id !== 'my-self' && !remotePlayers[id]) container.removeChild(child);
     });
 }
 let joysticksInitialized = false;
