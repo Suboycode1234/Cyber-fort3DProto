@@ -311,8 +311,38 @@ function init() {
 
     if(typeof THREE.PointerLockControls !== 'undefined') controls = new THREE.PointerLockControls( camera, document.body );
     const blocker = document.getElementById( 'blocker' );
-    controls.addEventListener( 'lock', () => { blocker.style.display = 'none'; document.getElementById('shop-modal').classList.add('hidden'); document.getElementById('vip-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('hotbar').style.display = 'flex'; });
-    controls.addEventListener( 'unlock', () => { isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); document.getElementById('scope-overlay').classList.add('hidden'); document.getElementById('hotbar').style.display = 'none'; if(myHp > 0 && !isMobileDeploy) blocker.style.display = 'flex'; });
+    controls.addEventListener( 'lock', () => { 
+        blocker.style.display = 'none'; 
+        document.getElementById('shop-modal').classList.add('hidden'); 
+        document.getElementById('vip-modal').classList.add('hidden'); 
+        document.getElementById('admin-modal').classList.add('hidden'); 
+        document.getElementById('hotbar').style.display = 'flex'; 
+    });
+    controls.addEventListener( 'unlock', () => { 
+        isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); 
+        document.getElementById('scope-overlay').classList.add('hidden'); 
+        document.getElementById('hotbar').style.display = 'none'; 
+        if(myHp > 0 && !isMobileDeploy) {
+            if (gameState.started) {
+                document.getElementById('exit-panel').classList.remove('hidden');
+                document.getElementById('exit-panel').style.display = 'flex';
+            } else {
+                blocker.style.display = 'flex'; 
+            }
+        }
+    });
+
+    // Exit Panel Actions
+    document.getElementById('btn-resume-match').addEventListener('click', () => {
+        document.getElementById('exit-panel').classList.add('hidden');
+        document.getElementById('exit-panel').style.display = 'none';
+        if (!isMobileDeploy && myHp > 0) controls.lock();
+    });
+    
+    document.getElementById('btn-exit-match').addEventListener('click', () => {
+        window.location.reload(); // Wipes timer, disconnects peers, stops match loops, resets back to lobby beautifully
+    });
+
     scene.add( controls.getObject() );
 
     document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);

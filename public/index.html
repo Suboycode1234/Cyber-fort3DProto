@@ -328,6 +328,15 @@
         </div>
     </div>
 
+    <div id="exit-panel" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,20,0.85); z-index:9999; flex-direction:column; align-items:center; justify-content:center; backdrop-filter:blur(10px);">
+        <h1 class="neon-title" style="color:#ff0055; text-shadow:0 0 15px #ff0055; font-size:4rem; margin-bottom:10px;">SYSTEM PAUSED</h1>
+        <p style="color:#aaa; letter-spacing:2px; margin-bottom:40px;">SIMULATION TEMPORARILY SUSPENDED</p>
+        <div style="display:flex; gap:30px;">
+            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:24px; padding:15px 50px;">RESUME GAME</button>
+            <button id="btn-exit-match" class="deploy-btn" style="background:rgba(255,0,0,0.2); border-color:#ff0000; color:#ff0000; font-size:24px; padding:15px 50px;">ABORT TO LOBBY</button>
+        </div>
+    </div>
+
     <script src="js/game.js"></script>
     <style>
         .hotbar-slot {

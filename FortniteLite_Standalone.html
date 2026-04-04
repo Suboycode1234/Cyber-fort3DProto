@@ -465,6 +465,15 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
         </div>
     </div>
 
+    <div id="exit-panel" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,20,0.85); z-index:9999; flex-direction:column; align-items:center; justify-content:center; backdrop-filter:blur(10px);">
+        <h1 class="neon-title" style="color:#ff0055; text-shadow:0 0 15px #ff0055; font-size:4rem; margin-bottom:10px;">SYSTEM PAUSED</h1>
+        <p style="color:#aaa; letter-spacing:2px; margin-bottom:40px;">SIMULATION TEMPORARILY SUSPENDED</p>
+        <div style="display:flex; gap:30px;">
+            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:24px; padding:15px 50px;">RESUME GAME</button>
+            <button id="btn-exit-match" class="deploy-btn" style="background:rgba(255,0,0,0.2); border-color:#ff0000; color:#ff0000; font-size:24px; padding:15px 50px;">ABORT TO LOBBY</button>
+        </div>
+    </div>
+
     <script>
 // --- Core Systems ---
 let camera, scene, renderer, controls, composer;
@@ -779,8 +788,38 @@ function init() {
 
     if(typeof THREE.PointerLockControls !== 'undefined') controls = new THREE.PointerLockControls( camera, document.body );
     const blocker = document.getElementById( 'blocker' );
-    controls.addEventListener( 'lock', () => { blocker.style.display = 'none'; document.getElementById('shop-modal').classList.add('hidden'); document.getElementById('vip-modal').classList.add('hidden'); document.getElementById('admin-modal').classList.add('hidden'); document.getElementById('hotbar').style.display = 'flex'; });
-    controls.addEventListener( 'unlock', () => { isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); document.getElementById('scope-overlay').classList.add('hidden'); document.getElementById('hotbar').style.display = 'none'; if(myHp > 0 && !isMobileDeploy) blocker.style.display = 'flex'; });
+    controls.addEventListener( 'lock', () => { 
+        blocker.style.display = 'none'; 
+        document.getElementById('shop-modal').classList.add('hidden'); 
+        document.getElementById('vip-modal').classList.add('hidden'); 
+        document.getElementById('admin-modal').classList.add('hidden'); 
+        document.getElementById('hotbar').style.display = 'flex'; 
+    });
+    controls.addEventListener( 'unlock', () => { 
+        isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); 
+        document.getElementById('scope-overlay').classList.add('hidden'); 
+        document.getElementById('hotbar').style.display = 'none'; 
+        if(myHp > 0 && !isMobileDeploy) {
+            if (gameState.started) {
+                document.getElementById('exit-panel').classList.remove('hidden');
+                document.getElementById('exit-panel').style.display = 'flex';
+            } else {
+                blocker.style.display = 'flex'; 
+            }
+        }
+    });
+
+    // Exit Panel Actions
+    document.getElementById('btn-resume-match').addEventListener('click', () => {
+        document.getElementById('exit-panel').classList.add('hidden');
+        document.getElementById('exit-panel').style.display = 'none';
+        if (!isMobileDeploy && myHp > 0) controls.lock();
+    });
+    
+    document.getElementById('btn-exit-match').addEventListener('click', () => {
+        window.location.reload(); // Wipes timer, disconnects peers, stops match loops, resets back to lobby beautifully
+    });
+
     scene.add( controls.getObject() );
 
     document.addEventListener('keydown', onKeyDown); document.addEventListener('keyup', onKeyUp);
