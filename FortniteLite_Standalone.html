@@ -1414,7 +1414,7 @@ function createNeonGridTexture(hexColor, glowColor) {
 
 function buildMap(mode) {
     let size = 300;
-    if (mode === 'TDM' || mode === 'CTF') size = 600;
+    if (mode === 'TDM' || mode === 'CTF') size = 1200;
 
     // Add Floor first
     const floorShape = new CANNON.Plane(); const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
@@ -1424,7 +1424,7 @@ function buildMap(mode) {
     const floorMesh = new THREE.Mesh(floorGeo, floorMat); floorMesh.receiveShadow = true; scene.add(floorMesh); mapMeshes.push(floorMesh);
 
     // Outer Walls
-    addBox(size, 100, 5, 0, 50, -size/2, 0x050510, '#444444'); addBox(size, 100, 5, 0, 50, size/2, 0x050510, '#444444'); addBox(5, 100, size, -size/2, 50, 0, 0x050510, '#444444'); addBox(5, 100, size, size/2, 50, 0, 0x050510, '#444444');
+    addBox(size, 250, 5, 0, 125, -size/2, 0x050510, '#444444'); addBox(size, 250, 5, 0, 125, size/2, 0x050510, '#444444'); addBox(5, 250, size, -size/2, 125, 0, 0x050510, '#444444'); addBox(5, 250, size, size/2, 125, 0, 0x050510, '#444444');
 
     if (mode === 'FFA') buildMapFFA();
     else if (mode === 'TDM') buildMapTDM();
@@ -1463,33 +1463,72 @@ function buildMapFFA() {
 }
 
 function buildMapTDM() {
-    // Red Fortress - Massive
-    addBox(120, 30, 120, 180, 15, 0, 0x331111, '#ff0000'); // Main Base
-    addBox(40, 50, 40, 220, 25, 0, 0x331111, '#ff0000');   // Inner Keep
-    // Walls and Parapets
-    addBox(150, 20, 10, 180, 10, 65, 0x220000, '#ff0000'); // Front Wall Right
-    addBox(150, 20, 10, 180, 10, -65, 0x220000, '#ff0000'); // Front Wall Left
-    addBox(10, 20, 140, 105, 10, 0, 0x220000, '#ff0000'); // Front Entrance Wall
-    addRamp(40, 2, 80, 120, 15, 0, 0, -Math.PI/6, 0x222222, '#ff0000'); // Huge Ramp Entrance
-    addBox(20, 40, 20, 105, 20, 60, 0x441111, '#ff0000'); // Guard Tower Right
-    addBox(20, 40, 20, 105, 20, -60, 0x441111, '#ff0000'); // Guard Tower Left
+    // RED FORTRESS (Massive Citadel Setup)
+    addBox(240, 60, 240, 450, 30, 0, 0x331111, '#ff0000'); // Central Keep
+    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');  // Sniper Peak
+    addRamp(40, 2, 100, 310, 30, 60, 0, -Math.PI/6, 0x222222, '#ff0000'); // Keep stairs Left
+    addRamp(40, 2, 100, 310, 30, -60, 0, -Math.PI/6, 0x222222, '#ff0000'); // Keep stairs Right
+    
+    // Red Outer Forward Walls (220 units forward of Keep)
+    addBox(200, 40, 30, 220, 20, 160, 0x220000, '#ff0000'); // Outer Wall Left
+    addBox(200, 40, 30, 220, 20, -160, 0x220000, '#ff0000'); // Outer Wall Right
+    addBox(40, 40, 30, 220, 20, 0, 0x220000, '#ff0000'); // Center Arch Base
+    addBox(120, 10, 30, 220, 45, 0, 0x220000, '#ff0000'); // Archway bridging the gap
+    
+    // Parapets and Tower Guards on Red Walls
+    addBox(180, 2, 30, 220, 41, 160, 0x222222, '#00ffaa'); // Walkway Left
+    addBox(180, 2, 30, 220, 41, -160, 0x222222, '#00ffaa'); // Walkway Right
+    addBox(60, 80, 60, 220, 40, 280, 0x330000, '#ff0000'); // Corner Guard Tower Left
+    addBox(60, 80, 60, 220, 40, -280, 0x330000, '#ff0000'); // Corner Guard Tower Right
+    
+    // Ramps to Outer Walls (inside courtyard)
+    addRamp(20, 2, 80, 250, 20, 160, 0, -Math.PI/5, 0x111111, '#ff5500');
+    addRamp(20, 2, 80, 250, 20, -160, 0, -Math.PI/5, 0x111111, '#ff5500');
+    
+    // Courtyard Fillers
+    addBox(60, 25, 60, 300, 12.5, 180, 0x111111, '#ff00ff');
+    addBox(60, 25, 60, 300, 12.5, -180, 0x111111, '#ff00ff');
 
-    // Blue Fortress - Massive
-    addBox(120, 30, 120, -180, 15, 0, 0x111133, '#0000ff'); // Main Base
-    addBox(40, 50, 40, -220, 25, 0, 0x111133, '#0000ff');   // Inner Keep
-    // Walls and Parapets
-    addBox(150, 20, 10, -180, 10, 65, 0x000022, '#0000ff'); // Front Wall Right
-    addBox(150, 20, 10, -180, 10, -65, 0x000022, '#0000ff'); // Front Wall Left
-    addBox(10, 20, 140, -105, 10, 0, 0x000022, '#0000ff'); // Front Entrance Wall
-    addRamp(40, 2, 80, -120, 15, 0, 0, Math.PI/6, 0x222222, '#0000ff'); // Huge Ramp Entrance
-    addBox(20, 40, 20, -105, 20, 60, 0x111144, '#0000ff'); // Guard Tower Right
-    addBox(20, 40, 20, -105, 20, -60, 0x111144, '#0000ff'); // Guard Tower Left
 
-    // Center Chokepoint Bridges and Cover
-    addBox(60, 10, 60, 0, 5, 80, 0x222222, '#ffff00');  
-    addBox(60, 10, 60, 0, 5, -80, 0x222222, '#ffff00'); 
-    addBox(40, 30, 40, 0, 15, 0, 0x111111, '#ffffff');  
-    addBox(140, 2, 60, 0, 15, 0, 0x111111, '#ffffff');  
+    // BLUE FORTRESS (Perfectly Mirrored)
+    addBox(240, 60, 240, -450, 30, 0, 0x111133, '#0000ff'); // Central Keep
+    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');  // Sniper Peak
+    addRamp(40, 2, 100, -310, 30, 60, 0, Math.PI/6, 0x222222, '#0000ff'); // Keep stairs Left
+    addRamp(40, 2, 100, -310, 30, -60, 0, Math.PI/6, 0x222222, '#0000ff'); // Keep stairs Right
+    
+    // Blue Outer Forward Walls
+    addBox(200, 40, 30, -220, 20, 160, 0x000022, '#0000ff'); // Outer Wall Left
+    addBox(200, 40, 30, -220, 20, -160, 0x000022, '#0000ff'); // Outer Wall Right
+    addBox(40, 40, 30, -220, 20, 0, 0x000022, '#0000ff'); // Center Arch Base
+    addBox(120, 10, 30, -220, 45, 0, 0x000022, '#0000ff'); // Archway bridging the gap
+    
+    // Parapets and Tower Guards on Blue Walls
+    addBox(180, 2, 30, -220, 41, 160, 0x222222, '#00ffaa'); // Walkway Left
+    addBox(180, 2, 30, -220, 41, -160, 0x222222, '#00ffaa'); // Walkway Right
+    addBox(60, 80, 60, -220, 40, 280, 0x000033, '#0000ff'); // Corner Guard Tower Left
+    addBox(60, 80, 60, -220, 40, -280, 0x000033, '#0000ff'); // Corner Guard Tower Right
+    
+    // Ramps to Outer Walls (inside courtyard)
+    addRamp(20, 2, 80, -250, 20, 160, 0, Math.PI/5, 0x111111, '#0055ff');
+    addRamp(20, 2, 80, -250, 20, -160, 0, Math.PI/5, 0x111111, '#0055ff');
+
+    // Courtyard Fillers
+    addBox(60, 25, 60, -300, 12.5, 180, 0x111111, '#ff00ff');
+    addBox(60, 25, 60, -300, 12.5, -180, 0x111111, '#ff00ff');
+
+
+    // NO-MAN'S LAND (Center structure stretching -200 to +200)
+    addBox(140, 80, 140, 0, 40, 0, 0x111111, '#ffffff'); // Mega Spire
+    addRamp(60, 2, 160, 110, 40, 0, 0, -Math.PI/6, 0x222222, '#ffff00'); // Spire Right Ramp
+    addRamp(60, 2, 160, -110, 40, 0, 0, Math.PI/6, 0x222222, '#ffff00'); // Spire Left Ramp
+    addRamp(60, 2, 160, 0, 40, 110, -Math.PI/6, 0, 0x222222, '#ffff00');  // Spire Front Ramp
+    addRamp(60, 2, 160, 0, 40, -110, Math.PI/6, 0, 0x222222, '#ffff00');   // Spire Back Ramp
+    
+    // Auxiliary Flanks
+    addBox(120, 15, 120, 0, 7.5, 250, 0x222222, '#ffff00'); 
+    addBox(120, 15, 120, 0, 7.5, -250, 0x222222, '#ffff00'); 
+    addBox(60, 40, 60, 0, 20, 250, 0x1a1a1a, '#ffffff');
+    addBox(60, 40, 60, 0, 20, -250, 0x1a1a1a, '#ffffff');
 }
 
 function buildMapCTF() {
