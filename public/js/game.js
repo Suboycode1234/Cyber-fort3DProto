@@ -29,8 +29,8 @@ let gameState = {
     scoreBlue: 0,
     myTeam: 'none',
     started: false,
-    flagRed: { home: true, carrier: null, pos: { x: 450, y: 40, z: 0 } },
-    flagBlue: { home: true, carrier: null, pos: { x: -450, y: 40, z: 0 } }
+    flagRed: { home: true, carrier: null, pos: { x: 300, y: 10, z: 0 } },
+    flagBlue: { home: true, carrier: null, pos: { x: -300, y: 10, z: 0 } }
 };
 
 let myKothScore = 0;
@@ -38,11 +38,14 @@ let myKothScore = 0;
 function respawn() {
     let spawnX = 0, spawnY = 80, spawnZ = 0;
     if (gameState.mode === 'TDM' || gameState.mode === 'CTF') {
-        if (gameState.myTeam === 'red') { spawnX = 450; spawnY = 60; spawnZ = 0; }
-        else if (gameState.myTeam === 'blue') { spawnX = -450; spawnY = 60; spawnZ = 0; }
-        else { spawnX = (Math.random() < 0.5 ? 450 : -450); spawnY = 60; spawnZ = 0; }
+        if (gameState.myTeam === 'red') { spawnX = 450; spawnY = 70; spawnZ = 0; }
+        else if (gameState.myTeam === 'blue') { spawnX = -450; spawnY = 70; spawnZ = 0; }
+        else { spawnX = (Math.random() < 0.5 ? 450 : -450); spawnY = 70; spawnZ = 0; }
     } else if (gameState.mode === 'KOTH') {
-        spawnX = 0; spawnY = 40; spawnZ = (Math.random() < 0.5 ? 90 : -90); // Edges of KOTH platform
+        // Corner spawn platforms are at X=±100, Z=±100, height Y=10.
+        spawnX = (Math.random() < 0.5 ? 100 : -100); 
+        spawnY = 20; 
+        spawnZ = (Math.random() < 0.5 ? 100 : -100);
     } else {
         spawnX = (Math.random() - 0.5) * 100; spawnY = 80; spawnZ = (Math.random() - 0.5) * 100;
     }
@@ -118,8 +121,8 @@ function matchTimerTick() {
             }
         };
         
-        checkFlag(gameState.flagRed, 'red', {x: 450, y: 40, z: 0});
-        checkFlag(gameState.flagBlue, 'blue', {x: -450, y: 40, z: 0});
+        checkFlag(gameState.flagRed, 'red', {x: 300, y: 10, z: 0});
+        checkFlag(gameState.flagBlue, 'blue', {x: -300, y: 10, z: 0});
         
         connections.forEach(conn => { if(conn.open) conn.send({ type: 'sync_ctf', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue }); });
         
