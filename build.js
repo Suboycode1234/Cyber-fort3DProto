@@ -14,3 +14,4 @@ html = html.replace('<script src="js/game.js"></script>', `<script>\n${js}\n</sc
 
 fs.writeFileSync('FortniteLite_Standalone.html', html);
 console.log('Successfully compiled public/ files into FortniteLite_Standalone.html!');
+
