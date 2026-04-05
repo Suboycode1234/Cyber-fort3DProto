@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
-const { kv } = require('@vercel/kv'); // Works natively on Vercel
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN }); // Works natively on Vercel
 const crypto = require('crypto');     // For basic password hashing
 
 const app = express();
