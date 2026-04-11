@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Multiplayer server for 3D Cyberpunk Shooter",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js"
   },
