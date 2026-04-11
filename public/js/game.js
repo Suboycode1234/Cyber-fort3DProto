@@ -81,7 +81,7 @@ function matchTimerTick() {
             gameState.started = false;
             let win = {name: myUsername, score: myKothScore};
             Object.values(remotePlayers).forEach(r => { if((r.kothScore || 0) > win.score) win = {name: r.username, score: (r.kothScore || 0)}; });
-            connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over_koth', winner: win.name, score: win.score }); });
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'match_over_koth', winner: win.name, score: win.score } });
             alert("KOTH MATCH OVER! WINNER: " + win.name + " with " + win.score + " points!");
         }
     }
@@ -131,11 +131,11 @@ function matchTimerTick() {
         checkFlag(gameState.flagRed, 'red', {x: 300, y: 10, z: 0});
         checkFlag(gameState.flagBlue, 'blue', {x: -300, y: 10, z: 0});
         
-        connections.forEach(conn => { if(conn.open) conn.send({ type: 'sync_ctf', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue }); });
+        if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'sync_ctf', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue } });
         
         if (gameState.scoreRed >= 5 || gameState.scoreBlue >= 5) {
             gameState.started = false;
-            connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over' }); });
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'match_over' } });
             alert("CTF MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
         }
     }
@@ -143,7 +143,7 @@ function matchTimerTick() {
     updateMatchHUD();
     if(isHost && usesTimer && gameState.timer <= 0 && gameState.mode !== 'KOTH') {
         gameState.started = false;
-        connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over' }); });
+        if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'match_over' } });
         alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
     }
 }
@@ -167,7 +167,8 @@ function updateKothLeaderboard() {
 
 
 // Networking
-let peer = null, myId = "", connections = [], remotePlayers = {}; 
+let socket = null, myId = "", remotePlayers = {};
+let socketRoomId = null; 
 let lastNetTime = 0;
 
 // Mobile & Gamepad
@@ -207,7 +208,7 @@ async function saveProfile() {
     if(!un || un.startsWith("Player_") || !myPassword) return;
     const data = { coins: myCoins, kills: myKills, deaths: myDeaths, weapons: myOwnedWeapons };
     try {
-        await fetch('/api/profile', {
+        await fetch((typeof window.RAILWAY_URL !== 'undefined' ? window.RAILWAY_URL : '') + '/api/profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: un, password: myPassword, profile: data })
@@ -217,7 +218,7 @@ async function saveProfile() {
 
 async function loadProfile(un, pw) {
     try {
-        const res = await fetch('/api/login', {
+        const res = await fetch((typeof window.RAILWAY_URL !== 'undefined' ? window.RAILWAY_URL : '') + '/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: un, password: pw })
@@ -238,7 +239,7 @@ async function loadProfile(un, pw) {
 
 async function registerProfile(un, pw) {
     try {
-        const res = await fetch('/api/register', {
+        const res = await fetch((typeof window.RAILWAY_URL !== 'undefined' ? window.RAILWAY_URL : '') + '/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: un, password: pw })
@@ -365,7 +366,7 @@ let currentGamemode = 'FFA';
 
 function fetchLobbies() {
     if(document.getElementById('blocker').style.display === 'none') return;
-    fetch('/api/lobbies').then(r=>r.json()).then(list => {
+    fetch((typeof window.RAILWAY_URL !== 'undefined' ? window.RAILWAY_URL : '') + '/api/lobbies').then(r=>r.json()).then(list => {
         const sl = document.getElementById('server-list');
         sl.innerHTML = '';
         if(list.length === 0) { sl.innerHTML = '<p style="color:#aaa; font-size:12px; text-align:center;">No active servers found.</p>'; }
@@ -380,13 +381,9 @@ function fetchLobbies() {
 setInterval(fetchLobbies, 5000);
 
 function pingLobby() {
-    if(!isHost) return;
+    if(!isHost || !socket) return;
     if(document.getElementById('host-visibility') && document.getElementById('host-visibility').value !== 'public') return;
-    const un = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
-    fetch('/api/lobbies', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ hostId: myId, hostName: un || 'Host', gamemode: currentGamemode, players: connections.length + 1 })
-    }).catch(e=>{});
+    socket.emit('ping_lobby', { players: Object.keys(remotePlayers).length + 1 });
 }
 setInterval(pingLobby, 10000);
 
@@ -419,8 +416,24 @@ function initGamemode(mode, isNewGame=true) {
 }
 
 function init() {
-    peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } }); 
-    peer.on('open', id => { myId = id; document.getElementById('my-id-display').innerText = id; }); peer.on('connection', conn => setupConnection(conn));
+    socket = io(typeof window.RAILWAY_URL !== 'undefined' ? window.RAILWAY_URL : window.location.origin);
+    socket.on('welcome', data => { 
+        myId = data.id; 
+        document.getElementById('my-id-display').innerText = myId; 
+    });
+    socket.on('peer_connected', data => {
+        // Just note it, we'll get their pos data soon
+        adminLog(`New peer in room: ${data.peerId}`);
+    });
+    socket.on('relay_message', pkt => {
+        handleSocketData(pkt.senderId, pkt.data);
+    });
+    socket.on('host_disconnected', () => {
+        if(!isHost) {
+            alert("Host disconnected! Match ended.");
+            window.location.reload();
+        }
+    });
     window.addEventListener('touchstart', () => { if(!isMobile) { isMobile = true; document.body.classList.add('mobile-mode'); } }, {once: true});
     document.addEventListener('touchstart', (e) => {
         if (!isMobileDeploy || myHp <= 0) return;
@@ -474,6 +487,9 @@ function init() {
         if(isMobile) { isMobileDeploy = true; document.getElementById('blocker').style.display = 'none'; document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } 
         else { if(!controls.isLocked) controls.lock(); } 
         
+        socketRoomId = myId;
+        const un2 = document.getElementById('my-username') ? document.getElementById('my-username').value : '';
+        socket.emit('host_lobby', { hostName: un2 || 'Host', gamemode: currentGamemode, players: 1 });
         pingLobby();
         initGamemode(currentGamemode, true);
     });
@@ -675,7 +691,7 @@ function generateCards() {
 function die() {
     myDeaths++;
     saveProfile();
-    connections.forEach(conn => { if(conn.open) conn.send({ type: 'killed', victim: myId, killer: lastHitBy }); });
+    if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'killed', victim: myId, killer: lastHitBy } });
     lastHitBy = null;
     if(!isMobileDeploy) controls.unlock();
     isScoped = false; camera.fov = 75; camera.updateProjectionMatrix(); document.getElementById('scope-overlay').classList.add('hidden');
@@ -721,14 +737,14 @@ window.equipSlot = function(index) {
         myGun = myInventory[index];
         updateWeaponVisuals(myAvatar, myGun);
         updateViewModel(myGun);
-        connections.forEach(conn => { if(conn.open) conn.send({ type: 'gun', gun: myGun }); });
+        if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'gun', gun: myGun } });
     } else {
         if(myAvatar && myAvatar.gunContainer) {
             while(myAvatar.gunContainer.children.length > 0) myAvatar.gunContainer.remove(myAvatar.gunContainer.children[0]);
         }
         myGun = null;
         updateViewModel(null);
-        connections.forEach(conn => { if(conn.open) conn.send({ type: 'gun', gun: null }); });
+        if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'gun', gun: null } });
     }
 }
 
@@ -744,7 +760,7 @@ function setupUIEvents() {
     document.getElementById('btn-shop-close').onclick = () => { document.getElementById('shop-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
     document.getElementById('vip-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); else hideMobileControls(); document.getElementById('vip-modal').classList.remove('hidden'); };
     document.getElementById('btn-vip-close').onclick = () => { document.getElementById('vip-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
-    document.getElementById('btn-vip-login').onclick = () => { if(document.getElementById('vip-password').value === 'Seth1234@!') { document.getElementById('vip-modal').classList.add('hidden'); opCards.forEach(c => c.apply()); updateUI(); alert("VIP UNLOCKED!"); connections.forEach(conn => { if(conn.open) conn.send({type: 'vip'}); }); if(isMobileDeploy && myHp > 0) showMobileControls(); } };
+    document.getElementById('btn-vip-login').onclick = () => { if(document.getElementById('vip-password').value === 'Seth1234@!') { document.getElementById('vip-modal').classList.add('hidden'); opCards.forEach(c => c.apply()); updateUI(); alert("VIP UNLOCKED!"); if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: {type: 'vip'} }); if(isMobileDeploy && myHp > 0) showMobileControls(); } };
     document.getElementById('admin-trigger').onclick = () => { if(!isMobileDeploy) controls.unlock(); else hideMobileControls(); document.getElementById('admin-modal').classList.remove('hidden'); };
     document.getElementById('btn-admin-close').onclick = () => { document.getElementById('admin-modal').classList.add('hidden'); if(isMobileDeploy && myHp > 0) showMobileControls(); };
     document.getElementById('btn-admin-login').onclick = () => { if(document.getElementById('admin-password').value === 'Seth1234@!') { 
@@ -764,31 +780,31 @@ function setupUIEvents() {
         document.getElementById('btn-admin-apply-stats').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
                 const spd = document.getElementById('admin-set-speed').value;
-                remotePlayers[adminSelectedPeer].conn.send({ type: 'admin_cmd', action: 'set_stats', hp: document.getElementById('admin-set-hp').value, maxHp: document.getElementById('admin-set-maxhp').value, coins: document.getElementById('admin-set-coins').value, speed: spd });
+                if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: adminSelectedPeer, data: { type: 'admin_cmd', action: 'set_stats', hp: document.getElementById('admin-set-hp' }).value, maxHp: document.getElementById('admin-set-maxhp').value, coins: document.getElementById('admin-set-coins').value, speed: spd });
                 adminLog("Applied stat override to " + remotePlayers[adminSelectedPeer].username);
             }
         };
         document.getElementById('btn-admin-give-weapon').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
-                remotePlayers[adminSelectedPeer].conn.send({ type: 'admin_cmd', action: 'give_weapon', weapon: document.getElementById('admin-give-weapon-sel').value });
+                if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: adminSelectedPeer, data: { type: 'admin_cmd', action: 'give_weapon', weapon: document.getElementById('admin-give-weapon-sel' }).value });
                 adminLog("Dispatched payload [WEAPON] to " + remotePlayers[adminSelectedPeer].username);
             }
         };
         document.getElementById('btn-admin-give-card').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
-                remotePlayers[adminSelectedPeer].conn.send({ type: 'admin_cmd', action: 'give_card' });
+                if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: adminSelectedPeer, data: { type: 'admin_cmd', action: 'give_card' } });
                 adminLog("Dispatched payload [EPIC CARD] to " + remotePlayers[adminSelectedPeer].username);
             }
         };
         document.getElementById('btn-admin-vip').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
-                remotePlayers[adminSelectedPeer].conn.send({ type: 'admin_cmd', action: 'give_vip' });
+                if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: adminSelectedPeer, data: { type: 'admin_cmd', action: 'give_vip' } });
                 adminLog("Elevated privilege [VIP] for " + remotePlayers[adminSelectedPeer].username);
             }
         };
         document.getElementById('btn-admin-kick').onclick = () => {
             if(adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
-                remotePlayers[adminSelectedPeer].conn.send({ type: 'admin_cmd', action: 'kick' });
+                if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: adminSelectedPeer, data: { type: 'admin_cmd', action: 'kick' } });
                 adminLog("TERMINATED connection for " + remotePlayers[adminSelectedPeer].username);
             }
         };
@@ -931,7 +947,7 @@ function fireMelee(range, damage) {
         let hitId = null; let cur = intersects[0].object;
         while(cur && !hitId) { if(cur.userData && cur.userData.peerId) hitId = cur.userData.peerId; cur = cur.parent; }
         if(hitId && remotePlayers[hitId]) {
-            remotePlayers[hitId].conn.send({ type: 'hit', target: hitId, damage: damage });
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: hitId, data: { type: 'hit', target: hitId, damage: damage } });
             if(myLifesteal) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
             if(myCoinSteal) myCoins += 50; else myCoins += 20; updateUI(); 
         }
@@ -953,7 +969,7 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
         while(cur && !hitId) { if(cur.userData && cur.userData.peerId) hitId = cur.userData.peerId; cur = cur.parent; }
         
         if(hitId && remotePlayers[hitId]) {
-            remotePlayers[hitId].conn.send({ type: 'hit', target: hitId, damage: damage });
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: hitId, data: { type: 'hit', target: hitId, damage: damage } });
             if(myLifesteal) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
             if(myCoinSteal) myCoins += 50; else myCoins += 20; updateUI(); 
         }
@@ -1033,117 +1049,142 @@ function createHumanoid() {
     return { group, head, torso, lArm, rArm, lLeg, rLeg, gunContainer, matTorso, matPants, currentGun: 'default' };
 }
 
-function connectTo(id) { const conn = peer.connect(id); setupConnection(conn); }
-function setupConnection(conn) {
-    connections.push(conn);
-    conn.on('open', () => {
-        document.getElementById('connection-status').innerText = "Connected to: " + conn.peer;
-        const humanoid = createHumanoid(); const nametag = createNametag("Loading..."); nametag.position.y = 4.5; humanoid.group.add(nametag);
-        humanoid.group.userData.peerId = conn.peer;
-        scene.add(humanoid.group); remotePlayers[conn.peer] = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, conn, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0, username: "Player" };
-        conn.send({ type: 'init', username: myUsername, teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto' });
-        adminLog(`New connection: ${conn.peer}`);
-    });
-    conn.on('data', data => {
-        const remote = remotePlayers[conn.peer]; if(!remote) return;
-        if(data.type === 'init') {
-            remote.username = data.username;
-            remote.teamPref = data.teamPref || 'auto';
-            remote.mesh.remove(remote.nametag);
-            remote.nametag = createNametag(data.username); remote.nametag.position.y = 4.5; remote.mesh.add(remote.nametag);
-            
-            if (isHost) {
-                let t = 'none';
-                if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
-                    if (remote.teamPref === 'red' || remote.teamPref === 'blue') {
-                        t = remote.teamPref;
-                    } else {
-                        const reds = Object.values(remotePlayers).filter(r => r.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
-                        const blues = Object.values(remotePlayers).filter(r => r.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
-                        t = (reds <= blues) ? 'red' : 'blue';
-                    }
+function connectTo(id) { 
+    socketRoomId = id;
+    socket.emit('join_lobby', id);
+    if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'init', username: myUsername, teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto' }});
+}
+
+function handleSocketData(peerId, data) {
+    let remote = remotePlayers[peerId];
+    
+    // If not existing, create them!
+    if (!remote && data.type === 'init') {
+        const humanoid = createHumanoid(); 
+        const nametag = createNametag("Loading..."); nametag.position.y = 4.5; humanoid.group.add(nametag);
+        humanoid.group.userData.peerId = peerId;
+        scene.add(humanoid.group); 
+        remote = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0, username: data.username };
+        remotePlayers[peerId] = remote;
+        adminLog(`New connection initialized: ${peerId}`);
+        
+        // If we are host, respond with init_game and our own init info
+        if (isHost) {
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: peerId, data: { type: 'init', username: myUsername, teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto' } });
+        }
+    }
+    else if (!remote && data.type === 'pos') {
+        // Fallback if we miss init
+        const humanoid = createHumanoid(); 
+        const nametag = createNametag("Player"); nametag.position.y = 4.5; humanoid.group.add(nametag);
+        humanoid.group.userData.peerId = peerId;
+        scene.add(humanoid.group); 
+        remote = { mesh: humanoid.group, head: humanoid.head, torso: humanoid.torso, rArm: humanoid.rArm, gunContainer: humanoid.gunContainer, currentGun: 'default', nametag: nametag, mat: humanoid.matTorso, matPants: humanoid.matPants, connectedAt: Date.now(), kills: 0, deaths: 0, hp: 100, maxHp: 100, coins: 0, speed: 25, team: 'none', teamPref: 'auto', kothScore: 0, username: "Player" };
+        remotePlayers[peerId] = remote;
+    }
+    
+    if(!remote) return;
+    
+    // TARGETED MESSAGE CHECK (if target field exists and is not us, ignore)
+    // Actually the server relays everything. The client can filter out things not for them.
+    if(data.target && data.target !== myId) return;
+
+    if(data.type === 'init') {
+        remote.username = data.username;
+        remote.teamPref = data.teamPref || 'auto';
+        remote.mesh.remove(remote.nametag);
+        remote.nametag = createNametag(data.username); remote.nametag.position.y = 4.5; remote.mesh.add(remote.nametag);
+        
+        if (isHost) {
+            let t = 'none';
+            if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
+                if (remote.teamPref === 'red' || remote.teamPref === 'blue') {
+                    t = remote.teamPref;
+                } else {
+                    const reds = Object.values(remotePlayers).filter(r => r.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
+                    const blues = Object.values(remotePlayers).filter(r => r.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
+                    t = (reds <= blues) ? 'red' : 'blue';
                 }
-                remote.team = t;
-                conn.send({ type: 'init_game', mode: currentGamemode, timer: gameState.timer, scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, team: t, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue });
             }
+            remote.team = t;
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, target: peerId, data: { type: 'init_game', mode: currentGamemode, timer: gameState.timer, scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue, team: t, flagRed: gameState.flagRed, flagBlue: gameState.flagBlue } });
         }
-        if(data.type === 'pos') {
-            const oldPos = remote.mesh.position.clone();
-            remote.hp = data.hp; remote.maxHp = data.maxHp; remote.coins = data.coins; remote.speed = data.speed;
-            remote.kothScore = data.kothScore || 0;
-            remote.mesh.position.copy(data.pos); const q = new THREE.Quaternion(data.rot.x, data.rot.y, data.rot.z, data.rot.w); const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
-            
-            remote.moving = oldPos.distanceTo(data.pos) > 0.05;
-            
-            remote.mesh.rotation.y = euler.y; remote.head.rotation.x = euler.x; remote.rArm.rotation.x = -Math.PI/3 + euler.x;
-            if(data.isCrouching) { remote.mesh.scale.y = 0.5; remote.nametag.visible = false; } else { remote.mesh.scale.y = 1.0; remote.nametag.visible = true; remote.nametag.quaternion.copy(camera.quaternion); }
-            if(data.gun && remote.currentGun !== data.gun) { updateWeaponVisuals(remote, data.gun); }
-        }
-        if (data.type === 'init_game') {
-            currentGamemode = data.mode;
-            gameState.mode = data.mode;
-            gameState.timer = data.timer;
-            gameState.scoreRed = data.scoreRed;
-            gameState.scoreBlue = data.scoreBlue;
-            gameState.myTeam = data.team;
-            initGamemode(currentGamemode, false);
-            gameState.started = true;
-        }
-        if (data.type === 'match_over') {
-            gameState.started = false;
-            alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
-        }
-        if (data.type === 'match_over_gungame') {
-            gameState.started = false;
-            alert("GUN GAME OVER! WINNER: " + data.winner);
-        }
-        if (data.type === 'sync_score') {
-            gameState.scoreRed = data.scoreRed;
-            gameState.scoreBlue = data.scoreBlue;
+    }
+    if(data.type === 'pos') {
+        const oldPos = remote.mesh.position.clone();
+        remote.hp = data.hp; remote.maxHp = data.maxHp; remote.coins = data.coins; remote.speed = data.speed;
+        remote.kothScore = data.kothScore || 0;
+        remote.mesh.position.copy(data.pos); const q = new THREE.Quaternion(data.rot.x, data.rot.y, data.rot.z, data.rot.w); const euler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+        
+        remote.moving = oldPos.distanceTo(data.pos) > 0.05;
+        
+        remote.mesh.rotation.y = euler.y; remote.head.rotation.x = euler.x; remote.rArm.rotation.x = -Math.PI/3 + euler.x;
+        if(data.isCrouching) { remote.mesh.scale.y = 0.5; remote.nametag.visible = false; } else { remote.mesh.scale.y = 1.0; remote.nametag.visible = true; remote.nametag.quaternion.copy(camera.quaternion); }
+        if(data.gun && remote.currentGun !== data.gun) { updateWeaponVisuals(remote, data.gun); }
+    }
+    if (data.type === 'init_game') {
+        currentGamemode = data.mode;
+        gameState.mode = data.mode;
+        gameState.timer = data.timer;
+        gameState.scoreRed = data.scoreRed;
+        gameState.scoreBlue = data.scoreBlue;
+        gameState.myTeam = data.team;
+        initGamemode(currentGamemode, false);
+        gameState.started = true;
+    }
+    if (data.type === 'match_over') {
+        gameState.started = false;
+        alert("MATCH OVER! SCORES:\nRED: " + gameState.scoreRed + "\nBLUE: " + gameState.scoreBlue);
+    }
+    if (data.type === 'match_over_gungame') {
+        gameState.started = false;
+        alert("GUN GAME OVER! WINNER: " + data.winner);
+    }
+    if (data.type === 'sync_score') {
+        gameState.scoreRed = data.scoreRed;
+        gameState.scoreBlue = data.scoreBlue;
+        updateMatchHUD();
+    }
+    if(data.type === 'vip') { remote.mat.color.setHex(0xFFD700); remote.mat.emissive.setHex(0x554400); remote.matPants.color.setHex(0xFFD700); }
+    if(data.type === 'hit') { if(data.target === myId) { if(myShield) return; myHp -= data.damage || 25; lastHitBy = peerId; updateUI(); if(myHp <= 0) die(); } }
+    if(data.type === 'killed') {
+        if(data.victim === peerId && remote) remote.deaths++;
+        if(data.killer === myId) { 
+            myKills++; myCoins += 100; updateUI(); adminLog(`You eliminated ${remote.username}!`); 
+            if (currentGamemode === 'Gun Game' || currentGamemode === 'GUN_GAME') {
+                const prog = ['default', 'pistol', 'smg', 'shotgun', 'lmg', 'sniper', 'katana'];
+                let idx = prog.indexOf(myGun) + 1;
+                if(idx < prog.length) { 
+                    myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); 
+                } else if (idx >= prog.length) {
+                    gameState.started = false;
+                    if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'match_over_gungame', winner: myUsername } });
+                    alert("GUN GAME WINNER: " + myUsername + "!");
+                }
+            }
+            saveProfile();
+        } 
+        else if(remotePlayers[data.killer]) { remotePlayers[data.killer].kills++; adminLog(`${remotePlayers[data.killer].username} eliminated ${remote.username}.`); }
+        
+        if (currentGamemode === 'TDM') {
+            if (remote && remote.team === 'red') gameState.scoreBlue++;
+            else if (remote && remote.team === 'blue') gameState.scoreRed++;
+            else if (data.victim === myId) {
+                if(gameState.myTeam === 'red') gameState.scoreBlue++;
+                else if(gameState.myTeam === 'blue') gameState.scoreRed++;
+            }
             updateMatchHUD();
         }
-        if(data.type === 'vip') { remote.mat.color.setHex(0xFFD700); remote.mat.emissive.setHex(0x554400); remote.matPants.color.setHex(0xFFD700); }
-        if(data.type === 'hit') { if(data.target === myId) { if(myShield) return; myHp -= data.damage || 25; lastHitBy = conn.peer; updateUI(); if(myHp <= 0) die(); } }
-        if(data.type === 'killed') {
-            if(data.victim === conn.peer && remote) remote.deaths++;
-            if(data.killer === myId) { 
-                myKills++; myCoins += 100; updateUI(); adminLog(`You eliminated ${remote.username}!`); 
-                if (currentGamemode === 'Gun Game' || currentGamemode === 'GUN_GAME') {
-                    const prog = ['default', 'pistol', 'smg', 'shotgun', 'lmg', 'sniper', 'katana'];
-                    let idx = prog.indexOf(myGun) + 1;
-                    if(idx < prog.length) { 
-                        myInventory[0] = prog[idx]; window.equipSlot(0); updateUI(); adminLog(`Gun Game Level Up: ${prog[idx]}`); 
-                    } else if (idx >= prog.length) {
-                        gameState.started = false;
-                        connections.forEach(conn => { if(conn.open) conn.send({ type: 'match_over_gungame', winner: myUsername }); });
-                        alert("GUN GAME WINNER: " + myUsername + "!");
-                    }
-                }
-                saveProfile();
-            } 
-            else if(remotePlayers[data.killer]) { remotePlayers[data.killer].kills++; adminLog(`${remotePlayers[data.killer].username} eliminated ${remote.username}.`); }
-            
-            if (currentGamemode === 'TDM') {
-                if (remote && remote.team === 'red') gameState.scoreBlue++;
-                else if (remote && remote.team === 'blue') gameState.scoreRed++;
-                // If the victim was ME
-                else if (data.victim === myId) {
-                    if(gameState.myTeam === 'red') gameState.scoreBlue++;
-                    else if(gameState.myTeam === 'blue') gameState.scoreRed++;
-                }
-                updateMatchHUD();
-            }
-        }
-        if(data.type === 'admin_cmd') {
-            if(data.action === 'kick') { peer.destroy(); window.location.reload(); }
-            if(data.action === 'give_vip') { alert("Admin granted you VIP status!"); opCards.forEach(c => c.apply()); document.getElementById('vip-modal').classList.add('hidden'); connections.forEach(conn => { if(conn.open) conn.send({type: 'vip'}); }); updateUI(); }
-            if(data.action === 'set_stats') { myHp = parseFloat(data.hp); myMaxHp = parseFloat(data.maxHp); myCoins = parseFloat(data.coins); baseSpeed = parseFloat(data.speed); mySpeed = baseSpeed; updateUI(); }
-            if(data.action === 'give_weapon') { let slotIdx = myInventory.indexOf(null); if(slotIdx === -1) slotIdx = currentSlot; myInventory[slotIdx] = data.weapon; updateHotbarUI(); window.equipSlot(slotIdx); }
-            if(data.action === 'give_card') { const avail = availableCards.filter(c => c.rank === 'Epic'); if(avail.length > 0) { const c = avail[Math.floor(Math.random() * avail.length)]; c.apply(); adminLog("Admin gave you: " + c.name); } }
-        }
-    });
-    conn.on('close', () => { if(remotePlayers[conn.peer]) { adminLog(`Connection closed: ${remotePlayers[conn.peer].username}`); scene.remove(remotePlayers[conn.peer].mesh); delete remotePlayers[conn.peer]; } });
+    }
+    if(data.type === 'admin_cmd') {
+        if(data.action === 'kick') { window.location.reload(); }
+        if(data.action === 'give_vip') { alert("Admin granted you VIP status!"); opCards.forEach(c => c.apply()); document.getElementById('vip-modal').classList.add('hidden'); if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: {type: 'vip'} }); updateUI(); }
+        if(data.action === 'set_stats') { myHp = parseFloat(data.hp); myMaxHp = parseFloat(data.maxHp); myCoins = parseFloat(data.coins); baseSpeed = parseFloat(data.speed); mySpeed = baseSpeed; updateUI(); }
+        if(data.action === 'give_weapon') { let slotIdx = myInventory.indexOf(null); if(slotIdx === -1) slotIdx = currentSlot; myInventory[slotIdx] = data.weapon; updateHotbarUI(); window.equipSlot(slotIdx); }
+        if(data.action === 'give_card') { const avail = availableCards.filter(c => c.rank === 'Epic'); if(avail.length > 0) { const c = avail[Math.floor(Math.random() * avail.length)]; c.apply(); adminLog("Admin gave you: " + c.name); } }
+    }
 }
+
 
 function createNeonGridTexture(hexColor, glowColor) {
     const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128; const ctx = canvas.getContext('2d');
@@ -1486,7 +1527,7 @@ function animate() {
         const myRot = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
         const now = Date.now();
         if (now - lastNetTime > 50) {
-            connections.forEach(conn => { if(conn.open) conn.send({ type: 'pos', pos: myPos, rot: myRot, isCrouching: isCrouching, gun: myGun, hp: myHp, maxHp: myMaxHp, coins: myCoins, speed: mySpeed, kothScore: myKothScore }); });
+            if(socket && socketRoomId) socket.emit('relay', { roomId: socketRoomId, data: { type: 'pos', pos: myPos, rot: myRot, isCrouching: isCrouching, gun: myGun, hp: myHp, maxHp: myMaxHp, coins: myCoins, speed: mySpeed, kothScore: myKothScore } });
             lastNetTime = now;
         }
         
