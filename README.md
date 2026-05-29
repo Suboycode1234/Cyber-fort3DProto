@@ -1,0 +1,1 @@
+This is the main Repo of the cyberfort 3d game. the main standalone file has been mainly deprecated. Go To https://cyber-fort3-d-proto.vercel.app/ to play. *Warning. game is still in early access and development. may have bugs.
