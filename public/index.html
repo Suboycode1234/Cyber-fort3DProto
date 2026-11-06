@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script>
-        // When deploying to Vercel, set this to your Railway URL.
-        // e.g. 'https://your-backend.up.railway.app'
-        window.RAILWAY_URL = 'https://cyber-fort3dproto-production.up.railway.app';
-    </script>
     <meta charset="UTF-8">
     <title>3D Voxel Shooter - Cyberpunk Edition</title>
     <link rel="stylesheet" href="css/style.css">
@@ -22,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
 </head>
 <body>
@@ -70,7 +65,7 @@
         <div class="ch-line ch-v" style="left:50%; height:100px; top:calc(50% - 50px); background:red; width:1px;"></div>
     </div>
     
-    <!-- Network Lobby GUI -->
+    <!-- Network Lobby GUI (PeerJS P2P Mesh + Server Browser & Private Rooms) -->
     <div id="blocker" class="menu-bg">
         <div class="menu-container glass-heavy">
             <h1 class="neon-title" style="letter-spacing:10px; font-style:italic;">CYBER-FORT 3D</h1>
@@ -80,17 +75,12 @@
                 <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding-right:10px;">
                     <h3>IDENTITY & LOADOUT</h3>
                     <div class="id-box">
-                        <span class="label" style="font-size:10px;">YOUR LOBBY IDENTIFIER:</span>
-                        <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Connecting...</span>
+                        <span class="label" style="font-size:10px;">YOUR PEER ID:</span>
+                        <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Initializing PeerJS...</span>
                     </div>
-                    <label class="section-label">Callsign / Authentication</label>
+                    <label class="section-label">Callsign</label>
                     <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px;">
-                        <input type="text" id="my-username" placeholder="Enter Username..." class="tech-input" style="width:100%; box-sizing:border-box;" maxlength="12">
-                        <input type="password" id="my-password" placeholder="Enter Password..." class="tech-input" style="width:100%; box-sizing:border-box;">
-                        <div style="display:flex; gap:10px;">
-                            <button id="btn-profile-login" class="deploy-btn" style="flex:1; padding:5px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:14px;">LOGIN / SYNC</button>
-                            <button id="btn-profile-register" class="deploy-btn" style="flex:1; padding:5px; background:rgba(0,85,255,0.2); border-color:#0055ff; color:#0055ff; font-size:14px;">REGISTER</button>
-                        </div>
+                        <input type="text" id="my-username" placeholder="Enter Callsign..." class="tech-input" style="width:100%; box-sizing:border-box;" maxlength="12">
                     </div>
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select" style="margin-bottom:15px;">
@@ -99,18 +89,19 @@
                         <option value="ninja" style="background:#111;">Ninja 🥷 (Shuriken - 40 NRG)</option>
                     </select>
                     <label class="section-label">Select Team</label>
-                    <select id="team-select" class="tech-select">
+                    <select id="team-select" class="tech-select" style="margin-bottom:15px;">
                         <option value="auto" style="background:#111;">Auto-Assign</option>
                         <option value="red" style="background:#330000; color:#ff0000;">Crimson Legion (Red)</option>
                         <option value="blue" style="background:#000033; color:#0055ff;">Cobalt Order (Blue)</option>
                     </select>
+                    <button id="btn-solo" class="deploy-btn" style="width:100%; padding:8px; background:rgba(0,255,255,0.15); border-color:#00f3ff; color:#00f3ff; font-size:13px;">PRACTICE / SOLO DEPLOY</button>
                 </div>
                 
                 <!-- Middle Panel: Host Game -->
                 <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding:0 15px;">
-                    <h3>HOST MATCH</h3>
+                    <h3>HOST MATCH (P2P)</h3>
                     <label class="section-label">Gamemode</label>
-                    <select id="host-gamemode" class="tech-select" style="margin-bottom:15px;">
+                    <select id="host-gamemode" class="tech-select" style="margin-bottom:12px;">
                         <option value="FFA">Free For All</option>
                         <option value="TDM">Team Deathmatch</option>
                         <option value="CTF">Capture the Flag</option>
@@ -118,30 +109,44 @@
                         <option value="GUN_GAME">Gun Game</option>
                         <option value="ZOMBIES">Infection / Zombies</option>
                     </select>
-                    <label class="section-label">Visibility</label>
-                    <select id="host-visibility" class="tech-select" style="margin-bottom:20px;">
-                        <option value="public">Public Listing</option>
-                        <option value="private">Private (ID Only)</option>
+                    <label class="section-label">Room Visibility</label>
+                    <select id="host-visibility" class="tech-select" style="margin-bottom:15px;">
+                        <option value="public">Public (Listed in Server Browser)</option>
+                        <option value="private">Private (Room Code Only)</option>
                     </select>
+                    <div style="background:rgba(0,243,255,0.1); border:1px solid rgba(0,243,255,0.3); border-radius:6px; padding:8px; margin-bottom:15px; font-size:11px; color:#aaa;">
+                        <span style="color:#00f3ff; font-weight:bold;">Capacity:</span> Up to 8 Players (Full Mesh)<br>
+                        <span style="color:#00ffaa; font-weight:bold;">Resilience:</span> Automatic Host Migration
+                    </div>
                     <button id="btn-host" class="deploy-btn" style="width:100%;">DEPLOY AS HOST</button>
-                    <p class="desc" style="margin-top:10px;">Starts a fresh simulation and awaits connections.</p>
+                    <p class="desc" style="margin-top:10px;">Hosts an 8-player match. Public rooms appear in Server Browser.</p>
                 </div>
 
                 <!-- Right Panel: Join -->
-                <div class="menu-section join-section" style="padding-left:15px;">
-                    <h3>SERVER BROWSER</h3>
-                    <div id="server-list" style="height:120px; overflow-y:auto; background:rgba(0,0,0,0.4); border:1px solid #00f3ff; border-radius:5px; margin-bottom:15px; padding:5px;">
-                        <p style="color:#aaa; font-size:12px; text-align:center;">Fetching servers...</p>
+                <div class="menu-section join-section" style="padding-left:15px; display:flex; flex-direction:column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <h3 style="margin:0;">SERVER BROWSER</h3>
+                        <button id="btn-refresh-servers" style="background:transparent; border:1px solid #00f3ff; color:#00f3ff; font-size:10px; padding:2px 8px; border-radius:3px; cursor:pointer;" title="Refresh public server list">↻ REFRESH</button>
                     </div>
-                    <h3>PRIVATE JOIN</h3>
-                    <input type="text" id="join-id" placeholder="Enter Target ID" class="tech-input" style="margin-bottom:10px;">
-                    <button id="btn-join" class="deploy-btn" style="background:rgba(255,0,255,0.2); border-color:#ff00ff; color:#ff00ff; box-shadow:0 0 10px #ff00ff;">JOIN PRIVATE</button>
-                    <p id="connection-status" class="status-msg"></p>
+                    <div id="server-list" style="height:115px; overflow-y:auto; background:rgba(0,0,0,0.5); border:1px solid #00f3ff; border-radius:5px; margin-bottom:12px; padding:5px; display:flex; flex-direction:column; gap:4px;">
+                        <p style="color:#aaa; font-size:12px; text-align:center; margin:auto;">Fetching public servers...</p>
+                    </div>
+                    
+                    <h3 style="margin:0 0 6px 0; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">PRIVATE JOIN</h3>
+                    <label class="section-label" style="font-size:10px; margin-bottom:3px;">Enter Private Room Code:</label>
+                    <input type="text" id="join-id" placeholder="e.g. CF-A9B2C3" class="tech-input" style="margin-bottom:8px; text-transform:uppercase;">
+                    <button id="btn-join" class="deploy-btn" style="background:rgba(255,0,255,0.2); border-color:#ff00ff; color:#ff00ff; box-shadow:0 0 10px #ff00ff; width:100%;">JOIN PRIVATE ROOM</button>
+                    
+                    <div id="room-info-box" style="margin-top:10px; display:none; background:rgba(0,0,0,0.5); border:1px solid #00ffaa; border-radius:6px; padding:8px;">
+                        <div style="font-size:11px; color:#00ffaa; font-weight:bold;">ROOM: <span id="active-room-code" style="color:#fff; font-family:monospace;"></span></div>
+                        <div style="font-size:11px; color:#aaa; margin-top:2px;">Players: <span id="room-player-count" style="color:#FFD700; font-weight:bold;">1</span> / 8</div>
+                    </div>
+                    <p id="connection-status" class="status-msg" style="margin-top:6px;"></p>
                 </div>
             </div>
 
             <div class="launch-hint">
-                <p>DO NOT CLICK OUTSIDE UNLESS PLAYING SOLO / DEV MODE</p>
+                <p>DO NOT CLICK OUTSIDE UNLESS PLAYING SOLO / PRACTICE MODE</p>
                 <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
