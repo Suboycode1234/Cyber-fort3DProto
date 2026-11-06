@@ -30,6 +30,8 @@ let flagMeshBlue = null;
 let gameState = {
     mode: 'FFA',
     timer: 300,
+    timeLimit: 300, // 0 = infinite
+    scoreLimit: 25, // 0 = infinite
     scoreRed: 0,
     scoreBlue: 0,
     myTeam: 'none',
@@ -41,6 +43,30 @@ let gameState = {
 let myKothScore = 0;
 let isHost = false;
 let currentGamemode = 'FFA';
+
+// Tactical Abilities & Grapple Hook System
+let myActiveAbility = 'lightning';
+let abilityCooldownTimer = 0;
+let grappleActive = false;
+let grappleTarget = null;
+let grappleLineMesh = null;
+let grappleCooldownTimer = 0;
+const GRAPPLE_COOLDOWN = 3.5;
+const GRAPPLE_MAX_DIST = 85;
+
+// Offline Bot System
+let activeBots = [];
+let isBotMatch = false;
+let botDifficulty = 'medium';
+let botCount = 3;
+let botTeamSplit = 'balanced';
+const BOT_NAMES = [
+    "[BOT] Cipher", "[BOT] Valkyrie", "[BOT] Apex",
+    "[BOT] Ghost", "[BOT] Onyx", "[BOT] Vector", "[BOT] Nexus"
+];
+
+// Admin Stat Overrides Persistence
+let adminStatOverrides = null; // { hp, maxHp, coins, speed }
 
 // Mobile & Gamepad
 let isMobileDeploy = false, isMobile = false;
@@ -56,7 +82,8 @@ const WEAPON_STATS = {
     'sniper': { name: 'Sniper', type: 'gun', fireRate: 28, damage: 150, color: 0xff0055, spread: 0 },
     'shotgun': { name: 'Pump', type: 'gun', fireRate: 22, damage: 22, projectiles: 8, color: 0xffff00, spread: 0.05 },
     'smg': { name: 'SMG', type: 'gun', fireRate: 3, damage: 14, color: 0x00ffaa, spread: 0.025 },
-    'pistol': { name: 'Pistol', type: 'gun', fireRate: 6, damage: 35, color: 0xffaaaa, spread: 0 },
+    'golden_eagle': { name: 'Golden Eagle', type: 'gun', fireRate: 7, damage: 35, color: 0xffd700, spread: 0 },
+    'pistol': { name: 'Golden Eagle', type: 'gun', fireRate: 7, damage: 35, color: 0xffd700, spread: 0 },
     'lmg': { name: 'LMG', type: 'gun', fireRate: 4, damage: 22, color: 0xff8800, spread: 0.035 },
     'katana': { name: 'Katana', type: 'melee', fireRate: 14, damage: 90, range: 7.0, color: 0xffffff },
     'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 }
@@ -83,7 +110,9 @@ function saveLocalProfile() {
             coins: myCoins,
             kills: myKills,
             deaths: myDeaths,
-            weapons: myOwnedWeapons
+            weapons: myOwnedWeapons,
+            activeAbility: myActiveAbility,
+            adminStatOverrides: adminStatOverrides
         };
         localStorage.setItem('cyberfort3d_local_profile', JSON.stringify(profile));
     } catch(e) {
@@ -101,6 +130,14 @@ function loadLocalProfile() {
             if (typeof data.kills === 'number') myKills = data.kills;
             if (typeof data.deaths === 'number') myDeaths = data.deaths;
             if (Array.isArray(data.weapons)) myOwnedWeapons = data.weapons;
+            if (data.activeAbility) myActiveAbility = data.activeAbility;
+            if (data.adminStatOverrides) {
+                adminStatOverrides = data.adminStatOverrides;
+                if (adminStatOverrides.maxHp) myMaxHp = adminStatOverrides.maxHp;
+                if (adminStatOverrides.hp) myHp = adminStatOverrides.hp;
+                if (adminStatOverrides.speed) { baseSpeed = adminStatOverrides.speed; mySpeed = baseSpeed; }
+                if (adminStatOverrides.coins) myCoins = adminStatOverrides.coins;
+            }
         }
     } catch(e) {
         console.warn('Unable to load local profile:', e);
@@ -113,6 +150,7 @@ function loadLocalProfile() {
             unEl.value = '';
         }
     }
+    updateAbilityHUD();
 }
 
 function ensureCustomNametag() {
@@ -155,6 +193,701 @@ function updateMyNametag() {
     myAvatar.nametag = createNametag(myUsername, gameState.myTeam || 'none', myHp, myMaxHp);
     myAvatar.nametag.position.y = 4.5;
     myAvatar.group.add(myAvatar.nametag);
+}
+
+// ============================================================================
+// TACTICAL ABILITIES & GRAPPLE HOOK SYSTEM
+// ============================================================================
+const ABILITY_DEFINITIONS = {
+    'lightning': {
+        name: 'LIGHTNING STRIKE',
+        icon: '⚡',
+        desc: 'Call down orbital lightning dealing 85 direct damage + 35 AoE shock damage.',
+        cost: 250,
+        color: '#00f3ff',
+        cooldown: 7.0
+    },
+    'meteor': {
+        name: 'METEOR BLAST',
+        icon: '🔥',
+        desc: 'Launch a high-explosive fireball dealing 80 AoE splash damage with knockback.',
+        cost: 220,
+        color: '#ff5500',
+        cooldown: 8.0
+    },
+    'frost_nova': {
+        name: 'FROST NOVA',
+        icon: '❄️',
+        desc: 'Cryogenic blast: 45 damage and slows all targets by 60% for 3.5s.',
+        cost: 200,
+        color: '#00ffff',
+        cooldown: 6.0
+    },
+    'phase_blink': {
+        name: 'PHASE BLINK',
+        icon: '🌀',
+        desc: 'Teleport 22 units forward and gain 1.5s invulnerability shield.',
+        cost: 180,
+        color: '#aa00ff',
+        cooldown: 5.0
+    },
+    'vampiric_drain': {
+        name: 'VAMPIRIC DRAIN',
+        icon: '🩸',
+        desc: 'Siphon 50 HP from aimed target and heal yourself immediately.',
+        cost: 280,
+        color: '#ff0055',
+        cooldown: 9.0
+    },
+    'overcharge': {
+        name: 'OVERCHARGE',
+        icon: '⚡',
+        desc: 'Plasma surge: +100% weapon fire rate and +35% damage for 5 seconds.',
+        cost: 240,
+        color: '#ffd700',
+        cooldown: 12.0
+    },
+    'nanite_regen': {
+        name: 'NANITE REPAIR',
+        icon: '💚',
+        desc: 'Restores 50 HP immediately and regenerates 10 HP/s for 5 seconds.',
+        cost: 150,
+        color: '#00ffaa',
+        cooldown: 8.0
+    }
+};
+
+function updateAbilityHUD() {
+    const ab = ABILITY_DEFINITIONS[myActiveAbility] || ABILITY_DEFINITIONS['lightning'];
+    const nameEl = document.getElementById('hud-ability-name');
+    const iconEl = document.getElementById('hud-ability-icon');
+    const statusEl = document.getElementById('hud-ability-status');
+    const badgeEl = document.getElementById('hud-ability-badge');
+    
+    if (nameEl) nameEl.innerText = ab.name;
+    if (iconEl) iconEl.innerText = ab.icon;
+    
+    if (statusEl) {
+        if (abilityCooldownTimer > 0) {
+            statusEl.innerText = abilityCooldownTimer.toFixed(1) + "s";
+            statusEl.style.color = "#ff0055";
+            if (badgeEl) badgeEl.classList.add('cooldown');
+        } else {
+            statusEl.innerText = "READY";
+            statusEl.style.color = "#00ffaa";
+            if (badgeEl) badgeEl.classList.remove('cooldown');
+        }
+    }
+}
+
+function castActiveAbility() {
+    if (abilityCooldownTimer > 0 || myHp <= 0) return;
+    const ab = ABILITY_DEFINITIONS[myActiveAbility] || ABILITY_DEFINITIONS['lightning'];
+    
+    if (myActiveAbility === 'lightning') {
+        castLightning();
+    } else if (myActiveAbility === 'meteor') {
+        castMeteor();
+    } else if (myActiveAbility === 'frost_nova') {
+        castFrostNova();
+    } else if (myActiveAbility === 'phase_blink') {
+        castPhaseBlink();
+    } else if (myActiveAbility === 'vampiric_drain') {
+        castVampiricDrain();
+    } else if (myActiveAbility === 'overcharge') {
+        castOvercharge();
+    } else if (myActiveAbility === 'nanite_regen') {
+        castNaniteRegen();
+    }
+    
+    abilityCooldownTimer = ab.cooldown;
+    updateAbilityHUD();
+}
+
+function castLightning() {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const targets = [];
+    mapMeshes.forEach(m => targets.push(m));
+    Object.keys(remotePlayers).forEach(pid => { if (remotePlayers[pid]?.mesh) targets.push(remotePlayers[pid].mesh); });
+    activeBots.forEach(b => { if (b?.mesh && b.hp > 0) targets.push(b.mesh); });
+    
+    const intersects = raycaster.intersectObjects(targets, true);
+    const hitPoint = intersects.length > 0 ? intersects[0].point.clone() : new THREE.Vector3().copy(camera.position).add(raycaster.ray.direction.multiplyScalar(60));
+    
+    // Spawn huge lightning bolt from sky
+    const boltGeo = new THREE.CylinderGeometry(0.5, 0.9, 140, 8);
+    const boltMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.95 });
+    const bolt = new THREE.Mesh(boltGeo, boltMat);
+    bolt.position.set(hitPoint.x, hitPoint.y + 70, hitPoint.z);
+    scene.add(bolt);
+    
+    // Shock ring
+    const ringGeo = new THREE.RingGeometry(1, 9, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(hitPoint);
+    ring.position.y += 0.1;
+    scene.add(ring);
+    
+    setTimeout(() => {
+        scene.remove(bolt);
+        scene.remove(ring);
+    }, 300);
+    
+    applyAoEDamage(hitPoint, 10, 85, 35, 'lightning');
+    netBroadcast({ type: 'ability_fx', ability: 'lightning', target: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z } });
+}
+
+function castMeteor() {
+    const dir = new THREE.Vector3().copy(camera.getWorldDirection(new THREE.Vector3()));
+    const start = camera.position.clone().add(dir.clone().multiplyScalar(2));
+    
+    const fbGeo = new THREE.SphereGeometry(1.2, 12, 12);
+    const fbMat = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+    const fb = new THREE.Mesh(fbGeo, fbMat);
+    fb.position.copy(start);
+    scene.add(fb);
+    
+    const speed = 40;
+    let traveled = 0;
+    const interval = setInterval(() => {
+        fb.position.add(dir.clone().multiplyScalar(speed * 0.03));
+        traveled += speed * 0.03;
+        
+        const ray = new THREE.Raycaster(fb.position, dir, 0, 2.5);
+        const hits = ray.intersectObjects(mapMeshes, true);
+        if (hits.length > 0 || traveled > 120) {
+            clearInterval(interval);
+            const explodePos = fb.position.clone();
+            scene.remove(fb);
+            
+            const expGeo = new THREE.SphereGeometry(4.5, 12, 12);
+            const expMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.8 });
+            const exp = new THREE.Mesh(expGeo, expMat);
+            exp.position.copy(explodePos);
+            scene.add(exp);
+            setTimeout(() => { scene.remove(exp); }, 250);
+            
+            applyAoEDamage(explodePos, 14, 80, 80, 'meteor');
+            netBroadcast({ type: 'ability_fx', ability: 'meteor', target: { x: explodePos.x, y: explodePos.y, z: explodePos.z } });
+        }
+    }, 30);
+}
+
+function castFrostNova() {
+    const pPos = new THREE.Vector3(playerBody.position.x, playerBody.position.y - 1, playerBody.position.z);
+    
+    const fRingGeo = new THREE.RingGeometry(2, 16, 32);
+    fRingGeo.rotateX(-Math.PI / 2);
+    const fRingMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+    const fRing = new THREE.Mesh(fRingGeo, fRingMat);
+    fRing.position.copy(pPos);
+    fRing.position.y += 0.2;
+    scene.add(fRing);
+    setTimeout(() => { scene.remove(fRing); }, 400);
+    
+    applyAoEDamage(pPos, 16, 45, 45, 'frost');
+    netBroadcast({ type: 'ability_fx', ability: 'frost', target: { x: pPos.x, y: pPos.y, z: pPos.z } });
+}
+
+function castPhaseBlink() {
+    const dir = new THREE.Vector3().copy(camera.getWorldDirection(new THREE.Vector3()));
+    dir.y = 0; dir.normalize();
+    
+    createHitSpark(camera.position, 0xaa00ff);
+    playerBody.position.x += dir.x * 22;
+    playerBody.position.z += dir.z * 22;
+    createHitSpark(new THREE.Vector3(playerBody.position.x, playerBody.position.y, playerBody.position.z), 0xaa00ff);
+    
+    myShield = true;
+    setTimeout(() => { myShield = false; }, 1500);
+}
+
+function castVampiricDrain() {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const targets = [];
+    Object.keys(remotePlayers).forEach(pid => { if (remotePlayers[pid]?.mesh) targets.push(remotePlayers[pid].mesh); });
+    activeBots.forEach(b => { if (b?.mesh && b.hp > 0) targets.push(b.mesh); });
+    
+    const intersects = raycaster.intersectObjects(targets, true);
+    if (intersects.length > 0) {
+        const hitPoint = intersects[0].point;
+        let hitId = null;
+        let isBotHit = false;
+        let cur = intersects[0].object;
+        while(cur && !hitId) {
+            if (cur.userData?.botId) { hitId = cur.userData.botId; isBotHit = true; }
+            else if (cur.userData?.peerId) { hitId = cur.userData.peerId; isBotHit = false; }
+            cur = cur.parent;
+        }
+        if (hitId) {
+            if (isBotHit) damageBot(hitId, 50, false);
+            else netSendTo(hitId, { type: 'hit', target: hitId, damage: 50 });
+            
+            myHp = Math.min(myMaxHp, myHp + 50);
+            updateUI();
+            updateMyNametag();
+            createHitSpark(hitPoint, 0xff0055);
+        }
+    }
+}
+
+function castOvercharge() {
+    flatFireRateBonus -= 3;
+    flatDamageBonus += 25;
+    createHitSpark(camera.position, 0xffd700);
+    setTimeout(() => {
+        flatFireRateBonus += 3;
+        flatDamageBonus -= 25;
+    }, 5000);
+}
+
+function castNaniteRegen() {
+    myHp = Math.min(myMaxHp, myHp + 50);
+    updateUI();
+    updateMyNametag();
+    createHitSpark(camera.position, 0x00ffaa);
+    
+    let ticks = 5;
+    const interval = setInterval(() => {
+        ticks--;
+        myHp = Math.min(myMaxHp, myHp + 10);
+        updateUI();
+        updateMyNametag();
+        if (ticks <= 0) clearInterval(interval);
+    }, 1000);
+}
+
+function applyAoEDamage(center, radius, directDamage, aoeDamage, type) {
+    Object.keys(remotePlayers).forEach(pid => {
+        const r = remotePlayers[pid];
+        if (r && r.mesh) {
+            const d = r.mesh.position.distanceTo(center);
+            if (d <= radius) {
+                const dmg = d < 4 ? directDamage : Math.round(aoeDamage * (1 - d / radius));
+                netSendTo(pid, { type: 'hit', target: pid, damage: dmg });
+                createHitSpark(r.mesh.position, 0x00f3ff);
+            }
+        }
+    });
+    
+    activeBots.forEach(b => {
+        if (b && b.mesh && b.hp > 0) {
+            const d = b.pos.distanceTo(center);
+            if (d <= radius) {
+                const dmg = d < 4 ? directDamage : Math.round(aoeDamage * (1 - d / radius));
+                damageBot(b.id, dmg, false);
+                createHitSpark(b.pos, 0x00f3ff);
+            }
+        }
+    });
+}
+
+function fireGrapple() {
+    if (grappleActive) {
+        releaseGrapple();
+        return;
+    }
+    if (grappleCooldownTimer > 0 || myHp <= 0) return;
+    
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const intersects = raycaster.intersectObjects(mapMeshes, true);
+    
+    if (intersects.length > 0 && intersects[0].distance <= GRAPPLE_MAX_DIST) {
+        grappleActive = true;
+        grappleTarget = intersects[0].point.clone();
+        grappleCooldownTimer = GRAPPLE_COOLDOWN;
+        
+        const pts = [camera.position.clone(), grappleTarget.clone()];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00f3ff, linewidth: 3 });
+        grappleLineMesh = new THREE.Line(lineGeo, lineMat);
+        scene.add(grappleLineMesh);
+        
+        playerBody.velocity.y += 12;
+    }
+}
+
+function releaseGrapple() {
+    grappleActive = false;
+    grappleTarget = null;
+    if (grappleLineMesh) {
+        scene.remove(grappleLineMesh);
+        grappleLineMesh = null;
+    }
+}
+
+function updateGrappleHUD() {
+    const statusEl = document.getElementById('hud-grapple-status');
+    const badgeEl = document.getElementById('hud-grapple-badge');
+    if (!statusEl) return;
+    
+    if (grappleCooldownTimer > 0) {
+        statusEl.innerText = grappleCooldownTimer.toFixed(1) + "s";
+        statusEl.style.color = "#ff0055";
+        if (badgeEl) badgeEl.classList.add('cooldown');
+    } else {
+        statusEl.innerText = grappleActive ? "HOOKED" : "READY";
+        statusEl.style.color = grappleActive ? "#ffd700" : "#00ffaa";
+        if (badgeEl) badgeEl.classList.remove('cooldown');
+    }
+}
+
+// ============================================================================
+// OFFLINE BOT SYSTEM (OFFLINE PRACTICE & TACTICAL COMBAT)
+// ============================================================================
+function startBotMatch() {
+    isBotMatch = true;
+    isHost = true;
+    
+    const countEl = document.getElementById('bot-count');
+    botCount = countEl ? parseInt(countEl.value) : 3;
+    
+    const diffEl = document.getElementById('bot-difficulty');
+    botDifficulty = diffEl ? diffEl.value : 'medium';
+    
+    const splitEl = document.getElementById('bot-team-split');
+    botTeamSplit = splitEl ? splitEl.value : 'balanced';
+    
+    currentGamemode = document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA';
+    
+    const tlEl = document.getElementById('host-timelimit');
+    gameState.timeLimit = tlEl ? parseInt(tlEl.value) : 300;
+    gameState.timer = gameState.timeLimit;
+    
+    const slEl = document.getElementById('host-scorelimit');
+    gameState.scoreLimit = slEl ? parseInt(slEl.value) : 25;
+
+    let pref = document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto';
+    if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
+        gameState.myTeam = (pref === 'auto') ? 'red' : pref; 
+    } else {
+        gameState.myTeam = 'none';
+    }
+
+    applyClass(document.getElementById('player-class').value);
+
+    // Ingame HUD
+    const hudRoomEl = document.getElementById('ingame-room-hud');
+    const hudCodeEl = document.getElementById('hud-room-code');
+    if (hudRoomEl && hudCodeEl) {
+        hudRoomEl.style.display = 'flex';
+        hudCodeEl.innerText = "OFFLINE-BOTS";
+    }
+
+    if (isMobile) {
+        isMobileDeploy = true;
+        document.getElementById('blocker').style.display = 'none';
+        document.getElementById('hotbar').style.display = 'flex';
+        showMobileControls();
+    } else {
+        if (!controls.isLocked) controls.lock();
+    }
+
+    initGamemode(currentGamemode, true);
+    spawnBots(botCount, botDifficulty, botTeamSplit, currentGamemode);
+    setConnectionStatus(`Offline Match: ${botCount} Bots (${botDifficulty.toUpperCase()})`, true);
+    adminLog(`Spawned ${botCount} autonomous combat bots on ${currentGamemode} mode.`);
+}
+
+function spawnBots(count, difficulty, split, gamemode) {
+    activeBots.forEach(b => {
+        if (b.mesh) scene.remove(b.mesh);
+    });
+    activeBots = [];
+
+    const botGuns = ['default', 'smg', 'golden_eagle', 'shotgun', 'sniper'];
+
+    for (let i = 0; i < count; i++) {
+        const botName = BOT_NAMES[i % BOT_NAMES.length];
+        let botTeam = 'none';
+        if (gamemode === 'TDM' || gamemode === 'CTF') {
+            if (split === 'vs_all') {
+                botTeam = (gameState.myTeam === 'red') ? 'blue' : 'red';
+            } else {
+                const redCount = activeBots.filter(b => b.team === 'red').length + (gameState.myTeam === 'red' ? 1 : 0);
+                const blueCount = activeBots.filter(b => b.team === 'blue').length + (gameState.myTeam === 'blue' ? 1 : 0);
+                botTeam = (redCount <= blueCount) ? 'red' : 'blue';
+            }
+        }
+
+        const themeColor = botTeam === 'red' ? 0xff0055 : (botTeam === 'blue' ? 0x0055ff : 0x00ffaa);
+        const humanoid = createHumanoid(themeColor);
+        humanoid.group.userData.botId = 'bot_' + i;
+        humanoid.group.userData.isBot = true;
+
+        const nametag = createNametag(botName, botTeam, 100, 100);
+        nametag.position.y = 4.5;
+        humanoid.group.add(nametag);
+
+        const assignedGun = botGuns[i % botGuns.length];
+        if (humanoid.gunContainer) {
+            humanoid.gunContainer.add(createGunMesh(assignedGun));
+        }
+
+        const spawnPos = getBotSpawnPoint(botTeam, gamemode);
+        humanoid.group.position.copy(spawnPos);
+        scene.add(humanoid.group);
+
+        const botObj = {
+            id: 'bot_' + i,
+            name: botName,
+            team: botTeam,
+            mesh: humanoid.group,
+            humanoid: humanoid,
+            nametag: nametag,
+            gun: assignedGun,
+            hp: 100,
+            maxHp: 100,
+            pos: spawnPos.clone(),
+            shootCooldown: 1.0 + Math.random() * 1.5,
+            respawnTimer: 0,
+            difficulty: difficulty,
+            moveDir: new THREE.Vector3(),
+            strafeTimer: 0,
+            kills: 0,
+            deaths: 0
+        };
+
+        activeBots.push(botObj);
+    }
+}
+
+function getBotSpawnPoint(team, gamemode) {
+    let x = 0, y = 4, z = 0;
+    if (gamemode === 'TDM' || gamemode === 'CTF') {
+        if (team === 'red') {
+            x = 450 + (Math.random() - 0.5) * 30;
+            y = 70;
+            z = (Math.random() - 0.5) * 30;
+        } else if (team === 'blue') {
+            x = -450 + (Math.random() - 0.5) * 30;
+            y = 70;
+            z = (Math.random() - 0.5) * 30;
+        } else {
+            x = (Math.random() - 0.5) * 80;
+            y = 20;
+            z = (Math.random() - 0.5) * 80;
+        }
+    } else {
+        x = (Math.random() - 0.5) * 120;
+        y = 20;
+        z = (Math.random() - 0.5) * 120;
+    }
+    return new THREE.Vector3(x, y, z);
+}
+
+function updateBots(dt) {
+    const playerPos = playerBody ? new THREE.Vector3().copy(playerBody.position) : null;
+    const nowSec = Date.now() / 1000;
+
+    activeBots.forEach(bot => {
+        if (!bot.mesh) return;
+
+        if (bot.hp <= 0) {
+            bot.respawnTimer -= dt;
+            if (bot.respawnTimer <= 0) {
+                bot.hp = bot.maxHp;
+                bot.mesh.visible = true;
+                const sp = getBotSpawnPoint(bot.team, currentGamemode);
+                bot.pos.copy(sp);
+                bot.mesh.position.copy(sp);
+                if (bot.nametag) {
+                    bot.mesh.remove(bot.nametag);
+                    bot.nametag = createNametag(bot.name, bot.team, bot.hp, bot.maxHp);
+                    bot.nametag.position.y = 4.5;
+                    bot.mesh.add(bot.nametag);
+                }
+            }
+            return;
+        }
+
+        let bestTargetPos = null;
+        let bestTargetDist = Infinity;
+        let isTargetPlayer = false;
+        let targetBot = null;
+
+        if (playerPos && myHp > 0) {
+            const isEnemy = (bot.team === 'none' || bot.team !== gameState.myTeam);
+            if (isEnemy) {
+                const dist = bot.pos.distanceTo(playerPos);
+                bestTargetPos = playerPos;
+                bestTargetDist = dist;
+                isTargetPlayer = true;
+            }
+        }
+
+        activeBots.forEach(other => {
+            if (other.id !== bot.id && other.hp > 0) {
+                const isEnemy = (bot.team === 'none' || bot.team !== other.team);
+                if (isEnemy) {
+                    const dist = bot.pos.distanceTo(other.pos);
+                    if (dist < bestTargetDist) {
+                        bestTargetDist = dist;
+                        bestTargetPos = other.pos;
+                        isTargetPlayer = false;
+                        targetBot = other;
+                    }
+                }
+            }
+        });
+
+        let moving = false;
+        if (bestTargetPos) {
+            bot.mesh.lookAt(bestTargetPos.x, bot.mesh.position.y, bestTargetPos.z);
+            if (bot.humanoid?.head) {
+                const headRelY = bestTargetPos.y - (bot.mesh.position.y + 2.0);
+                bot.humanoid.head.rotation.x = -Math.atan2(headRelY, Math.max(1, bestTargetDist));
+            }
+
+            const speed = bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 17 : 12);
+            const toTarget = new THREE.Vector3().subVectors(bestTargetPos, bot.pos);
+            toTarget.y = 0;
+            const dist = toTarget.length();
+            toTarget.normalize();
+
+            bot.strafeTimer -= dt;
+            if (bot.strafeTimer <= 0) {
+                bot.strafeTimer = 1.0 + Math.random() * 2.0;
+                bot.moveDir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+            }
+
+            if (dist > 18) {
+                bot.pos.addScaledVector(toTarget, speed * dt);
+                moving = true;
+            } else if (dist < 8) {
+                bot.pos.addScaledVector(toTarget, -speed * 0.7 * dt);
+                moving = true;
+            } else {
+                bot.pos.addScaledVector(bot.moveDir, speed * 0.5 * dt);
+                moving = true;
+            }
+
+            bot.mesh.position.copy(bot.pos);
+
+            bot.shootCooldown -= dt;
+            if (bot.shootCooldown <= 0 && dist < 120) {
+                const baseCd = bot.difficulty === 'hard' ? 0.45 : (bot.difficulty === 'medium' ? 0.9 : 1.6);
+                bot.shootCooldown = baseCd + Math.random() * baseCd * 0.5;
+                botShoot(bot, isTargetPlayer, bestTargetPos, targetBot);
+            }
+        }
+
+        const walkTime = nowSec * 10;
+        const swing = moving ? Math.sin(walkTime) * 0.5 : 0;
+        if (bot.humanoid?.lLeg) bot.humanoid.lLeg.rotation.x = swing;
+        if (bot.humanoid?.rLeg) bot.humanoid.rLeg.rotation.x = -swing;
+        if (bot.humanoid?.lArm) bot.humanoid.lArm.rotation.x = -swing;
+        if (bot.nametag) bot.nametag.quaternion.copy(camera.quaternion);
+    });
+}
+
+function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
+    if (!bot || bot.hp <= 0) return;
+
+    const startPos = bot.pos.clone();
+    startPos.y += 2.0;
+
+    const spread = bot.difficulty === 'hard' ? 0.03 : (bot.difficulty === 'medium' ? 0.08 : 0.16);
+    const aimVec = new THREE.Vector3().subVectors(targetPos, startPos).normalize();
+    aimVec.x += (Math.random() - 0.5) * spread;
+    aimVec.y += (Math.random() - 0.5) * spread;
+    aimVec.z += (Math.random() - 0.5) * spread;
+    aimVec.normalize();
+
+    const endPos = startPos.clone().add(aimVec.multiplyScalar(80));
+
+    const bColor = bot.team === 'red' ? 0xff0055 : (bot.team === 'blue' ? 0x0055ff : 0x00ffaa);
+    const bMat = new THREE.MeshBasicMaterial({ color: bColor });
+    const tracer = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6.0, 6), bMat);
+    tracer.geometry.rotateX(Math.PI / 2);
+    tracer.position.copy(startPos);
+    tracer.lookAt(endPos);
+    scene.add(tracer);
+
+    activeBullets.push({
+        mesh: tracer,
+        start: startPos.clone(),
+        end: endPos.clone(),
+        progress: 0,
+        speed: 35
+    });
+
+    if (isTargetPlayer && myHp > 0) {
+        const toPlayer = new THREE.Vector3().subVectors(playerBody.position, startPos);
+        const dot = toPlayer.normalize().dot(aimVec);
+        if (dot > 0.985) {
+            const dmg = bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 15 : 10);
+            if (!myShield) {
+                myHp -= dmg;
+                lastHitBy = bot.id;
+                updateUI();
+                updateMyNametag();
+                createHitSpark(camera.position, bColor);
+                if (myHp <= 0) die();
+            }
+        }
+    } else if (targetBot && targetBot.hp > 0) {
+        const toBot = new THREE.Vector3().subVectors(targetBot.pos, startPos);
+        const dot = toBot.normalize().dot(aimVec);
+        if (dot > 0.985) {
+            const dmg = bot.difficulty === 'hard' ? 24 : 16;
+            damageBot(targetBot.id, dmg, false);
+            createHitSpark(targetBot.pos, bColor);
+        }
+    }
+}
+
+function damageBot(botId, damage, isHeadshot = false) {
+    const bot = activeBots.find(b => b.id === botId);
+    if (!bot || bot.hp <= 0) return;
+
+    bot.hp -= damage;
+    if (bot.nametag) {
+        bot.mesh.remove(bot.nametag);
+        bot.nametag = createNametag(bot.name, bot.team, Math.max(0, bot.hp), bot.maxHp);
+        bot.nametag.position.y = 4.5;
+        bot.mesh.add(bot.nametag);
+    }
+
+    if (bot.hp <= 0) {
+        botDie(bot);
+    }
+}
+
+function botDie(bot) {
+    bot.deaths++;
+    bot.hp = 0;
+    bot.respawnTimer = 3.5;
+    bot.mesh.visible = false;
+    createHitSpark(bot.pos, 0xff0055);
+
+    myKills++;
+    myCoins += 100;
+    updateUI();
+    saveLocalProfile();
+    adminLog(`Eliminated ${bot.name}! (+100c)`);
+
+    if (currentGamemode === 'TDM') {
+        if (bot.team === 'red') gameState.scoreBlue++;
+        else if (bot.team === 'blue') gameState.scoreRed++;
+        updateMatchHUD();
+    } else if (currentGamemode === 'GUN_GAME') {
+        const prog = ['default', 'golden_eagle', 'smg', 'shotgun', 'lmg', 'sniper', 'katana'];
+        let idx = prog.indexOf(myGun) + 1;
+        if (idx < prog.length) {
+            myInventory[0] = prog[idx];
+            window.equipSlot(0);
+            updateUI();
+            adminLog(`Gun Game Level Up: ${prog[idx]}`);
+        } else {
+            alert("GUN GAME VICTORY: You won against the bots!");
+        }
+    }
 }
 
 // ============================================================================
@@ -378,6 +1111,8 @@ function setupDataConnection(conn) {
                 peers: roomPeerIds,
                 mode: currentGamemode,
                 timer: gameState.timer,
+                timeLimit: gameState.timeLimit,
+                scoreLimit: gameState.scoreLimit,
                 scoreRed: gameState.scoreRed,
                 scoreBlue: gameState.scoreBlue,
                 flagRed: gameState.flagRed,
@@ -560,6 +1295,27 @@ function hostMatch(customRoomCode = null) {
     const vis = document.getElementById('host-visibility') ? document.getElementById('host-visibility').value : 'public';
     isPublicRoom = (vis === 'public');
 
+    const tlEl = document.getElementById('host-timelimit');
+    gameState.timeLimit = tlEl ? parseInt(tlEl.value) : 300;
+    gameState.timer = gameState.timeLimit;
+    
+    const slEl = document.getElementById('host-scorelimit');
+    gameState.scoreLimit = slEl ? parseInt(slEl.value) : 25;
+
+    const hudRoomEl = document.getElementById('ingame-room-hud');
+    const hudCodeEl = document.getElementById('hud-room-code');
+    if (hudRoomEl && hudCodeEl) {
+        hudRoomEl.style.display = 'flex';
+        hudCodeEl.innerText = (isPublicRoom ? "[PUB] " : "[PRI] ") + formatRoomCode(code);
+    }
+
+    if (!isPublicRoom) {
+        try {
+            navigator.clipboard.writeText(formatRoomCode(code));
+        } catch(e) {}
+        alert(`Private Room Created!\nRoom Code: ${formatRoomCode(code)}\n\nCode has been copied to your clipboard. Active in bottom-right corner.`);
+    }
+
     setConnectionStatus(`Hosting ${isPublicRoom ? 'Public' : 'Private'} Room [${code}]...`);
     initPeer(fullHostId, (id) => {
         isHost = true;
@@ -623,6 +1379,13 @@ function joinMatch(targetInput) {
             isConnecting = false;
             applyClass(document.getElementById('player-class').value);
 
+            const hudRoomEl = document.getElementById('ingame-room-hud');
+            const hudCodeEl = document.getElementById('hud-room-code');
+            if (hudRoomEl && hudCodeEl) {
+                hudRoomEl.style.display = 'flex';
+                hudCodeEl.innerText = cleanCode;
+            }
+
             if (isMobile) {
                 isMobileDeploy = true;
                 document.getElementById('blocker').style.display = 'none';
@@ -671,12 +1434,21 @@ function handleIncomingPacket(senderId, data) {
         currentGamemode = data.mode;
         gameState.mode = data.mode;
         gameState.timer = data.timer;
+        gameState.timeLimit = (data.timeLimit !== undefined) ? data.timeLimit : 300;
+        gameState.scoreLimit = (data.scoreLimit !== undefined) ? data.scoreLimit : 25;
         gameState.scoreRed = data.scoreRed;
         gameState.scoreBlue = data.scoreBlue;
         gameState.flagRed = data.flagRed || gameState.flagRed;
         gameState.flagBlue = data.flagBlue || gameState.flagBlue;
         hostPeerId = data.hostId;
         roomPeerIds = data.peers || [myPeerId];
+
+        const hudRoomEl = document.getElementById('ingame-room-hud');
+        const hudCodeEl = document.getElementById('hud-room-code');
+        if (hudRoomEl && hudCodeEl && currentRoomCode) {
+            hudRoomEl.style.display = 'flex';
+            hudCodeEl.innerText = formatRoomCode(currentRoomCode);
+        }
 
         // Connect to all other peers in room mesh
         if (Array.isArray(data.peers)) {
@@ -785,6 +1557,8 @@ function handleIncomingPacket(senderId, data) {
                 type: 'init_game',
                 mode: currentGamemode,
                 timer: gameState.timer,
+                timeLimit: gameState.timeLimit,
+                scoreLimit: gameState.scoreLimit,
                 scoreRed: gameState.scoreRed,
                 scoreBlue: gameState.scoreBlue,
                 team: t,
@@ -841,6 +1615,8 @@ function handleIncomingPacket(senderId, data) {
         currentGamemode = data.mode;
         gameState.mode = data.mode;
         gameState.timer = data.timer;
+        gameState.timeLimit = (data.timeLimit !== undefined) ? data.timeLimit : 300;
+        gameState.scoreLimit = (data.scoreLimit !== undefined) ? data.scoreLimit : 25;
         gameState.scoreRed = data.scoreRed;
         gameState.scoreBlue = data.scoreBlue;
         gameState.myTeam = data.team;
@@ -849,6 +1625,13 @@ function handleIncomingPacket(senderId, data) {
         initGamemode(currentGamemode, false);
         gameState.started = true;
         updateMyNametag();
+        updateMatchHUD();
+        const hudRoomEl = document.getElementById('ingame-room-hud');
+        const hudCodeEl = document.getElementById('hud-room-code');
+        if (hudRoomEl && hudCodeEl && currentRoomCode) {
+            hudRoomEl.style.display = 'flex';
+            hudCodeEl.innerText = formatRoomCode(currentRoomCode);
+        }
     }
 
     if (data.type === 'match_over') {
@@ -878,6 +1661,18 @@ function handleIncomingPacket(senderId, data) {
         gameState.flagRed = data.flagRed;
         gameState.flagBlue = data.flagBlue;
         updateMatchHUD();
+    }
+
+    if (data.type === 'respawn') {
+        if (remote) {
+            remote.hp = remote.maxHp || 100;
+            if (remote.nametag) {
+                remote.mesh.remove(remote.nametag);
+                remote.nametag = createNametag(remote.username, remote.team || 'none', remote.hp, remote.maxHp || 100);
+                remote.nametag.position.y = 4.5;
+                remote.mesh.add(remote.nametag);
+            }
+        }
     }
 
     if (data.type === 'vip') {
@@ -1000,9 +1795,13 @@ function respawn() {
 }
 
 function updateMatchHUD() {
-    const m = Math.floor(gameState.timer / 60);
-    const s = gameState.timer % 60;
-    document.getElementById('match-timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    if (gameState.timeLimit === 0) {
+        document.getElementById('match-timer').innerText = "∞";
+    } else {
+        const m = Math.floor(gameState.timer / 60);
+        const s = gameState.timer % 60;
+        document.getElementById('match-timer').innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
     document.getElementById('match-score-red').innerText = gameState.scoreRed;
     document.getElementById('match-score-blue').innerText = gameState.scoreBlue;
 }
@@ -1011,10 +1810,18 @@ function matchTimerTick() {
     if (!gameState.started) return;
     
     const usesTimer = ['TDM', 'FFA', 'KOTH', 'ZOMBIES'].includes(gameState.mode);
-    if (usesTimer && gameState.timer > 0 && isHost) {
+    if (usesTimer && gameState.timeLimit > 0 && gameState.timer > 0 && isHost) {
         gameState.timer--;
         if (gameState.timer % 5 === 0) {
             netBroadcast({ type: 'sync_score', scoreRed: gameState.scoreRed, scoreBlue: gameState.scoreBlue });
+        }
+    }
+
+    if (isHost && gameState.scoreLimit > 0 && (gameState.mode === 'TDM' || gameState.mode === 'FFA')) {
+        if (gameState.scoreRed >= gameState.scoreLimit || gameState.scoreBlue >= gameState.scoreLimit) {
+            gameState.started = false;
+            netBroadcast({ type: 'match_over' });
+            alert("MATCH OVER! TARGET SCORE REACHED!\nRED: " + gameState.scoreRed + " | BLUE: " + gameState.scoreBlue);
         }
     }
     
@@ -1388,6 +2195,47 @@ function init() {
         deploySolo();
     });
 
+    // Copy Peer ID button
+    const btnCopyPeerId = document.getElementById('btn-copy-peer-id');
+    if (btnCopyPeerId) {
+        btnCopyPeerId.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (myPeerId) {
+                navigator.clipboard.writeText(myPeerId).then(() => {
+                    btnCopyPeerId.innerText = 'COPIED!';
+                    setTimeout(() => { btnCopyPeerId.innerText = 'COPY'; }, 1500);
+                }).catch(() => {
+                    prompt("Copy your Peer ID:", myPeerId);
+                });
+            }
+        });
+    }
+
+    // Ingame Room Code Copy button
+    const btnHudCopy = document.getElementById('btn-hud-copy-code');
+    if (btnHudCopy) {
+        btnHudCopy.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const codeToCopy = formatRoomCode(currentRoomCode || myPeerId);
+            navigator.clipboard.writeText(codeToCopy).then(() => {
+                btnHudCopy.innerText = 'COPIED!';
+                setTimeout(() => { btnHudCopy.innerText = 'COPY'; }, 1500);
+            }).catch(() => {
+                prompt("Room Code:", codeToCopy);
+            });
+        });
+    }
+
+    // Deploy with Bots button
+    const btnDeployBots = document.getElementById('btn-deploy-bots');
+    if (btnDeployBots) {
+        btnDeployBots.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!ensureCustomNametag()) return;
+            startBotMatch();
+        });
+    }
+
     // Blocker Background Click (Dev Solo Deploy)
     document.getElementById('blocker').addEventListener('click', (e) => { 
         if (e.target.id === 'blocker') { 
@@ -1533,6 +2381,14 @@ function deploySolo() {
     applyClass(document.getElementById('player-class').value); 
     isHost = true; 
     currentGamemode = document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA'; 
+    
+    const hudRoomEl = document.getElementById('ingame-room-hud');
+    const hudCodeEl = document.getElementById('hud-room-code');
+    if (hudRoomEl && hudCodeEl) {
+        hudRoomEl.style.display = 'flex';
+        hudCodeEl.innerText = "SOLO PRACTICE";
+    }
+
     initGamemode(currentGamemode, true);
     if (isMobile) { 
         isMobileDeploy = true; 
@@ -1589,7 +2445,20 @@ function applyClass(c) {
     if (c === 'tank') { myMaxHp = 200; myHp = 200; baseSpeed = 15; baseMaxSpeed = 25; }
     else if (c === 'ninja') { myMaxHp = 80; myHp = 80; baseSpeed = 35; baseMaxSpeed = 50; myJumps = 3; myJumpsLeft = 3; }
     else { myMaxHp = 100; myHp = 100; baseSpeed = 25; baseMaxSpeed = 40; myJumps = 2; }
-    mySpeed = baseSpeed; myMaxSpeed = baseMaxSpeed; updateUI();
+    mySpeed = baseSpeed; myMaxSpeed = baseMaxSpeed;
+    
+    if (adminStatOverrides) {
+        if (typeof adminStatOverrides.maxHp === 'number') myMaxHp = adminStatOverrides.maxHp;
+        if (typeof adminStatOverrides.hp === 'number') myHp = adminStatOverrides.hp;
+        if (typeof adminStatOverrides.speed === 'number') {
+            baseSpeed = adminStatOverrides.speed;
+            mySpeed = baseSpeed;
+            baseMaxSpeed = baseSpeed * 1.5;
+            myMaxSpeed = baseMaxSpeed;
+        }
+        if (typeof adminStatOverrides.coins === 'number') myCoins = adminStatOverrides.coins;
+    }
+    updateUI();
 }
 
 function triggerAbility() {
@@ -1718,19 +2587,65 @@ function die() {
 
     const opts = document.getElementById('draft-options'); 
     opts.innerHTML = '';
-    const shuffled = [...availableCards].sort(() => 0.5 - Math.random()).slice(0, 3);
-    shuffled.forEach(c => {
+    
+    const abilityKeys = Object.keys(ABILITY_DEFINITIONS);
+    const chosenAbilities = [...abilityKeys].sort(() => 0.5 - Math.random()).slice(0, 2);
+    const chosenCards = [...availableCards].sort(() => 0.5 - Math.random()).slice(0, 1);
+    
+    const draftItems = [];
+    chosenAbilities.forEach(key => {
+        const ab = ABILITY_DEFINITIONS[key];
+        draftItems.push({
+            name: `${ab.icon} ${ab.name}`,
+            desc: ab.desc,
+            isAbility: true,
+            abilityKey: key
+        });
+    });
+    chosenCards.forEach(c => {
+        draftItems.push({
+            name: `⚡ ${c.name}`,
+            desc: c.desc,
+            isAbility: false,
+            card: c
+        });
+    });
+
+    draftItems.forEach(item => {
         const btn = document.createElement('div'); 
         btn.className = 'draft-card'; 
-        btn.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
+        btn.innerHTML = `<h3>${item.name}</h3><p>${item.desc}</p>`;
         btn.onclick = () => { 
-            c.apply(); 
+            if (item.isAbility) {
+                myActiveAbility = item.abilityKey;
+                updateAbilityHUD();
+                saveLocalProfile();
+            } else if (item.card) {
+                item.card.apply();
+            }
             myHp = myMaxHp; 
             updateUI(); 
             respawn(); 
             document.getElementById('draft-modal').classList.add('hidden'); 
-            if (!isMobileDeploy) document.getElementById('blocker').style.display = 'flex'; 
-            else { document.getElementById('hotbar').style.display = 'flex'; showMobileControls(); } 
+            document.getElementById('hotbar').style.display = 'flex';
+            if (!isMobileDeploy) {
+                controls.lock();
+            } else {
+                showMobileControls();
+            }
+            netBroadcast({
+                type: 'pos',
+                pos: { x: playerBody.position.x, y: playerBody.position.y - 1.5, z: playerBody.position.z },
+                rot: { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w },
+                isCrouching: false,
+                gun: myGun,
+                hp: myHp,
+                maxHp: myMaxHp,
+                coins: myCoins,
+                speed: mySpeed,
+                kothScore: myKothScore
+            });
+            netBroadcast({ type: 'respawn', id: myPeerId });
         }; 
         opts.appendChild(btn);
     });
@@ -1916,6 +2831,7 @@ function setupUIEvents() {
                 myCoins = parseFloat(document.getElementById('my-set-coins').value);
                 baseSpeed = parseFloat(document.getElementById('my-set-speed').value);
                 mySpeed = baseSpeed;
+                adminStatOverrides = { hp: myHp, maxHp: myMaxHp, coins: myCoins, speed: baseSpeed };
                 updateUI();
                 saveLocalProfile();
                 adminLog("Applied stat override to SELF");
@@ -1945,7 +2861,16 @@ function setupUIEvents() {
             if (myCoins >= cost || isNaN(cost)) {
                 if (!isNaN(cost)) myCoins -= cost;
                 
-                if (type === 'card') { 
+                if (type === 'ability') {
+                    const abId = btnEl.getAttribute('data-id');
+                    if (ABILITY_DEFINITIONS[abId]) {
+                        myActiveAbility = abId;
+                        updateAbilityHUD();
+                        saveLocalProfile();
+                        alert(`TACTICAL MODULE EQUIPPED: ${ABILITY_DEFINITIONS[abId].name}\nPress [Q] in combat to activate!`);
+                    }
+                }
+                else if (type === 'card') { 
                     const rankStr = btnEl.getAttribute('data-rank');
                     let pool = (!rankStr || rankStr === 'Random') ? availableCards : availableCards.filter(c => c.rank === rankStr);
                     if (pool.length === 0) pool = availableCards;
@@ -2003,6 +2928,8 @@ function updateUI() {
 
 function onKeyDown(e) {
     if (e.code === 'KeyR') isWallRunning = true;
+    if (e.code === 'KeyF') fireGrapple();
+    if (e.code === 'KeyQ') castActiveAbility();
     switch(e.code) {
         case 'KeyW': moveForward = true; break; 
         case 'KeyA': moveLeft = true; break; 
@@ -2142,35 +3069,93 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
             targets.push(r.mesh);
         }
     });
+    activeBots.forEach(b => {
+        if (b && b.mesh && b.hp > 0) {
+            targets.push(b.mesh);
+        }
+    });
     const intersects = raycaster.intersectObjects(targets, true);
     
     let endPoint;
     if (intersects.length > 0) {
-        const hitPoint = intersects[0].point; 
+        const hit = intersects[0];
+        const hitPoint = hit.point; 
         endPoint = hitPoint; 
-        const hitMesh = intersects[0].object;
+        const hitMesh = hit.object;
         let hitId = null; 
+        let isBotHit = false;
         let cur = hitMesh;
         while(cur && !hitId) { 
-            if (cur.userData && cur.userData.peerId) hitId = cur.userData.peerId; 
+            if (cur.userData && cur.userData.botId) { hitId = cur.userData.botId; isBotHit = true; }
+            else if (cur.userData && cur.userData.peerId) { hitId = cur.userData.peerId; isBotHit = false; }
             cur = cur.parent; 
         }
         
-        if (hitId && remotePlayers[hitId]) {
-            // Immediate Hitscan Damage Dispatch over P2P Mesh
-            netSendTo(hitId, { type: 'hit', target: hitId, damage: damage });
+        if (hitId) {
+            let targetMaxHp = 100;
+            let targetPos = hitPoint;
+            if (isBotHit) {
+                const b = activeBots.find(x => x.id === hitId);
+                if (b) { targetMaxHp = b.maxHp; targetPos = b.pos; }
+            } else if (remotePlayers[hitId]) {
+                targetMaxHp = remotePlayers[hitId].maxHp || 100;
+                targetPos = remotePlayers[hitId].mesh.position;
+            }
+
+            let isHeadshot = false;
+            let testObj = hitMesh;
+            while(testObj) {
+                if (testObj.name === 'head' || testObj.userData?.isHead) { isHeadshot = true; break; }
+                testObj = testObj.parent;
+            }
+            if (!isHeadshot && hitPoint.y - targetPos.y >= 2.6) {
+                isHeadshot = true;
+            }
+
+            let finalDamage = damage;
+            const dist = camera.position.distanceTo(hitPoint);
+
+            if (myGun === 'sniper') {
+                if (isHeadshot) {
+                    finalDamage = targetMaxHp;
+                } else {
+                    finalDamage = Math.ceil(targetMaxHp / 3);
+                }
+            } else if (myGun === 'golden_eagle' || myGun === 'pistol') {
+                if (isHeadshot) {
+                    finalDamage = targetMaxHp;
+                } else {
+                    finalDamage = Math.ceil(targetMaxHp / 3);
+                }
+            } else if (myGun === 'shotgun') {
+                if (dist <= 6.0) {
+                    finalDamage = Math.ceil(targetMaxHp * 0.50);
+                } else {
+                    const falloffFactor = Math.max(0.15, 1.0 - (dist - 6.0) / 30.0);
+                    finalDamage = Math.ceil(targetMaxHp * 0.50 * falloffFactor);
+                }
+                if (isHeadshot) finalDamage = Math.min(targetMaxHp, Math.ceil(finalDamage * 1.5));
+            } else {
+                if (isHeadshot) finalDamage = Math.ceil(damage * 2.2);
+            }
+
+            if (isBotHit) {
+                damageBot(hitId, finalDamage, isHeadshot);
+            } else if (remotePlayers[hitId]) {
+                netSendTo(hitId, { type: 'hit', target: hitId, damage: finalDamage, isHeadshot: isHeadshot });
+            }
+
             if (myLifesteal) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
             if (myCoinSteal) myCoins += 50; else myCoins += 20; 
             updateUI(); 
             saveLocalProfile();
-            createHitSpark(hitPoint, colorHex);
+            createHitSpark(hitPoint, isHeadshot ? 0xff0055 : colorHex);
         }
     } else { 
         const dir = raycaster.ray.direction; 
         endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(350)); 
     }
     
-    // Supersonic Sci-Fi Tracer
     const bMat = new THREE.MeshBasicMaterial({ color: colorHex }); 
     const bullet = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8.0, 8), bMat); 
     bullet.geometry.rotateX(Math.PI/2);
@@ -2298,11 +3283,16 @@ function createGunMesh(type) {
         const mag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.1), accentMat); 
         mag.position.y = -0.2; 
         group.add(body, barrel, mag);
-    } else if (type === 'pistol') {
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.15, 0.3), gunMat); 
-        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3), gunMat); 
-        barrel.rotation.x = Math.PI/2; barrel.position.z = -0.2; 
-        group.add(body, barrel);
+    } else if (type === 'pistol' || type === 'golden_eagle') {
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.95, roughness: 0.15 });
+        const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.22, 0.14), blackMat);
+        grip.rotation.x = -0.25; grip.position.set(0, -0.08, 0.08);
+        const slide = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.42), goldMat);
+        slide.position.set(0, 0.08, -0.1);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.44), goldMat);
+        barrel.rotation.x = Math.PI/2; barrel.position.set(0, 0.08, -0.12);
+        group.add(grip, slide, barrel);
     } else if (type === 'lmg') {
         const body = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.7), gunMat); 
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), gunMat); 
@@ -2445,6 +3435,8 @@ function createHumanoid(themeColor = 0x00f3ff) {
 
     // --- CYBER HELMET ---
     const head = new THREE.Group();
+    head.name = 'head';
+    head.userData.isHead = true;
     head.position.y = 1.35;
     torso.add(head);
 
@@ -3050,17 +4042,67 @@ function animate() {
         }
         if (isGrounded && jumpAntiGravityTimer <= 0) myJumpsLeft = myJumps;
 
-        if (isWallRunning && !isGrounded) {
+        // Wall climbing & wall running (Hold W + R to climb wall)
+        if (isWallRunning) {
+            forwardVec.set(0,0,-1).applyQuaternion(camera.quaternion);
+            forwardVec.y = 0;
+            forwardVec.normalize();
             wallRight.set(1,0,0).applyQuaternion(camera.quaternion).normalize(); 
             wallLeft.set(-1,0,0).applyQuaternion(camera.quaternion).normalize();
-            wallPos.copy(playerBody.position); 
-            wallPos.y -= 1; 
-            wallRayR.set(wallPos, wallRight); wallRayR.far = 3; 
-            wallRayL.set(wallPos, wallLeft); wallRayL.far = 3;
-            if (wallRayR.intersectObjects(mapMeshes).length > 0 || wallRayL.intersectObjects(mapMeshes).length > 0) { 
-                playerBody.velocity.y = 0; 
-                myJumpsLeft = myJumps; 
+            wallPos.copy(playerBody.position);
+            
+            const wallRayF = new THREE.Raycaster(wallPos, forwardVec, 0, 3.5);
+            wallRayR.set(wallPos, wallRight); wallRayR.far = 3.5;
+            wallRayL.set(wallPos, wallLeft); wallRayL.far = 3.5;
+            
+            const hitF = wallRayF.intersectObjects(mapMeshes).length > 0;
+            const hitR = wallRayR.intersectObjects(mapMeshes).length > 0;
+            const hitL = wallRayL.intersectObjects(mapMeshes).length > 0;
+            
+            if (hitF || hitR || hitL) {
+                if (moveForward) {
+                    playerBody.velocity.y = 19;
+                } else if (!isGrounded) {
+                    playerBody.velocity.y = Math.max(playerBody.velocity.y, -1.5);
+                }
+                myJumpsLeft = myJumps;
             }
+        }
+
+        // Grapple Hook Physics
+        if (grappleActive && grappleTarget) {
+            const pPos = new THREE.Vector3().copy(playerBody.position);
+            const pullDir = new THREE.Vector3().subVectors(grappleTarget, pPos);
+            const dist = pullDir.length();
+            if (dist < 3.5 || pPos.y > grappleTarget.y + 2.5) {
+                releaseGrapple();
+            } else {
+                pullDir.normalize();
+                playerBody.velocity.x = pullDir.x * 52;
+                playerBody.velocity.y = pullDir.y * 52 + 4;
+                playerBody.velocity.z = pullDir.z * 52;
+                myJumpsLeft = myJumps;
+                
+                if (grappleLineMesh) {
+                    const posAttr = grappleLineMesh.geometry.attributes.position;
+                    posAttr.setXYZ(0, camera.position.x, camera.position.y - 0.2, camera.position.z);
+                    posAttr.setXYZ(1, grappleTarget.x, grappleTarget.y, grappleTarget.z);
+                    posAttr.needsUpdate = true;
+                }
+            }
+        }
+        if (grappleCooldownTimer > 0) {
+            grappleCooldownTimer = Math.max(0, grappleCooldownTimer - 1/60);
+            updateGrappleHUD();
+        }
+        if (abilityCooldownTimer > 0) {
+            abilityCooldownTimer = Math.max(0, abilityCooldownTimer - 1/60);
+            updateAbilityHUD();
+        }
+
+        // Offline Bots Update
+        if (isBotMatch && activeBots.length > 0) {
+            updateBots(1/60);
         }
 
         if (playerBody.position.y < -10) die();

@@ -38,6 +38,30 @@
         <p style="margin-top:12px; color:#FFD700; font-weight:bold; text-shadow:0 0 5px rgba(255,215,0,0.5);">Coins: <span id="coin-text">0</span></p>
     </div>
 
+    <!-- Tactical Ability & Grapple HUD -->
+    <div id="tactical-hud">
+        <div class="tactical-badge" id="hud-ability-badge">
+            <span id="hud-ability-icon" style="color:#00f3ff;">⚡</span>
+            <span>[Q] <span id="hud-ability-name">LIGHTNING</span>: <strong id="hud-ability-status" style="color:#00ffaa;">READY</strong></span>
+        </div>
+        <div class="tactical-badge" id="hud-grapple-badge">
+            <span style="color:#00f3ff;">🪝</span>
+            <span>[F] GRAPPLE: <strong id="hud-grapple-status" style="color:#00ffaa;">READY</strong></span>
+        </div>
+        <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
+            <span>[W+R] CLIMB WALL</span>
+        </div>
+    </div>
+
+    <!-- Ingame Room Code in Bottom-Right Corner -->
+    <div id="ingame-room-hud">
+        <div>
+            <div style="font-size:9px; color:#aaa; letter-spacing:1px; text-transform:uppercase;">ROOM CODE</div>
+            <div id="hud-room-code" style="font-size:15px; font-weight:900; color:#00f3ff; font-family:monospace; letter-spacing:2px;">------</div>
+        </div>
+        <button id="btn-hud-copy-code" style="background:rgba(0,243,255,0.2); border:1px solid #00f3ff; color:#00f3ff; padding:4px 8px; font-size:11px; font-weight:bold; border-radius:4px; cursor:pointer;">COPY</button>
+    </div>
+
     <div id="ui-triggers">
         <div id="admin-trigger" title="Admin">⚙️ ADMIN</div>
         <div id="vip-trigger" title="VIP Status">👑 VIP</div>
@@ -71,37 +95,78 @@
             <h1 class="neon-title" style="letter-spacing:10px; font-style:italic;">CYBER-FORT 3D</h1>
             
             <div class="menu-grid" style="grid-template-columns: 1fr 1fr 1fr; max-width:1200px;">
-                <!-- Left Panel: Your Info -->
+                <!-- Left Panel: Your Info & Bot Matches -->
                 <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding-right:10px;">
                     <h3>IDENTITY & LOADOUT</h3>
-                    <div class="id-box">
+                    <div class="id-box" style="padding:10px; display:flex; flex-direction:column; gap:4px; margin-bottom:12px;">
                         <span class="label" style="font-size:10px;">YOUR PEER ID:</span>
-                        <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Initializing PeerJS...</span>
+                        <div style="display:flex; align-items:center; justify-content:center; gap:6px;">
+                            <span id="my-id-display" class="id-value glow-text" style="font-size:11px; word-break:break-all; max-width:200px; overflow:hidden; text-overflow:ellipsis;">Initializing PeerJS...</span>
+                            <button id="btn-copy-peer-id" style="background:rgba(0,243,255,0.2); border:1px solid #00f3ff; color:#00f3ff; font-size:10px; padding:3px 6px; border-radius:4px; cursor:pointer; font-weight:bold; white-space:nowrap;">COPY</button>
+                        </div>
                     </div>
-                    <label class="section-label" style="color:#00f3ff; font-weight:bold; letter-spacing:1px;">CUSTOM NAMETAG / CALLSIGN (REQUIRED)</label>
-                    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px;">
-                        <input type="text" id="my-username" placeholder="Enter Custom Nametag..." class="tech-input" style="width:100%; box-sizing:border-box; border-color:#00f3ff; box-shadow:0 0 10px rgba(0,243,255,0.3); font-weight:bold;" maxlength="14">
+                    <label class="section-label" style="color:#00f3ff; font-weight:bold; letter-spacing:1px; margin-bottom:4px;">CUSTOM NAMETAG / CALLSIGN (REQUIRED)</label>
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+                        <input type="text" id="my-username" placeholder="Enter Custom Nametag..." class="tech-input" style="width:100%; box-sizing:border-box; border-color:#00f3ff; box-shadow:0 0 10px rgba(0,243,255,0.3); font-weight:bold; padding:10px;" maxlength="14">
                     </div>
-                    <label class="section-label">Select Loadout</label>
-                    <select id="player-class" class="tech-select" style="margin-bottom:15px;">
-                        <option value="assault" style="background:#111;">Assault ⚡ (Dash - 30 NRG)</option>
-                        <option value="tank" style="background:#111;">Tank 🛡️ (Shield - 70 NRG)</option>
-                        <option value="ninja" style="background:#111;">Ninja 🥷 (Shuriken - 40 NRG)</option>
-                    </select>
-                    <label class="section-label">Select Team</label>
-                    <select id="team-select" class="tech-select" style="margin-bottom:15px;">
-                        <option value="auto" style="background:#111;">Auto-Assign</option>
-                        <option value="red" style="background:#330000; color:#ff0000;">Crimson Legion (Red)</option>
-                        <option value="blue" style="background:#000033; color:#0055ff;">Cobalt Order (Blue)</option>
-                    </select>
-                    <button id="btn-solo" class="deploy-btn" style="width:100%; padding:8px; background:rgba(0,255,255,0.15); border-color:#00f3ff; color:#00f3ff; font-size:13px;">PRACTICE / SOLO DEPLOY</button>
+                    
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:11px; margin-bottom:3px;">Class</label>
+                            <select id="player-class" class="tech-select" style="padding:6px; font-size:11px;">
+                                <option value="assault" style="background:#111;">Assault ⚡</option>
+                                <option value="tank" style="background:#111;">Tank 🛡️</option>
+                                <option value="ninja" style="background:#111;">Ninja 🥷</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:11px; margin-bottom:3px;">Team</label>
+                            <select id="team-select" class="tech-select" style="padding:6px; font-size:11px;">
+                                <option value="auto" style="background:#111;">Auto-Assign</option>
+                                <option value="red" style="background:#330000; color:#ff0000;">Crimson</option>
+                                <option value="blue" style="background:#000033; color:#0055ff;">Cobalt</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Offline Bot Match Section -->
+                    <div style="background:rgba(0,243,255,0.06); border:1px solid rgba(0,243,255,0.3); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:#00f3ff; font-size:11px; font-weight:bold; letter-spacing:1px;">BOT COMBAT (OFFLINE)</span>
+                            <select id="bot-difficulty" class="tech-select" style="padding:3px 6px; font-size:10px; width:auto;">
+                                <option value="easy">Recruit (Easy)</option>
+                                <option value="medium" selected>Veteran (Med)</option>
+                                <option value="hard">Cyborg (Hard)</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:11px; color:#aaa;">Count:</span>
+                            <select id="bot-count" class="tech-select" style="padding:4px 6px; font-size:11px; flex:1;">
+                                <option value="1">1 Bot</option>
+                                <option value="2">2 Bots</option>
+                                <option value="3" selected>3 Bots</option>
+                                <option value="4">4 Bots</option>
+                                <option value="5">5 Bots</option>
+                                <option value="6">6 Bots</option>
+                                <option value="7">7 Bots</option>
+                            </select>
+                            <span style="font-size:11px; color:#aaa;">Teams:</span>
+                            <select id="bot-team-split" class="tech-select" style="padding:4px 6px; font-size:11px; flex:1;">
+                                <option value="balanced" selected>Balanced</option>
+                                <option value="vs_all">Solo vs All</option>
+                            </select>
+                        </div>
+                        <button id="btn-deploy-bots" class="deploy-btn" style="width:100%; padding:8px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:12px; font-weight:bold;">DEPLOY WITH BOTS</button>
+                    </div>
+
+                    <button id="btn-solo" class="deploy-btn" style="width:100%; padding:6px; margin-top:8px; background:rgba(0,255,255,0.08); border-color:#00f3ff; color:#00f3ff; font-size:11px;">SOLO EXPLORE / PRACTICE</button>
                 </div>
                 
-                <!-- Middle Panel: Host Game -->
+                <!-- Middle Panel: Host Game with Full Settings -->
                 <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding:0 15px;">
                     <h3>HOST MATCH (P2P)</h3>
-                    <label class="section-label">Gamemode</label>
-                    <select id="host-gamemode" class="tech-select" style="margin-bottom:12px;">
+                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Gamemode</label>
+                    <select id="host-gamemode" class="tech-select" style="margin-bottom:10px; padding:8px;">
                         <option value="FFA">Free For All</option>
                         <option value="TDM">Team Deathmatch</option>
                         <option value="CTF">Capture the Flag</option>
@@ -109,17 +174,41 @@
                         <option value="GUN_GAME">Gun Game</option>
                         <option value="ZOMBIES">Infection / Zombies</option>
                     </select>
-                    <label class="section-label">Room Visibility</label>
-                    <select id="host-visibility" class="tech-select" style="margin-bottom:15px;">
+
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:11px; margin-bottom:4px;">Time Limit</label>
+                            <select id="host-timelimit" class="tech-select" style="padding:8px; font-size:12px;">
+                                <option value="300" selected>5 Minutes</option>
+                                <option value="180">3 Minutes</option>
+                                <option value="600">10 Minutes</option>
+                                <option value="900">15 Minutes</option>
+                                <option value="0">Infinite</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:11px; margin-bottom:4px;">Score Limit</label>
+                            <select id="host-scorelimit" class="tech-select" style="padding:8px; font-size:12px;">
+                                <option value="25" selected>25 Pts</option>
+                                <option value="15">15 Pts</option>
+                                <option value="50">50 Pts</option>
+                                <option value="0">Infinite</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Room Visibility</label>
+                    <select id="host-visibility" class="tech-select" style="margin-bottom:12px; padding:8px;">
                         <option value="public">Public (Listed in Server Browser)</option>
                         <option value="private">Private (Room Code Only)</option>
                     </select>
-                    <div style="background:rgba(0,243,255,0.1); border:1px solid rgba(0,243,255,0.3); border-radius:6px; padding:8px; margin-bottom:15px; font-size:11px; color:#aaa;">
+                    
+                    <div style="background:rgba(0,243,255,0.08); border:1px solid rgba(0,243,255,0.3); border-radius:6px; padding:8px; margin-bottom:12px; font-size:11px; color:#aaa;">
                         <span style="color:#00f3ff; font-weight:bold;">Capacity:</span> Up to 8 Players (Full Mesh)<br>
-                        <span style="color:#00ffaa; font-weight:bold;">Resilience:</span> Automatic Host Migration
+                        <span style="color:#00ffaa; font-weight:bold;">Host Control:</span> Dynamic Settings Broadcast
                     </div>
-                    <button id="btn-host" class="deploy-btn" style="width:100%;">DEPLOY AS HOST</button>
-                    <p class="desc" style="margin-top:10px;">Hosts an 8-player match. Public rooms appear in Server Browser.</p>
+                    <button id="btn-host" class="deploy-btn" style="width:100%; padding:10px;">DEPLOY AS HOST</button>
+                    <p class="desc" style="margin-top:8px;">Hosts a synced match. Private rooms display a copyable code.</p>
                 </div>
 
                 <!-- Right Panel: Join -->
@@ -134,7 +223,7 @@
                     
                     <h3 style="margin:0 0 6px 0; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">PRIVATE JOIN</h3>
                     <label class="section-label" style="font-size:10px; margin-bottom:3px;">Enter Private Room Code:</label>
-                    <input type="text" id="join-id" placeholder="e.g. CF-A9B2C3" class="tech-input" style="margin-bottom:8px; text-transform:uppercase;">
+                    <input type="text" id="join-id" placeholder="e.g. CF-A9B2C3" class="tech-input" style="margin-bottom:8px; text-transform:uppercase; padding:10px;">
                     <button id="btn-join" class="deploy-btn" style="background:rgba(255,0,255,0.2); border-color:#ff00ff; color:#ff00ff; box-shadow:0 0 10px #ff00ff; width:100%;">JOIN PRIVATE ROOM</button>
                     
                     <div id="room-info-box" style="margin-top:10px; display:none; background:rgba(0,0,0,0.5); border:1px solid #00ffaa; border-radius:6px; padding:8px;">
@@ -147,16 +236,16 @@
 
             <div class="launch-hint">
                 <p>DO NOT CLICK OUTSIDE UNLESS PLAYING SOLO / PRACTICE MODE</p>
-                <div style="margin-top:20px; color:#888; font-size:14px; text-transform:uppercase; letter-spacing:1px; line-height:1.5;">
+                <div style="margin-top:16px; color:#aaa; font-size:13px; text-transform:uppercase; letter-spacing:1px; line-height:1.6;">
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[SHIFT]</span> Sprint (Toggle) &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[C]</span> Crouch (Toggle)<br>
-                    <span style="color:#00f3ff;">[E]</span> Ability (Uses NRG) &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[V]</span> Change POV &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[R]</span> Wallrun &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[W + R]</span> Climb Wall &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[F]</span> Grapple Hook<br>
+                    <span style="color:#00f3ff;">[Q]</span> Cast Ability &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[E]</span> Class Power &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[Click]</span> Shoot &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[Right Click]</span> AIM
+                    <span style="color:#00f3ff;">[Right Click]</span> AIM &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[V]</span> 1st/3rd POV
                 </div>
             </div>
         </div>
@@ -164,7 +253,7 @@
 
     <!-- Modals -->
     <div id="shop-modal" class="modal hidden">
-        <div class="modal-content glass" style="max-width:800px; width:100%; border-color:#00f3ff; box-shadow:0 0 40px rgba(0,243,255,0.4);">
+        <div class="modal-content glass" style="max-width:850px; width:100%; border-color:#00f3ff; box-shadow:0 0 40px rgba(0,243,255,0.4);">
             <h2 class="neon-title" style="color:#00f3ff; text-shadow:0 0 15px #00f3ff; text-align:center; font-size:2.5rem; margin-top:0; margin-bottom:10px; letter-spacing:3px;">CYBER SHOP</h2>
             <p style="color:#ddd; text-align:center; font-size:18px;">Balance: <span id="shop-coins" class="highlight-text" style="color:#FFD700; text-shadow:0 0 10px rgba(255,215,0,0.8);">0</span> Coins</p>
             
@@ -173,7 +262,7 @@
                 <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,0,0,0.3); padding:15px; border-radius:8px;">
                     <h3 style="color:#ff3333; text-align:center; margin-top:0;">WEAPONS</h3>
                     <div style="display:flex; flex-direction:column; gap:8px;">
-                        <button class="shop-btn buy-btn" data-type="weapon" data-id="pistol" data-cost="50" style="border-color:rgba(255,0,0,0.4); color:#ffaaaa;">Pistol (50c)</button>
+                        <button class="shop-btn buy-btn" data-type="weapon" data-id="golden_eagle" data-cost="50" style="border-color:rgba(255,215,0,0.6); color:#ffd700; font-weight:bold;">Golden Eagle (50c)</button>
                         <button class="shop-btn buy-btn" data-type="weapon" data-id="smg" data-cost="100" style="border-color:rgba(255,0,0,0.4); color:#00ff00;">SMG (100c)</button>
                         <button class="shop-btn buy-btn" data-type="weapon" data-id="shotgun" data-cost="150" style="border-color:rgba(255,0,0,0.4); color:#ffff00;">Pump Shotgun (150c)</button>
                         <button class="shop-btn buy-btn" data-type="weapon" data-id="lmg" data-cost="180" style="border-color:rgba(255,0,0,0.4); color:#ff8800;">LMG (180c)</button>
@@ -182,20 +271,22 @@
                     </div>
                 </div>
                 
-                <!-- Upgrades / Cards -->
-                <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,255,170,0.3); padding:15px; border-radius:8px;">
-                    <h3 style="color:#00ffaa; text-align:center; margin-top:0;">UPGRADES</h3>
+                <!-- Tactical Ability Modules -->
+                <div style="flex:1; min-width:240px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,255,170,0.3); padding:15px; border-radius:8px;">
+                    <h3 style="color:#00ffaa; text-align:center; margin-top:0;">TACTICAL ABILITIES [Q]</h3>
                     <div style="display:flex; flex-direction:column; gap:8px;">
-                        <button class="shop-btn buy-btn" data-type="card" data-rank="Common" data-cost="50" style="border-color: #aaaaaa; color: #aaaaaa;">Common Card (50c)</button>
-                        <button class="shop-btn buy-btn" data-type="card" data-rank="Rare" data-cost="150" style="border-color: #0055ff; color: #0055ff;">Rare Card (150c)</button>
-                        <button class="shop-btn buy-btn" data-type="card" data-rank="Epic" data-cost="350" style="border-color: #aa00ff; color: #aa00ff;">Epic Card (350c)</button>
-                        <button class="shop-btn buy-btn" data-type="card" data-rank="Legendary" data-cost="800" style="border-color: #ffd700; color: #ffd700;">Legendary Card (800c)</button>
-                        <button class="shop-btn buy-btn" data-type="card" data-rank="Random" data-cost="200" style="border-color:rgba(0,255,170,0.4); color:#fff; font-weight:bold;">Random Card (200c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="lightning" data-cost="250" style="border-color:#00f3ff; color:#00f3ff; font-weight:bold;">⚡ Lightning Strike (250c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="meteor" data-cost="220" style="border-color:#ff5500; color:#ff5500; font-weight:bold;">🔥 Meteor Blast (220c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="frost_nova" data-cost="200" style="border-color:#00ffff; color:#00ffff; font-weight:bold;">❄️ Frost Nova (200c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="phase_blink" data-cost="180" style="border-color:#aa00ff; color:#aa00ff; font-weight:bold;">🌀 Phase Blink (180c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="vampiric_drain" data-cost="280" style="border-color:#ff0055; color:#ff0055; font-weight:bold;">🩸 Vampiric Drain (280c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="overcharge" data-cost="240" style="border-color:#ffd700; color:#ffd700; font-weight:bold;">⚡ Overcharge (240c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="nanite_regen" data-cost="150" style="border-color:#00ffaa; color:#00ffaa; font-weight:bold;">💚 Nanite Repair (150c)</button>
                     </div>
                 </div>
 
                 <!-- Support -->
-                <div style="flex:1; min-width:220px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.3); padding:15px; border-radius:8px;">
+                <div style="flex:1; min-width:200px; background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.3); padding:15px; border-radius:8px;">
                     <h3 style="color:#00f3ff; text-align:center; margin-top:0;">SUPPORT</h3>
                     <div style="display:flex; flex-direction:column; gap:8px;">
                         <button class="shop-btn buy-btn" data-type="heal" data-cost="30" style="border-color:rgba(0,243,255,0.4); color:#00f3ff;">Max Heal (30c)</button>
@@ -304,13 +395,14 @@
                                 <option value="shotgun">Shotgun</option>
                                 <option value="smg">SMG</option>
                                 <option value="lmg">LMG</option>
+                                <option value="golden_eagle">Golden Eagle</option>
                                 <option value="katana">Katana</option>
                                 <option value="medkit">Medkit</option>
                             </select>
                             <button id="btn-admin-give-weapon" class="shop-btn" style="border-color:#fff; color:#fff; padding:5px 10px;">GIVE WEP</button>
                         </div>
                         
-                        <button id="btn-admin-give-card" class="shop-btn" style="border-color:#aa00ff; color:#aa00ff; padding:10px;">INJECT RANDOM EPIC CARD</button>
+                        <button id="btn-admin-give-card" class="shop-btn" style="border-color:#aa00ff; color:#aa00ff; padding:10px;">INJECT RANDOM ABILITY</button>
                         
                         <div style="display:flex; gap:10px; margin-top:auto;">
                             <button id="btn-admin-vip" class="shop-btn" style="flex:1; border-color:#ffd700; color:#ffd700; background:rgba(255,215,0,0.1);">GRANT VIP</button>
@@ -347,7 +439,7 @@
     <div id="draft-modal" class="modal hidden">
         <div class="modal-content glass" style="max-width:800px; width:100%; border-color:#ff0055; box-shadow:0 0 30px rgba(255,0,85,0.4);">
             <h2 id="draft-title" class="neon-text" style="color:#ff0055; text-shadow:0 0 10px #ff0055; font-size:2rem;">SYSTEM FAILURE</h2>
-            <p style="text-align:center; color:#ccc; letter-spacing:2px;">SELECT A POWERUP MODULE FOR REDEPLOYMENT</p>
+            <p style="text-align:center; color:#ccc; letter-spacing:2px;">SELECT A TACTICAL ABILITY MODULE TO REDEPLOY</p>
             <div id="draft-options" style="display:flex; gap:15px; margin-top:30px; flex-wrap:wrap; justify-content:center;">
                 <!-- Cards injected here -->
             </div>
