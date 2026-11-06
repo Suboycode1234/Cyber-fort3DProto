@@ -215,9 +215,9 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                         <span class="label" style="font-size:10px;">YOUR PEER ID:</span>
                         <span id="my-id-display" class="id-value glow-text" style="font-size:12px;">Initializing PeerJS...</span>
                     </div>
-                    <label class="section-label">Callsign</label>
+                    <label class="section-label" style="color:#00f3ff; font-weight:bold; letter-spacing:1px;">CUSTOM NAMETAG / CALLSIGN (REQUIRED)</label>
                     <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px;">
-                        <input type="text" id="my-username" placeholder="Enter Callsign..." class="tech-input" style="width:100%; box-sizing:border-box;" maxlength="12">
+                        <input type="text" id="my-username" placeholder="Enter Custom Nametag..." class="tech-input" style="width:100%; box-sizing:border-box; border-color:#00f3ff; box-shadow:0 0 10px rgba(0,243,255,0.3); font-weight:bold;" maxlength="14">
                     </div>
                     <label class="section-label">Select Loadout</label>
                     <select id="player-class" class="tech-select" style="margin-bottom:15px;">
@@ -524,6 +524,8 @@ let recoilAnimTimer = 0;
 let meleeAnimTimer = 0;
 let mapMeshes = [];
 let mapBodies = [];
+let mapDecorations = [];
+let animatedMapObjects = [];
 let flagMeshRed = null;
 let flagMeshBlue = null;
 
@@ -551,16 +553,16 @@ let myUsername = "Player_" + Math.floor(Math.random() * 900 + 100);
 // Physical Bullets
 const activeBullets = [];
 
-// --- Weapon System ---
+// --- Weapon System (Fast-Paced Responsive Firing) ---
 const WEAPON_STATS = {
-    'default': { name: 'Assault', type: 'gun', fireRate: 15, damage: 25, color: 0x00ffff, spread: 0 },
-    'sniper': { name: 'Sniper', type: 'gun', fireRate: 60, damage: 150, color: 0xff0000, spread: 0 },
-    'shotgun': { name: 'Pump', type: 'gun', fireRate: 45, damage: 20, projectiles: 6, color: 0xffff00, spread: 0.06 },
-    'smg': { name: 'SMG', type: 'gun', fireRate: 4, damage: 12, color: 0x00ff00, spread: 0.03 },
-    'pistol': { name: 'Pistol', type: 'gun', fireRate: 12, damage: 35, color: 0xffaaaa, spread: 0 },
-    'lmg': { name: 'LMG', type: 'gun', fireRate: 8, damage: 20, color: 0xff8800, spread: 0.04 },
-    'katana': { name: 'Katana', type: 'melee', fireRate: 25, damage: 85, range: 6.0, color: 0xffffff },
-    'medkit': { name: 'Medkit', type: 'support', fireRate: 60, heal: 100, consume: true, color: 0x00ff00 }
+    'default': { name: 'Assault', type: 'gun', fireRate: 7, damage: 25, color: 0x00f3ff, spread: 0 },
+    'sniper': { name: 'Sniper', type: 'gun', fireRate: 28, damage: 150, color: 0xff0055, spread: 0 },
+    'shotgun': { name: 'Pump', type: 'gun', fireRate: 22, damage: 22, projectiles: 8, color: 0xffff00, spread: 0.05 },
+    'smg': { name: 'SMG', type: 'gun', fireRate: 3, damage: 14, color: 0x00ffaa, spread: 0.025 },
+    'pistol': { name: 'Pistol', type: 'gun', fireRate: 6, damage: 35, color: 0xffaaaa, spread: 0 },
+    'lmg': { name: 'LMG', type: 'gun', fireRate: 4, damage: 22, color: 0xff8800, spread: 0.035 },
+    'katana': { name: 'Katana', type: 'melee', fireRate: 14, damage: 90, range: 7.0, color: 0xffffff },
+    'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 }
 };
 
 let myInventory = ['default', null, null, null, null];
@@ -607,7 +609,55 @@ function loadLocalProfile() {
         console.warn('Unable to load local profile:', e);
     }
     const unEl = document.getElementById('my-username');
-    if (unEl) unEl.value = myUsername;
+    if (unEl) {
+        if (myUsername && !/^Player_\d+$/i.test(myUsername)) {
+            unEl.value = myUsername;
+        } else {
+            unEl.value = '';
+        }
+    }
+}
+
+function ensureCustomNametag() {
+    const unEl = document.getElementById('my-username');
+    let val = unEl ? unEl.value.trim() : (myUsername ? myUsername.trim() : '');
+    
+    // Check if empty or still a default "Player_..." pattern
+    if (!val || val.length < 2 || /^Player_\d+$/i.test(val)) {
+        const entered = prompt("ENTER YOUR CUSTOM CALLSIGN / NAMETAG TO DEPLOY (Min 2 chars):", (val && !/^Player_\d+$/i.test(val)) ? val : "");
+        if (entered && entered.trim().length >= 2) {
+            val = entered.trim().substring(0, 14);
+            if (unEl) unEl.value = val;
+        } else {
+            if (unEl) {
+                unEl.focus();
+                unEl.style.borderColor = '#ff0055';
+                unEl.style.boxShadow = '0 0 15px rgba(255, 0, 85, 0.7)';
+            }
+            alert("A custom nametag is required to deploy! Please enter your custom callsign.");
+            return false;
+        }
+    }
+    
+    myUsername = val;
+    if (unEl) {
+        unEl.value = val;
+        unEl.style.borderColor = '#00f3ff';
+        unEl.style.boxShadow = '0 0 10px rgba(0, 243, 255, 0.3)';
+    }
+    saveLocalProfile();
+    updateMyNametag();
+    return true;
+}
+
+function updateMyNametag() {
+    if (!myAvatar) return;
+    if (myAvatar.nametag) {
+        myAvatar.group.remove(myAvatar.nametag);
+    }
+    myAvatar.nametag = createNametag(myUsername, gameState.myTeam || 'none', myHp, myMaxHp);
+    myAvatar.nametag.position.y = 4.5;
+    myAvatar.group.add(myAvatar.nametag);
 }
 
 // ============================================================================
@@ -668,9 +718,7 @@ function fetchLobbies() {
                 div.innerHTML = `<span><strong>[${l.gamemode}]</strong> ${escapeHtml(l.hostName)}</span><span style="color:#00ffaa; font-weight:bold;">${l.players}/${l.maxPlayers || 8}</span>`;
                 div.onclick = (e) => {
                     e.stopPropagation();
-                    const un = document.getElementById('my-username') ? document.getElementById('my-username').value.trim() : '';
-                    if (un) myUsername = un;
-                    saveLocalProfile();
+                    if (!ensureCustomNametag()) return;
                     joinMatch(l.roomCode || l.hostPeerId);
                 };
                 sl.appendChild(div);
@@ -1179,7 +1227,7 @@ function handleIncomingPacket(senderId, data) {
     // Lazy instantiate remote player avatar if not present
     if (!remote && (data.type === 'init' || data.type === 'pos')) {
         const humanoid = createHumanoid(); 
-        const nametag = createNametag(data.username || "Player"); 
+        const nametag = createNametag(data.username || "Player", 'none', data.hp || 100, 100); 
         nametag.position.y = 4.5; 
         humanoid.group.add(nametag);
         humanoid.group.userData.peerId = senderId;
@@ -1201,7 +1249,7 @@ function handleIncomingPacket(senderId, data) {
             connectedAt: Date.now(), 
             kills: 0, 
             deaths: 0, 
-            hp: 100, 
+            hp: data.hp || 100, 
             maxHp: 100, 
             coins: 0, 
             speed: 25, 
@@ -1220,7 +1268,7 @@ function handleIncomingPacket(senderId, data) {
         remote.username = data.username || "Player";
         remote.teamPref = data.teamPref || 'auto';
         if (remote.nametag) remote.mesh.remove(remote.nametag);
-        remote.nametag = createNametag(remote.username); 
+        remote.nametag = createNametag(remote.username, remote.team || 'none', remote.hp || 100, remote.maxHp || 100); 
         remote.nametag.position.y = 4.5; 
         remote.mesh.add(remote.nametag);
         
@@ -1251,7 +1299,15 @@ function handleIncomingPacket(senderId, data) {
 
     if (data.type === 'pos') {
         const oldPos = remote.mesh.position.clone();
-        remote.hp = data.hp; 
+        if (typeof data.hp === 'number' && remote.hp !== data.hp) {
+            remote.hp = data.hp;
+            if (remote.nametag) {
+                remote.mesh.remove(remote.nametag);
+                remote.nametag = createNametag(remote.username, remote.team || 'none', remote.hp, remote.maxHp || 100);
+                remote.nametag.position.y = 4.5;
+                remote.mesh.add(remote.nametag);
+            }
+        }
         remote.maxHp = data.maxHp; 
         remote.coins = data.coins; 
         remote.speed = data.speed;
@@ -1295,6 +1351,7 @@ function handleIncomingPacket(senderId, data) {
         if (data.flagBlue) gameState.flagBlue = data.flagBlue;
         initGamemode(currentGamemode, false);
         gameState.started = true;
+        updateMyNametag();
     }
 
     if (data.type === 'match_over') {
@@ -1338,6 +1395,7 @@ function handleIncomingPacket(senderId, data) {
             myHp -= data.damage || 25;
             lastHitBy = senderId;
             updateUI();
+            updateMyNametag();
             if (myHp <= 0) die();
         }
     }
@@ -1441,6 +1499,7 @@ function respawn() {
         playerBody.position.set(spawnX, spawnY, spawnZ);
         playerBody.velocity.set(0,0,0);
     }
+    updateMyNametag();
 }
 
 function updateMatchHUD() {
@@ -1740,8 +1799,11 @@ function initGamemode(mode, isNewGame = true) {
     
     for (const ob of mapMeshes) scene.remove(ob);
     for (const ob of mapBodies) world.removeBody(ob);
+    for (const d of mapDecorations) scene.remove(d);
     mapMeshes = []; 
     mapBodies = [];
+    mapDecorations = [];
+    animatedMapObjects = [];
     buildMap(mode);
     respawn();
     updateMatchHUD();
@@ -1793,9 +1855,12 @@ function init() {
     if (unInput) {
         unInput.addEventListener('change', (e) => {
             const val = e.target.value.trim();
-            if (val) {
+            if (val && val.length >= 2) {
                 myUsername = val;
+                unInput.style.borderColor = '#00f3ff';
+                unInput.style.boxShadow = '0 0 10px rgba(0, 243, 255, 0.3)';
                 saveLocalProfile();
+                updateMyNametag();
             }
         });
     }
@@ -1803,60 +1868,66 @@ function init() {
     // Host Button Click
     document.getElementById('btn-host').addEventListener('click', (e) => {
         e.stopPropagation();
-        const un = document.getElementById('my-username') ? document.getElementById('my-username').value.trim() : '';
-        if (un) myUsername = un;
-        saveLocalProfile();
+        if (!ensureCustomNametag()) return;
         hostMatch();
     });
 
     // Join Button Click
     document.getElementById('btn-join').addEventListener('click', (e) => { 
         e.stopPropagation(); 
-        const targetId = document.getElementById('join-id').value; 
+        const targetId = document.getElementById('join-id').value.trim(); 
         if (!targetId) {
             alert("Please enter a Room Code or Host Peer ID.");
             return;
         }
-        const un = document.getElementById('my-username') ? document.getElementById('my-username').value.trim() : '';
-        if (un) myUsername = un;
-        saveLocalProfile();
+        if (!ensureCustomNametag()) return;
         joinMatch(targetId);
     });
 
     // Solo Deploy Button Click
     document.getElementById('btn-solo').addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!ensureCustomNametag()) return;
         deploySolo();
     });
 
     // Blocker Background Click (Dev Solo Deploy)
     document.getElementById('blocker').addEventListener('click', (e) => { 
         if (e.target.id === 'blocker') { 
+            if (!ensureCustomNametag()) return;
             deploySolo();
         } 
     });
 
     document.body.oncontextmenu = () => false;
 
-    // Three.js Scene Setup
+    // Three.js Scene Setup - High Fidelity Sci-Fi Atmosphere
     scene = new THREE.Scene(); 
-    scene.background = new THREE.Color( 0x050510 ); 
-    scene.fog = new THREE.FogExp2( 0x050510, 0.003 );
+    scene.background = new THREE.Color( 0x060814 ); 
+    scene.fog = new THREE.FogExp2( 0x060814, 0.0022 );
 
-    const light = new THREE.HemisphereLight( 0xffffff, 0x444455, 0.4 ); 
-    light.position.set( 0.5, 1, 0.75 ); 
+    // Rich dual-tone cyberpunk hemisphere lighting (Cyan sky, Neon purple/magenta ground bounce)
+    const light = new THREE.HemisphereLight( 0x00f3ff, 0x1d0533, 0.65 ); 
+    light.position.set( 0, 150, 0 ); 
     scene.add( light );
 
-    const dirLight = new THREE.DirectionalLight( 0xffffff, 1.0 ); 
-    dirLight.position.set( 100, 200, 100 ); 
+    // High fidelity main directional light with soft shadows
+    const dirLight = new THREE.DirectionalLight( 0xffffff, 1.35 ); 
+    dirLight.position.set( 120, 240, 100 ); 
     dirLight.castShadow = true;
-    dirLight.shadow.camera.top = 200; 
-    dirLight.shadow.camera.bottom = -200; 
-    dirLight.shadow.camera.left = -200; 
-    dirLight.shadow.camera.right = 200; 
+    dirLight.shadow.camera.top = 220; 
+    dirLight.shadow.camera.bottom = -220; 
+    dirLight.shadow.camera.left = -220; 
+    dirLight.shadow.camera.right = 220; 
     dirLight.shadow.mapSize.width = 2048; 
     dirLight.shadow.mapSize.height = 2048; 
+    dirLight.shadow.bias = -0.0005;
     scene.add( dirLight );
+
+    // Deep neon fill light
+    const fillLight = new THREE.DirectionalLight( 0x0066ff, 0.45 );
+    fillLight.position.set( -120, 100, -100 );
+    scene.add( fillLight );
 
     camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
     
@@ -1951,6 +2022,7 @@ function init() {
     myAvatar.matTorso.color.setHex(0x0055ff); 
     myAvatar.matTorso.emissive.setHex(0x001155); 
     scene.add(myAvatar.group);
+    updateMyNametag();
 
     buildMap('FFA'); 
     setupUIEvents(); 
@@ -1960,8 +2032,7 @@ function init() {
 }
 
 function deploySolo() {
-    const un = document.getElementById('my-username') ? document.getElementById('my-username').value.trim() : '';
-    if (un) myUsername = un;
+    if (!ensureCustomNametag()) return;
     applyClass(document.getElementById('player-class').value); 
     isHost = true; 
     currentGamemode = document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA'; 
@@ -2541,6 +2612,25 @@ function fireMelee(range, damage) {
     fireCooldown = 25;
 }
 
+function createHitSpark(pos, colorHex) {
+    const spark = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 8, 8),
+        new THREE.MeshBasicMaterial({ color: colorHex })
+    );
+    spark.position.copy(pos);
+    scene.add(spark);
+    let scale = 1.0;
+    const sparkTimer = setInterval(() => {
+        scale -= 0.25;
+        if (scale <= 0) {
+            clearInterval(sparkTimer);
+            scene.remove(spark);
+        } else {
+            spark.scale.set(scale, scale, scale);
+        }
+    }, 25);
+}
+
 function fireRay(offsetX, offsetY, damage, colorHex) {
     const raycaster = new THREE.Raycaster(); 
     const rx = offsetX * 2; 
@@ -2548,7 +2638,13 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
     raycaster.setFromCamera(new THREE.Vector2(rx, ry), camera); 
     if (isScoped) raycaster.setFromCamera(new THREE.Vector2(0,0), camera); 
 
-    const targets = Object.values(remotePlayers).map(r => r.mesh); 
+    const targets = [];
+    Object.keys(remotePlayers).forEach(pid => {
+        const r = remotePlayers[pid];
+        if (r && r.mesh) {
+            targets.push(r.mesh);
+        }
+    });
     const intersects = raycaster.intersectObjects(targets, true);
     
     let endPoint;
@@ -2564,19 +2660,22 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
         }
         
         if (hitId && remotePlayers[hitId]) {
+            // Immediate Hitscan Damage Dispatch over P2P Mesh
             netSendTo(hitId, { type: 'hit', target: hitId, damage: damage });
             if (myLifesteal) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
             if (myCoinSteal) myCoins += 50; else myCoins += 20; 
             updateUI(); 
             saveLocalProfile();
+            createHitSpark(hitPoint, colorHex);
         }
     } else { 
         const dir = raycaster.ray.direction; 
-        endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(300)); 
+        endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(350)); 
     }
     
+    // Supersonic Sci-Fi Tracer
     const bMat = new THREE.MeshBasicMaterial({ color: colorHex }); 
-    const bullet = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 6.0, 8), bMat); 
+    const bullet = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8.0, 8), bMat); 
     bullet.geometry.rotateX(Math.PI/2);
     
     let startPoint = new THREE.Vector3().copy(camera.position); 
@@ -2590,26 +2689,84 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
 
     const dir = new THREE.Vector3().subVectors(endPoint, startPoint).normalize(); 
     bullet.position.add(dir.multiplyScalar(4));
-    activeBullets.push({ mesh: bullet, start: new THREE.Vector3().copy(bullet.position), end: endPoint, progress: 0 });
+    activeBullets.push({ 
+        mesh: bullet, 
+        start: new THREE.Vector3().copy(bullet.position), 
+        end: endPoint, 
+        progress: 0,
+        speed: 35 
+    });
 }
 
-function createNametag(name) {
+function createNametag(name, team = 'none', hp = 100, maxHp = 100) {
     const canvas = document.createElement('canvas'); 
     canvas.width = 512; 
-    canvas.height = 128; 
+    canvas.height = 160; 
     const ctx = canvas.getContext('2d');
-    ctx.font = 'bold 80px sans-serif'; 
-    ctx.textAlign = 'center'; 
-    ctx.textBaseline = 'middle'; 
-    ctx.strokeStyle = 'black'; 
-    ctx.lineWidth = 10; 
-    ctx.strokeText(name, 256, 64); 
-    ctx.fillStyle = '#00f3ff'; 
-    ctx.fillText(name, 256, 64);
+
+    // Rounded sci-fi glass badge background
+    ctx.fillStyle = 'rgba(6, 12, 24, 0.90)';
+    const x = 12, y = 10, w = 488, h = 140, r = 18;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Determine team accent colors
+    let glowColor = '#00f3ff';
+    let roleText = 'CYBER PILOT';
+    if (team === 'red') { 
+        glowColor = '#ff0055'; 
+        roleText = 'CRIMSON LEGION'; 
+    } else if (team === 'blue') { 
+        glowColor = '#0088ff'; 
+        roleText = 'COBALT ORDER'; 
+    } else if (team === 'vip') { 
+        glowColor = '#ffd700'; 
+        roleText = 'VIP OPERATIVE'; 
+    }
+
+    // Border with neon cyber glow
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Top role/team tag
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = glowColor;
+    ctx.fillText(`• ${roleText} •`, 256, 38);
+
+    // Player Callsign / Nametag
+    ctx.font = '900 50px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 14;
+    ctx.fillText((name || 'PILOT').toUpperCase(), 256, 88);
+    ctx.shadowBlur = 0;
+
+    // Mini Health Bar on Nametag
+    const barW = 380, barH = 8;
+    const barX = (512 - barW) / 2, barY = 126;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(barX, barY, barW, barH);
+    const hpPct = Math.min(1.0, Math.max(0.0, hp / (maxHp || 100)));
+    ctx.fillStyle = hpPct < 0.35 ? '#ff0055' : (hpPct < 0.7 ? '#ffff00' : '#00ffaa');
+    ctx.fillRect(barX, barY, barW * hpPct, barH);
+
     const tex = new THREE.CanvasTexture(canvas); 
-    const mat = new THREE.SpriteMaterial({ map: tex }); 
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }); 
     const sprite = new THREE.Sprite(mat); 
-    sprite.scale.set(6, 1.5, 1); 
+    sprite.scale.set(5.5, 1.7, 1); 
     return sprite;
 }
 
@@ -2681,48 +2838,322 @@ function createGunMesh(type) {
     return group;
 }
 
-// Humanoid Avatar
-function createHumanoid() {
+// ============================================================================
+// HIGH-POLY SCI-FI CYBER WARRIOR AVATAR
+// ============================================================================
+function createHumanoid(themeColor = 0x00f3ff) {
     const group = new THREE.Group();
-    const matTorso = new THREE.MeshStandardMaterial({ color: 0x3b4d36, roughness: 0.9, metalness: 0.1 }); 
-    const matPants = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }); 
-    const matHead  = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }); 
-    const matSkin  = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.4 }); 
+
+    // Sci-Fi PBR Materials
+    const matArmorMain = new THREE.MeshStandardMaterial({ 
+        color: 0x141824, 
+        metalness: 0.85, 
+        roughness: 0.25 
+    }); 
+    const matArmorSecondary = new THREE.MeshStandardMaterial({ 
+        color: 0x222838, 
+        metalness: 0.7, 
+        roughness: 0.35 
+    }); 
+    const matArmorAccent = new THREE.MeshStandardMaterial({ 
+        color: themeColor, 
+        metalness: 0.8, 
+        roughness: 0.3,
+        emissive: themeColor,
+        emissiveIntensity: 0.3
+    }); 
+    const matGlow = new THREE.MeshStandardMaterial({ 
+        color: themeColor, 
+        emissive: themeColor, 
+        emissiveIntensity: 2.2, 
+        roughness: 0.1, 
+        metalness: 0.9 
+    });
+    const matJoints = new THREE.MeshStandardMaterial({ 
+        color: 0x0a0c10, 
+        roughness: 0.85, 
+        metalness: 0.2 
+    });
+
+    // Generous Hitbox cylinder for 100% reliable raycast hit registration
+    const hitboxGeo = new THREE.CylinderGeometry(1.2, 1.2, 4.2, 12);
+    const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitbox = new THREE.Mesh(hitboxGeo, hitboxMat);
+    hitbox.position.y = 2.0;
+    group.add(hitbox);
+
+    // Torso Core & Chassis
+    const torso = new THREE.Group();
+    torso.position.y = 2.0;
+    group.add(torso);
+
+    // Inner Body Suit
+    const innerTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 1.7, 16), matJoints);
+    innerTorso.castShadow = true; innerTorso.receiveShadow = true;
+    torso.add(innerTorso);
+
+    // Outer Armored Chest Carapace (Ballistic Breastplate)
+    const breastplate = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.9, 0.85), matArmorMain);
+    breastplate.position.set(0, 0.35, 0);
+    breastplate.castShadow = true; breastplate.receiveShadow = true;
+    torso.add(breastplate);
+
+    // Chest Armor Accent Plates
+    const chestPlateL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.15), matArmorAccent);
+    chestPlateL.position.set(-0.32, 0.35, 0.42);
+    const chestPlateR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.15), matArmorAccent);
+    chestPlateR.position.set(0.32, 0.35, 0.42);
+    torso.add(chestPlateL, chestPlateR);
+
+    // Glowing Arc Reactor Core in Chest Center
+    const arcCore = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.15, 16), matGlow);
+    arcCore.rotation.x = Math.PI / 2;
+    arcCore.position.set(0, 0.38, 0.44);
+    torso.add(arcCore);
+
+    // Segmented Abdominal Armor
+    const absArmor = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.75), matArmorSecondary);
+    absArmor.position.set(0, -0.4, 0);
+    absArmor.castShadow = true; absArmor.receiveShadow = true;
+    torso.add(absArmor);
+
+    // Tactical Utility Belt with Cartridges
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.18, 0.85), matJoints);
+    belt.position.set(0, -0.75, 0);
+    torso.add(belt);
+    for (let b = -0.4; b <= 0.4; b += 0.25) {
+        const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.12), matArmorAccent);
+        pouch.position.set(b, -0.75, 0.45);
+        torso.add(pouch);
+    }
+
+    // High-Tech Twin-Thruster Jetpack on Back
+    const jetpackGroup = new THREE.Group();
+    jetpackGroup.position.set(0, 0.2, -0.5);
+    const jetMain = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.1, 0.35), matArmorMain);
+    jetMain.castShadow = true;
+    jetpackGroup.add(jetMain);
+
+    // Dual Thruster Nozzles with Glowing Neon Exhaust Rings
+    const nozzleL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.4, 16), matArmorSecondary);
+    nozzleL.position.set(-0.25, -0.45, -0.05);
+    const nozzleR = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.4, 16), matArmorSecondary);
+    nozzleR.position.set(0.25, -0.45, -0.05);
+    const ringL = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.035, 8, 16), matGlow);
+    ringL.rotation.x = Math.PI / 2; ringL.position.set(-0.25, -0.65, -0.05);
+    const ringR = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.035, 8, 16), matGlow);
+    ringR.rotation.x = Math.PI / 2; ringR.position.set(0.25, -0.65, -0.05);
+    jetpackGroup.add(nozzleL, nozzleR, ringL, ringR);
+    torso.add(jetpackGroup);
+
+    // --- CYBER HELMET ---
+    const head = new THREE.Group();
+    head.position.y = 1.35;
+    torso.add(head);
+
+    // Helmet Base Chassis
+    const helmDome = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.46, 0.75, 16), matArmorMain);
+    helmDome.castShadow = true;
+    head.add(helmDome);
+
+    // Curved Crown Armor Plate
+    const helmCrown = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.45), matArmorSecondary);
+    helmCrown.position.y = 0.25;
+    head.add(helmCrown);
+
+    // Glowing Cyber Visor
+    const visor = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.53, 0.53, 0.2, 16, 1, false, -Math.PI * 0.35, Math.PI * 0.7),
+        matGlow
+    );
+    visor.position.set(0, 0.05, 0);
+    head.add(visor);
+
+    // Helmet Side Comms / Filters
+    const earL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.25, 12), matArmorAccent);
+    earL.rotation.z = Math.PI / 2; earL.position.set(-0.52, 0.05, 0);
+    const earR = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.25, 12), matArmorAccent);
+    earR.rotation.z = Math.PI / 2; earR.position.set(0.52, 0.05, 0);
+    head.add(earL, earR);
+
+    // Rebreather Mouthpiece
+    const rebreather = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.35), matArmorSecondary);
+    rebreather.position.set(0, -0.25, 0.38);
+    head.add(rebreather);
+
+    // --- ARMS & WEAPON SOCKET ---
+    // Left Arm
+    const lArm = new THREE.Group(); 
+    lArm.position.set(-0.85, 0.7, 0); 
+    torso.add(lArm);
     
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.8), matTorso); 
-    torso.position.y = 2.0; torso.castShadow = true; torso.receiveShadow = true; group.add(torso);
-    
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead); 
-    head.position.y = 1.3; head.castShadow = true; head.receiveShadow = true; torso.add(head);
-    
-    const lArm = new THREE.Group(); lArm.position.set(-0.8, 0.7, 0); torso.add(lArm);
-    const lArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.6, 0.35), matTorso); 
-    lArmMesh.position.y = -0.8; lArmMesh.castShadow = true; lArmMesh.receiveShadow = true; lArm.add(lArmMesh);
-    
-    const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.6, 0.35), matTorso); 
-    rArm.position.set(0.8, 0.2, -0.4); rArm.rotation.x = -Math.PI/3; rArm.castShadow = true; rArm.receiveShadow = true; torso.add(rArm);
-    
-    const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin); lHand.position.y = -0.8; lArmMesh.add(lHand);
-    const rHand = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin); rHand.position.y = -0.8; rArm.add(rHand);
-    
-    const gunContainer = new THREE.Group(); gunContainer.position.set(0, -0.2, -0.6); rHand.add(gunContainer); gunContainer.add(createGunMesh('default'));
-    
-    const lLeg = new THREE.Group(); lLeg.position.set(-0.35, -0.9, 0); torso.add(lLeg);
-    const lLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); 
-    lLegMesh.position.y = -0.9; lLegMesh.castShadow = true; lLegMesh.receiveShadow = true; lLeg.add(lLegMesh);
-    
-    const rLeg = new THREE.Group(); rLeg.position.set(0.35, -0.9, 0); torso.add(rLeg);
-    const rLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.8, 0.45), matPants); 
-    rLegMesh.position.y = -0.9; rLegMesh.castShadow = true; rLegMesh.receiveShadow = true; rLeg.add(rLegMesh);
-    
-    return { group, head, torso, lArm, rArm, lLeg, rLeg, gunContainer, matTorso, matPants, currentGun: 'default' };
+    const lPauldron = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), matArmorAccent);
+    lPauldron.position.set(0, 0.1, 0);
+    lArm.add(lPauldron);
+
+    const lArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.8, 12), matArmorMain);
+    lArmMesh.position.y = -0.45; lArmMesh.castShadow = true;
+    lArm.add(lArmMesh);
+
+    const lForearm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.8, 0.32), matArmorSecondary);
+    lForearm.position.y = -1.1; lForearm.castShadow = true;
+    lArm.add(lForearm);
+
+    const lGlowStrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.34), matGlow);
+    lGlowStrip.position.set(-0.14, -1.1, 0);
+    lArm.add(lGlowStrip);
+
+    const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), matJoints);
+    lHand.position.y = -1.55;
+    lArm.add(lHand);
+
+    // Right Arm
+    const rArm = new THREE.Group(); 
+    rArm.position.set(0.85, 0.2, -0.4); 
+    rArm.rotation.x = -Math.PI / 3; 
+    torso.add(rArm);
+
+    const rPauldron = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), matArmorAccent);
+    rPauldron.position.set(0, 0.1, 0);
+    rArm.add(rPauldron);
+
+    const rArmMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.8, 12), matArmorMain);
+    rArmMesh.position.y = -0.45; rArmMesh.castShadow = true;
+    rArm.add(rArmMesh);
+
+    const rForearm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.8, 0.32), matArmorSecondary);
+    rForearm.position.y = -1.1; rForearm.castShadow = true;
+    rArm.add(rForearm);
+
+    const rGlowStrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.34), matGlow);
+    rGlowStrip.position.set(0.14, -1.1, 0);
+    rArm.add(rGlowStrip);
+
+    const rHand = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), matJoints);
+    rHand.position.y = -1.55;
+    rArm.add(rHand);
+
+    const gunContainer = new THREE.Group(); 
+    gunContainer.position.set(0, -0.15, -0.5); 
+    rHand.add(gunContainer); 
+    gunContainer.add(createGunMesh('default'));
+
+    // --- LEGS & CYBER BOOTS ---
+    // Left Leg
+    const lLeg = new THREE.Group(); 
+    lLeg.position.set(-0.38, -0.9, 0); 
+    torso.add(lLeg);
+
+    const lThigh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.9, 0.45), matArmorSecondary);
+    lThigh.position.y = -0.45; lThigh.castShadow = true;
+    lLeg.add(lThigh);
+
+    const lKnee = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.25, 12), matArmorAccent);
+    lKnee.rotation.x = Math.PI / 2; lKnee.position.set(0, -0.9, 0.12);
+    lLeg.add(lKnee);
+
+    const lShin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.42), matArmorMain);
+    lShin.position.y = -1.35; lShin.castShadow = true;
+    lLeg.add(lShin);
+
+    const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.3, 0.6), matJoints);
+    lBoot.position.set(0, -1.85, 0.08); lBoot.castShadow = true;
+    lLeg.add(lBoot);
+
+    const lBootGlow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 0.62), matGlow);
+    lBootGlow.position.set(0, -1.96, 0.08);
+    lLeg.add(lBootGlow);
+
+    // Right Leg
+    const rLeg = new THREE.Group(); 
+    rLeg.position.set(0.38, -0.9, 0); 
+    torso.add(rLeg);
+
+    const rThigh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.9, 0.45), matArmorSecondary);
+    rThigh.position.y = -0.45; rThigh.castShadow = true;
+    rLeg.add(rThigh);
+
+    const rKnee = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.25, 12), matArmorAccent);
+    rKnee.rotation.x = Math.PI / 2; rKnee.position.set(0, -0.9, 0.12);
+    rLeg.add(rKnee);
+
+    const rShin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.42), matArmorMain);
+    rShin.position.y = -1.35; rShin.castShadow = true;
+    rLeg.add(rShin);
+
+    const rBoot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.3, 0.6), matJoints);
+    rBoot.position.set(0, -1.85, 0.08); rBoot.castShadow = true;
+    rLeg.add(rBoot);
+
+    const rBootGlow = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 0.62), matGlow);
+    rBootGlow.position.set(0, -1.96, 0.08);
+    rLeg.add(rBootGlow);
+
+    return { 
+        group, 
+        head, 
+        torso, 
+        lArm, 
+        rArm, 
+        lLeg, 
+        rLeg, 
+        gunContainer, 
+        matTorso: matArmorAccent, 
+        matPants: matArmorSecondary, 
+        matGlow, 
+        hitbox, 
+        currentGun: 'default' 
+    };
 }
 
-// Procedural Map Building
+// Procedural Sci-Fi Hex & Circuit Texture
 function createNeonGridTexture(hexColor, glowColor) {
-    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128; const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#' + hexColor.toString(16).padStart(6, '0'); ctx.fillRect(0,0,128,128); ctx.strokeStyle = glowColor; ctx.lineWidth = 4; ctx.strokeRect(0,0,128,128);
-    const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; return tex;
+    const canvas = document.createElement('canvas'); 
+    canvas.width = 256; 
+    canvas.height = 256; 
+    const ctx = canvas.getContext('2d');
+
+    // Dark metallic panel background
+    ctx.fillStyle = '#' + hexColor.toString(16).padStart(6, '0');
+    ctx.fillRect(0, 0, 256, 256);
+
+    // Inset beveled tech tile
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+    ctx.fillRect(12, 12, 232, 232);
+
+    // Glowing cyber circuit border
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, 256, 256);
+
+    // Angled corner brackets
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 48); ctx.lineTo(48, 0);
+    ctx.moveTo(256, 48); ctx.lineTo(208, 0);
+    ctx.moveTo(0, 208); ctx.lineTo(48, 256);
+    ctx.moveTo(256, 208); ctx.lineTo(208, 256);
+    ctx.stroke();
+
+    // Center illuminated power node
+    ctx.fillStyle = glowColor;
+    ctx.beginPath();
+    ctx.arc(128, 128, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Circuit trace runners
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(128, 0); ctx.lineTo(128, 120);
+    ctx.moveTo(0, 128); ctx.lineTo(120, 128);
+    ctx.moveTo(256, 128); ctx.lineTo(136, 128);
+    ctx.moveTo(128, 256); ctx.lineTo(128, 136);
+    ctx.stroke();
+
+    const tex = new THREE.CanvasTexture(canvas); 
+    tex.wrapS = THREE.RepeatWrapping; 
+    tex.wrapT = THREE.RepeatWrapping; 
+    return tex;
 }
 
 function buildMap(mode) {
@@ -2762,39 +3193,161 @@ function buildMap(mode) {
 }
 
 function buildMapFFA() {
-    addBox(40, 40, 40, 0, 20, 0, 0x111111, '#ff0055'); 
-    addBox(20, 40, 20, 0, 60, 0, 0x111111, '#ff0055');
+    // --- CENTRAL TITAN CYBER SPIRE ---
+    // Ground Tier Foundation
+    addBox(46, 26, 46, 0, 13, 0, 0x111624, '#00f3ff'); 
+    // Mid Tier Spire
+    addBox(28, 36, 28, 0, 44, 0, 0x141b2e, '#ff0055');
+    // High Pinnacle Observation Tier
+    addBox(14, 28, 14, 0, 76, 0, 0x0f1526, '#00f3ff');
     
+    // Spiral Ascending Combat Platforms
     for(let i=0; i<12; i++) {
-        const radius = 35; const angle = i * (Math.PI / 4);
-        const x = Math.cos(angle) * radius; const z = Math.sin(angle) * radius; const y = 5 + (i * 6);
-        addBox(12, 2, 12, x, y, z, 0x333333, '#00ffaa');
+        const radius = 35; 
+        const angle = i * (Math.PI / 4);
+        const x = Math.cos(angle) * radius; 
+        const z = Math.sin(angle) * radius; 
+        const y = 6 + (i * 6);
+        addBox(12, 2, 12, x, y, z, 0x1a2236, '#00ffaa');
     }
 
+    // Floating Holographic Torus Ring around Central Spire
+    const ringGeo = new THREE.TorusGeometry(26, 0.75, 16, 64);
+    const ringMat = new THREE.MeshStandardMaterial({
+        color: 0x00f3ff,
+        emissive: 0x00f3ff,
+        emissiveIntensity: 1.8,
+        roughness: 0.15,
+        metalness: 0.85
+    });
+    const holoRing = new THREE.Mesh(ringGeo, ringMat);
+    holoRing.position.set(0, 78, 0);
+    holoRing.rotation.x = Math.PI / 4;
+    scene.add(holoRing);
+    mapDecorations.push(holoRing);
+
+    // Floating Pulsating Cyber Power Core
+    const coreGeo = new THREE.OctahedronGeometry(5.5, 2);
+    const coreMat = new THREE.MeshStandardMaterial({
+        color: 0xff0055,
+        emissive: 0xff0055,
+        emissiveIntensity: 2.4,
+        roughness: 0.1,
+        metalness: 0.95
+    });
+    const powerCore = new THREE.Mesh(coreGeo, coreMat);
+    powerCore.position.set(0, 88, 0);
+    scene.add(powerCore);
+    mapDecorations.push(powerCore);
+
+    const coreLight = new THREE.PointLight(0xff0055, 3.5, 110);
+    coreLight.position.set(0, 88, 0);
+    scene.add(coreLight);
+    mapDecorations.push(coreLight);
+
+    animatedMapObjects.push({
+        update: (t) => {
+            holoRing.rotation.z += 0.012;
+            holoRing.rotation.y += 0.005;
+            powerCore.rotation.y += 0.02;
+            powerCore.rotation.x += 0.01;
+            const cy = 88 + Math.sin(t * 2) * 2.5;
+            powerCore.position.y = cy;
+            coreLight.position.y = cy;
+        }
+    });
+
+    // --- 4 CORNER CYBER DEFENSE TOWERS & PYLONS ---
     const s = 70; 
-    addBox(20, 60, 20, -s, 30, -s, 0x111122, '#00f3ff'); 
-    addBox(20, 60, 20, s, 30, -s, 0x111122, '#00f3ff'); 
-    addBox(20, 60, 20, -s, 30, s, 0x111122, '#00f3ff'); 
-    addBox(20, 60, 20, s, 30, s, 0x111122, '#00f3ff');
+    addBox(22, 60, 22, -s, 30, -s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, s, 30, -s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, -s, 30, s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, s, 30, s, 0x111624, '#00f3ff');
 
-    addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x222222, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x222222, '#ffff00'); 
-    addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x222222, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x222222, '#ffff00'); 
+    const pylonData = [
+        { x: -s, z: -s, color: 0x00f3ff },
+        { x: s, z: -s, color: 0xff0088 },
+        { x: -s, z: s, color: 0xffaa00 },
+        { x: s, z: s, color: 0x00ff88 }
+    ];
+    pylonData.forEach(p => {
+        // High-poly cylindrical pylon mast
+        const pylonMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.2, 2.0, 75, 16),
+            new THREE.MeshStandardMaterial({ color: 0x111624, metalness: 0.85, roughness: 0.25 })
+        );
+        pylonMesh.position.set(p.x, 37.5, p.z);
+        pylonMesh.castShadow = true;
+        scene.add(pylonMesh);
+        mapMeshes.push(pylonMesh);
 
-    addBox(40, 2, 10, s, 40, 0, 0x222222, '#00ffaa'); 
-    addBox(40, 2, 10, -s, 40, 0, 0x222222, '#00ffaa'); 
-    addBox(10, 2, 40, 0, 40, s, 0x222222, '#00ffaa'); 
-    addBox(10, 2, 40, 0, 40, -s, 0x222222, '#00ffaa');
+        // Glowing torus emitter crown
+        const crownMesh = new THREE.Mesh(
+            new THREE.TorusGeometry(3.0, 0.45, 12, 32),
+            new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 2.2 })
+        );
+        crownMesh.rotation.x = Math.PI / 2;
+        crownMesh.position.set(p.x, 75, p.z);
+        scene.add(crownMesh);
+        mapDecorations.push(crownMesh);
 
-    const coverColors = ['#ff00ff', '#00ffff', '#ffff00', '#ff8800'];
-    for(let i=0; i<15; i++) {
+        // Real-time Cyber Point Light
+        const pLight = new THREE.PointLight(p.color, 2.4, 90);
+        pLight.position.set(p.x, 77, p.z);
+        scene.add(pLight);
+        mapDecorations.push(pLight);
+    });
+
+    // High-Poly Concentric Jump Pads
+    const jumpPadCoords = [{ x: 0, z: 55 }, { x: 0, z: -55 }, { x: 55, z: 0 }, { x: -55, z: 0 }];
+    jumpPadCoords.forEach(j => {
+        const padBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(4.2, 4.8, 0.6, 24),
+            new THREE.MeshStandardMaterial({ color: 0x0d1424, metalness: 0.9, roughness: 0.2 })
+        );
+        padBase.position.set(j.x, 0.3, j.z);
+        scene.add(padBase);
+        mapMeshes.push(padBase);
+
+        const padRing = new THREE.Mesh(
+            new THREE.RingGeometry(1.8, 3.6, 32),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff, side: THREE.DoubleSide })
+        );
+        padRing.rotateX(-Math.PI / 2);
+        padRing.position.set(j.x, 0.62, j.z);
+        scene.add(padRing);
+        mapDecorations.push(padRing);
+
+        const padCore = new THREE.Mesh(
+            new THREE.CircleGeometry(1.2, 24),
+            new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide })
+        );
+        padCore.rotateX(-Math.PI / 2);
+        padCore.position.set(j.x, 0.63, j.z);
+        scene.add(padCore);
+        mapDecorations.push(padCore);
+    });
+
+    // Elevated Ramps and Cross-Walkways
+    addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+
+    addBox(40, 2, 10, s, 40, 0, 0x1a2438, '#00ffaa'); 
+    addBox(40, 2, 10, -s, 40, 0, 0x1a2438, '#00ffaa'); 
+    addBox(10, 2, 40, 0, 40, s, 0x1a2438, '#00ffaa'); 
+    addBox(10, 2, 40, 0, 40, -s, 0x1a2438, '#00ffaa');
+
+    // Strategic High-Fidelity Tactical Cover Nodes
+    const coverColors = ['#ff00ff', '#00f3ff', '#ffff00', '#ff8800'];
+    for(let i=0; i<18; i++) {
         const x = (Math.random() - 0.5) * 240; 
         const z = (Math.random() - 0.5) * 240;
         if (Math.abs(x) < 45 && Math.abs(z) < 45) continue;
         const w = 10 + Math.random() * 15; 
         const h = 5 + Math.random() * 15;
-        addBox(w, h, w, x, h/2, z, 0x1a1a1a, coverColors[i%coverColors.length]);
+        addBox(w, h, w, x, h/2, z, 0x141a29, coverColors[i % coverColors.length]);
     }
 }
 
@@ -3081,6 +3634,10 @@ function animate() {
         const trueThirdPerson = isThirdPerson && !isScoped;
         if (trueThirdPerson) {
             myAvatar.group.visible = true;
+            if (myAvatar.nametag) {
+                myAvatar.nametag.visible = true;
+                myAvatar.nametag.quaternion.copy(camera.quaternion);
+            }
             if (viewModelContainer) viewModelContainer.visible = false;
             const pivot = new THREE.Vector3().copy(playerBody.position); 
             pivot.y += (isCrouching ? 0.0 : 1.5);
@@ -3103,6 +3660,7 @@ function animate() {
             myAvatar.lArm.rotation.x = -swing;
         } else {
             myAvatar.group.visible = false; 
+            if (myAvatar.nametag) myAvatar.nametag.visible = false;
             if (viewModelContainer) viewModelContainer.visible = !isScoped;
             camera.position.copy(playerBody.position); 
             camera.position.y += (isCrouching ? 0.0 : 1.5); 
@@ -3143,13 +3701,15 @@ function animate() {
             if (r.lLeg) r.lLeg.rotation.x = rSwing;
             if (r.rLeg) r.rLeg.rotation.x = -rSwing;
             if (r.lArm) r.lArm.rotation.x = -rSwing;
+            if (r.nametag) r.nametag.quaternion.copy(camera.quaternion);
         });
 
-        // Bullet Tracers
+        // Bullet Tracers (Supersonic High-Velocity)
         for(let i=activeBullets.length-1; i>=0; i--) {
             const b = activeBullets[i]; 
             const dist = b.start.distanceTo(b.end); 
-            const step = dist > 0.001 ? 5 / dist : 1.0; 
+            const speed = b.speed || 35;
+            const step = dist > 0.001 ? speed / dist : 1.0; 
             b.progress += step;
             if (b.progress >= 1.0) { 
                 scene.remove(b.mesh); 
@@ -3158,6 +3718,12 @@ function animate() {
                 b.mesh.position.lerpVectors(b.start, b.end, b.progress); 
             }
         }
+
+        // Animated Map Cybernetics
+        const nowSec = Date.now() / 1000;
+        animatedMapObjects.forEach(obj => {
+            if (obj && typeof obj.update === 'function') obj.update(nowSec);
+        });
 
         // P2P Position Sync Broadcast (20 Hz)
         const myPos = { x: playerBody.position.x, y: playerBody.position.y - 1.5, z: playerBody.position.z };
