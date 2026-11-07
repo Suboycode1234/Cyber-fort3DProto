@@ -1318,7 +1318,7 @@ const WEAPON_STATS = {
     'katana': { name: 'Katana', type: 'melee', fireRate: 14, damage: 90, range: 7.0, color: 0xffffff },
     'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 },
     // Exclusive KOTH (King of the Hill) Weapons
-    'knockback_rifle': { name: 'Knockback Rifle', type: 'gun', fireRate: 8, damage: 0, color: 0x00f3ff, spread: 0, knockback: 16, lift: 8 },
+    'knockback_rifle': { name: 'Knockback Rifle', type: 'gun', fireRate: 8, damage: 0, color: 0x00f3ff, spread: 0, knockback: 5.0, lift: 0.5 },
     'knock_stick': { name: 'Knock Stick', type: 'melee', fireRate: 14, damage: 0, range: 8.5, color: 0xffd700, knockback: 320, lift: 160 }
 };
 
@@ -1330,7 +1330,7 @@ let flatFireRateBonus = 0;
 let myGun = 'default';
 let myCoinSteal = false;
 let fireCooldown = 0;
-let myKills = 0, myDeaths = 0, lastHitBy = null;
+let myKills = 0, myDeaths = 0, lastHitBy = null, isDead = false;
 let adminSelectedPeer = null;
 
 // ============================================================================
@@ -3618,7 +3618,18 @@ function updateBots(dt) {
             }
 
             let moveX = 0, moveZ = 0;
-            if (dist > 18) {
+            const isBotMelee = (bot.gun === 'knock_stick' || bot.gun === 'katana');
+            if (isBotMelee) {
+                if (dist > 3.5) {
+                    moveX = toTarget.x * speed * 1.1 * dt;
+                    moveZ = toTarget.z * speed * 1.1 * dt;
+                    moving = true;
+                } else {
+                    moveX = toTarget.x * speed * 0.3 * dt;
+                    moveZ = toTarget.z * speed * 0.3 * dt;
+                    moving = true;
+                }
+            } else if (dist > 18) {
                 moveX = toTarget.x * speed * dt;
                 moveZ = toTarget.z * speed * dt;
                 moving = true;
@@ -3659,8 +3670,8 @@ function updateBots(dt) {
             if (bot.velX || bot.velZ) {
                 bot.pos.x += (bot.velX || 0) * dt;
                 bot.pos.z += (bot.velZ || 0) * dt;
-                bot.velX *= 0.88;
-                bot.velZ *= 0.88;
+                bot.velX *= 0.94;
+                bot.velZ *= 0.94;
                 if (Math.abs(bot.velX) < 0.1) bot.velX = 0;
                 if (Math.abs(bot.velZ) < 0.1) bot.velZ = 0;
             }
@@ -3675,13 +3686,27 @@ function updateBots(dt) {
                 bot.velocityY = 0;
             }
 
-            // Void fall elimination (fell off map or KOTH hill into abyss)
-            if (bot.pos.y < -25) {
+            // Barrier & Void check: bot knocked over or outside arena boundaries
+            const mapSize = (currentGamemode === 'TDM' || currentGamemode === 'CTF' || gameState.mode === 'TDM' || gameState.mode === 'CTF') ? 1200 : 300;
+            const horizBarrier = (mapSize / 2) + 2.0;
+            const botOutOfBarrier = Math.abs(bot.pos.x) > horizBarrier || 
+                                   Math.abs(bot.pos.z) > horizBarrier || 
+                                   bot.pos.y < -15 || 
+                                   bot.pos.y > 260;
+
+            if (botOutOfBarrier) {
                 bot.hp = 0;
                 bot.deaths = (bot.deaths || 0) + 1;
-                bot.respawnTimer = 3.0;
+                bot.respawnTimer = 2.0;
                 bot.mesh.visible = false;
-                adminLog(`${bot.name} was knocked into the abyss!`);
+                adminLog(`${bot.name} was knocked out of the arena barrier!`);
+                if (bot.lastHitBy === myPeerId) {
+                    myKills++;
+                    if (currentGamemode === 'KOTH' || gameState.mode === 'KOTH') myCoins += 100;
+                    updateUI();
+                    saveLocalProfile();
+                }
+                bot.lastHitBy = null;
             }
 
             bot.mesh.position.copy(bot.pos);
@@ -3705,6 +3730,47 @@ function updateBots(dt) {
 
 function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
     if (!bot || bot.hp <= 0) return;
+
+    const isMelee = (bot.gun === 'knock_stick' || bot.gun === 'katana');
+    if (isMelee) {
+        const meleeRange = 8.5;
+        if (isTargetPlayer && myHp > 0 && playerBody) {
+            const dist = bot.pos.distanceTo(playerBody.position);
+            if (dist <= meleeRange) {
+                if (bot.humanoid?.rArm) {
+                    bot.humanoid.rArm.rotation.x -= Math.PI / 2;
+                    setTimeout(() => { if (bot.humanoid?.rArm) bot.humanoid.rArm.rotation.x += Math.PI / 2; }, 150);
+                }
+                playKnockSound(true);
+                createHitSpark(camera.position, 0xffd700);
+                const launchDir = new THREE.Vector3().subVectors(playerBody.position, bot.pos).normalize();
+                launchDir.y = 0.42;
+                launchDir.normalize();
+                playerBody.velocity.x += launchDir.x * 320;
+                playerBody.velocity.y = Math.max(playerBody.velocity.y, 160);
+                playerBody.velocity.z += launchDir.z * 320;
+                lastHitBy = bot.id;
+            }
+        } else if (targetBot && targetBot.hp > 0) {
+            const dist = bot.pos.distanceTo(targetBot.pos);
+            if (dist <= meleeRange) {
+                if (bot.humanoid?.rArm) {
+                    bot.humanoid.rArm.rotation.x -= Math.PI / 2;
+                    setTimeout(() => { if (bot.humanoid?.rArm) bot.humanoid.rArm.rotation.x += Math.PI / 2; }, 150);
+                }
+                playKnockSound(true);
+                createHitSpark(targetBot.pos, 0xffd700);
+                const launchDir = new THREE.Vector3().subVectors(targetBot.pos, bot.pos).normalize();
+                launchDir.y = 0.42;
+                launchDir.normalize();
+                targetBot.velX = (targetBot.velX || 0) + launchDir.x * 320;
+                targetBot.velZ = (targetBot.velZ || 0) + launchDir.z * 320;
+                targetBot.velocityY = Math.max(targetBot.velocityY || 0, 160);
+                targetBot.lastHitBy = bot.id;
+            }
+        }
+        return;
+    }
 
     const startPos = bot.pos.clone();
     startPos.y += 2.0;
@@ -3736,15 +3802,16 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
 
     const isKoth = (currentGamemode === 'KOTH' || gameState.mode === 'KOTH');
 
-    if (isTargetPlayer && myHp > 0) {
+    if (isTargetPlayer && myHp > 0 && playerBody) {
         const toPlayer = new THREE.Vector3().subVectors(playerBody.position, startPos);
         const dot = toPlayer.normalize().dot(aimVec);
         if (dot > 0.985) {
-            if (isKoth && playerBody) {
+            if (isKoth) {
                 // In KOTH, rifle applies gentle shove knockback to player, zero damage!
-                playerBody.velocity.x += aimVec.x * 16;
-                playerBody.velocity.y = Math.max(playerBody.velocity.y, 8);
-                playerBody.velocity.z += aimVec.z * 16;
+                playerBody.velocity.x += aimVec.x * 5.0;
+                playerBody.velocity.y = Math.max(playerBody.velocity.y, 0.5);
+                playerBody.velocity.z += aimVec.z * 5.0;
+                lastHitBy = bot.id;
             }
             const dmg = isKoth ? 0 : (bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 15 : 10));
             if (dmg > 0 && !myShield && !isSmiteInvincible) {
@@ -3762,9 +3829,10 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
         if (dot > 0.985) {
             if (isKoth) {
                 // In KOTH, rifle shoves target bot gently, zero damage!
-                targetBot.velX = (targetBot.velX || 0) + aimVec.x * 16;
-                targetBot.velZ = (targetBot.velZ || 0) + aimVec.z * 16;
-                targetBot.velocityY = Math.max(targetBot.velocityY || 0, 8);
+                targetBot.velX = (targetBot.velX || 0) + aimVec.x * 5.0;
+                targetBot.velZ = (targetBot.velZ || 0) + aimVec.z * 5.0;
+                targetBot.velocityY = Math.max(targetBot.velocityY || 0, 0.5);
+                targetBot.lastHitBy = bot.id;
             } else {
                 const dmg = bot.difficulty === 'hard' ? 24 : 16;
                 damageBot(targetBot.id, dmg, false);
@@ -4671,8 +4739,9 @@ function handleIncomingPacket(senderId, data) {
     if (data.type === 'knockback') {
         if (playerBody) {
             playerBody.velocity.x += data.forceX || 0;
-            playerBody.velocity.y = Math.max(playerBody.velocity.y, data.forceY || 12);
+            playerBody.velocity.y = Math.max(playerBody.velocity.y, (data.forceY !== undefined ? data.forceY : 0.5));
             playerBody.velocity.z += data.forceZ || 0;
+            if (data.attacker) lastHitBy = data.attacker;
         }
     }
 
@@ -4773,14 +4842,15 @@ function handleIncomingPacket(senderId, data) {
 // ============================================================================
 function respawn() {
     let spawnX = 0, spawnY = 80, spawnZ = 0;
-    if (gameState.mode === 'TDM' || gameState.mode === 'CTF') {
+    const isKoth = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH');
+    if (gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') {
         if (gameState.myTeam === 'red') { spawnX = 450; spawnY = 70; spawnZ = 0; }
         else if (gameState.myTeam === 'blue') { spawnX = -450; spawnY = 70; spawnZ = 0; }
         else { spawnX = (Math.random() < 0.5 ? 450 : -450); spawnY = 70; spawnZ = 0; }
-    } else if (gameState.mode === 'KOTH') {
-        spawnX = (Math.random() < 0.5 ? 100 : -100); 
+    } else if (isKoth) {
+        spawnX = (Math.random() < 0.5 ? 90 : -90); 
         spawnY = 20; 
-        spawnZ = (Math.random() < 0.5 ? 100 : -100);
+        spawnZ = (Math.random() < 0.5 ? 90 : -90);
         myInventory = ['knockback_rifle', 'knock_stick', null, null, null];
         myOwnedWeapons = ['knockback_rifle', 'knock_stick'];
         updateHotbarUI();
@@ -4792,6 +4862,7 @@ function respawn() {
         playerBody.position.set(spawnX, spawnY, spawnZ);
         playerBody.velocity.set(0,0,0);
     }
+    isDead = false;
     updateMyNametag();
 }
 
@@ -4826,10 +4897,16 @@ function matchTimerTick() {
         }
     }
     
-    if (gameState.mode === 'KOTH') {
-        if (Math.abs(playerBody.position.x) < 40 && Math.abs(playerBody.position.z) < 40 && playerBody.position.y > 5 && playerBody.position.y < 30) {
+    const isKothMatch = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH');
+    if (isKothMatch) {
+        if (playerBody && Math.abs(playerBody.position.x) < 40 && Math.abs(playerBody.position.z) < 40 && playerBody.position.y > 5 && playerBody.position.y < 30) {
             myKothScore++;
         }
+        activeBots.forEach(b => {
+            if (b.hp > 0 && Math.abs(b.pos.x) < 40 && Math.abs(b.pos.z) < 40 && b.pos.y > 5 && b.pos.y < 30) {
+                b.kothScore = (b.kothScore || 0) + 1;
+            }
+        });
         updateKothLeaderboard();
         
         if (isHost && gameState.timer <= 0) {
@@ -4837,6 +4914,9 @@ function matchTimerTick() {
             let win = { name: myUsername, score: myKothScore };
             Object.values(remotePlayers).forEach(r => { 
                 if ((r.kothScore || 0) > win.score) win = { name: r.username, score: (r.kothScore || 0) }; 
+            });
+            activeBots.forEach(b => {
+                if ((b.kothScore || 0) > win.score) win = { name: b.name, score: (b.kothScore || 0) };
             });
             netBroadcast({ type: 'match_over_koth', winner: win.name, score: win.score });
             alert("KOTH MATCH OVER! WINNER: " + win.name + " with " + win.score + " points!");
@@ -4913,7 +4993,8 @@ function matchTimerTick() {
 setInterval(matchTimerTick, 1000);
 
 function updateKothLeaderboard() {
-    if (gameState.mode !== 'KOTH') { 
+    const isKoth = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH');
+    if (!isKoth) { 
         document.getElementById('koth-leaderboard').style.display = 'none'; 
         return; 
     }
@@ -4922,6 +5003,7 @@ function updateKothLeaderboard() {
     let scores = [];
     scores.push({ name: myUsername, score: myKothScore });
     Object.values(remotePlayers).forEach(r => scores.push({ name: r.username, score: r.kothScore || 0 }));
+    activeBots.forEach(b => scores.push({ name: b.name, score: b.kothScore || 0 }));
     scores.sort((a,b) => b.score - a.score);
     
     const lines = document.getElementById('koth-lines');
@@ -5635,7 +5717,10 @@ function generateCards() {
 generateCards();
 
 function die() {
-    if (isSmiteInvincible) return;
+    if (isSmiteInvincible || isDead) return;
+    isDead = true;
+    myHp = 0;
+    if (playerBody) playerBody.velocity.set(0, 0, 0);
     myDeaths++;
     saveLocalProfile();
     netBroadcast({ type: 'killed', victim: myPeerId, killer: lastHitBy });
@@ -5666,18 +5751,29 @@ function die() {
 
     if (respawnModal) {
         respawnModal.classList.remove('hidden');
-        if (killerText) killerText.innerText = `Eliminated by ${killerName}. Tactical redeploy in progress...`;
+        if (killerText) {
+            killerText.innerText = (killerName && killerName !== "Combat") 
+                ? `Eliminated by ${killerName}. Tactical redeploy in progress...`
+                : `Flew out of the arena barrier! Tactical redeploy in progress...`;
+        }
     }
 
-    let countdown = 3;
+    let countdown = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH') ? 2 : 3;
     if (timerDisplay) timerDisplay.innerText = countdown;
 
     let respawnInterval = null;
+    let onKeyRespawn = null;
+
     const performRespawn = () => {
         if (respawnInterval) {
             clearInterval(respawnInterval);
             respawnInterval = null;
         }
+        if (onKeyRespawn) {
+            window.removeEventListener('keydown', onKeyRespawn);
+            onKeyRespawn = null;
+        }
+        isDead = false;
         if (respawnModal) respawnModal.classList.add('hidden');
         myHp = myMaxHp;
         updateUI();
@@ -5702,6 +5798,13 @@ function die() {
         });
         netBroadcast({ type: 'respawn', id: myPeerId });
     };
+
+    onKeyRespawn = (e) => {
+        if (e.code === 'Space' || e.code === 'Enter') {
+            performRespawn();
+        }
+    };
+    window.addEventListener('keydown', onKeyRespawn, { once: true });
 
     if (btnRespawnNow) {
         btnRespawnNow.onclick = performRespawn;
@@ -6196,7 +6299,7 @@ function fireMelee(range, damage) {
         if (wStats && wStats.knockback) {
             const kDir = new THREE.Vector3();
             camera.getWorldDirection(kDir);
-            kDir.y = 0.42; // Upward super-launch trajectory
+            kDir.y = (wStats.lift && wStats.lift > 10) ? 0.42 : 0.05; // Upward super-launch trajectory
             kDir.normalize();
 
             if (isBotHit) {
@@ -6205,13 +6308,15 @@ function fireMelee(range, damage) {
                     b.velX = (b.velX || 0) + kDir.x * wStats.knockback;
                     b.velZ = (b.velZ || 0) + kDir.z * wStats.knockback;
                     b.velocityY = Math.max(b.velocityY || 0, wStats.lift || 160);
+                    b.lastHitBy = myPeerId;
                 }
             } else if (remotePlayers[hitId]) {
                 netSendTo(hitId, {
                     type: 'knockback',
                     forceX: kDir.x * wStats.knockback,
                     forceY: wStats.lift || 160,
-                    forceZ: kDir.z * wStats.knockback
+                    forceZ: kDir.z * wStats.knockback,
+                    attacker: myPeerId
                 });
             }
         }
@@ -6321,21 +6426,23 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
             const wStats = WEAPON_STATS[myGun];
             if (wStats && wStats.knockback) {
                 const kDir = new THREE.Vector3().subVectors(hitPoint, camera.position).normalize();
-                kDir.y = 0.2;
+                kDir.y = (wStats.lift && wStats.lift > 10) ? 0.42 : 0.05;
                 kDir.normalize();
                 if (isBotHit) {
                     const b = activeBots.find(x => x.id === hitId);
                     if (b) {
                         b.velX = (b.velX || 0) + kDir.x * wStats.knockback;
                         b.velZ = (b.velZ || 0) + kDir.z * wStats.knockback;
-                        b.velocityY = Math.max(b.velocityY || 0, wStats.lift || 8);
+                        b.velocityY = Math.max(b.velocityY || 0, wStats.lift || 0.5);
+                        b.lastHitBy = myPeerId;
                     }
                 } else if (remotePlayers[hitId]) {
                     netSendTo(hitId, { 
                         type: 'knockback', 
                         forceX: kDir.x * wStats.knockback, 
-                        forceY: wStats.lift || 8, 
-                        forceZ: kDir.z * wStats.knockback 
+                        forceY: wStats.lift || 0.5, 
+                        forceZ: kDir.z * wStats.knockback,
+                        attacker: myPeerId
                     });
                 }
             }
@@ -7431,9 +7538,21 @@ function animate() {
             updateAbilityHUD();
         }
 
-        if (playerBody.position.y < -10) {
-            if (!isSmiteInvincible) die();
-            else playerBody.position.set(0, 5, 0);
+        const mapSize = (gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300;
+        const barrierLimit = (mapSize / 2) + 2.0;
+        const isOutOfBarrier = Math.abs(playerBody.position.x) > barrierLimit || 
+                              Math.abs(playerBody.position.z) > barrierLimit || 
+                              playerBody.position.y < -10 || 
+                              playerBody.position.y > 260;
+
+        if (isOutOfBarrier) {
+            if (!isSmiteInvincible && !isDead) {
+                adminLog("Flew out of arena barrier! Redeploying...");
+                die();
+            } else if (isSmiteInvincible) {
+                playerBody.position.set(0, 25, 0);
+                playerBody.velocity.set(0, 0, 0);
+            }
         }
         if (fireCooldown > 0) fireCooldown--; 
         myEnergy = Math.min(myMaxEnergy, myEnergy + (energyRegen * 1/60)); 
@@ -7478,10 +7597,21 @@ function animate() {
             if (currentSpeed <= myMaxSpeed) { 
                 playerBody.velocity.x = tryVelX; 
                 playerBody.velocity.z = tryVelZ; 
+            } else {
+                playerBody.velocity.x *= 0.94;
+                playerBody.velocity.z *= 0.94;
             }
         } else if (isCrouching && isGrounded) {
             playerBody.velocity.x = 0; 
             playerBody.velocity.z = 0;
+        } else if (isGrounded) {
+            playerBody.velocity.x *= 0.82;
+            playerBody.velocity.z *= 0.82;
+            if (Math.abs(playerBody.velocity.x) < 0.05) playerBody.velocity.x = 0;
+            if (Math.abs(playerBody.velocity.z) < 0.05) playerBody.velocity.z = 0;
+        } else {
+            playerBody.velocity.x *= 0.985;
+            playerBody.velocity.z *= 0.985;
         }
 
         if (Math.abs(gpLookX) > 0.05 || Math.abs(gpLookY) > 0.05) {
