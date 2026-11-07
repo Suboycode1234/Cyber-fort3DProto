@@ -51,8 +51,47 @@ let grappleActive = false;
 let grappleTarget = null;
 let grappleLineMesh = null;
 let grappleCooldownTimer = 0;
-const GRAPPLE_COOLDOWN = 3.5;
-const GRAPPLE_MAX_DIST = 85;
+let isHoldingGrapple = false;
+let grappleHoldDuration = 0;
+const GRAPPLE_COOLDOWN = 2.5;
+const GRAPPLE_MAX_DIST = 115;
+
+// Post-Processing, RTX & Settings Systems
+let bloomPass = null;
+let rtxPass = null;
+let dirLight = null;
+let lastFrameTime = 0;
+
+let gameSettings = {
+    resolutionScale: 1.0,
+    brightness: 1.0,
+    contrast: 1.0,
+    gamma: 1.0,
+    saturation: 1.1,
+    fov: 75,
+    shadowQuality: 'ultra',
+    maxFps: 0,
+    rtxPreset: 'ultra',
+    enableBloom: true,
+    bloomStrength: 1.4,
+    bloomRadius: 0.6,
+    enableSSR: true,
+    ssrIntensity: 1.0,
+    enableAO: true,
+    aoIntensity: 1.0,
+    enableACES: true,
+    enableChromatic: true,
+    chromaticIntensity: 1.0,
+    enableAnamorphic: true,
+    anamorphicIntensity: 1.0,
+    enableVignette: true,
+    vignetteIntensity: 1.0,
+    enableFilmGrain: true,
+    grainIntensity: 1.0,
+    enableMotionBlur: false,
+    mouseSensitivity: 1.0,
+    crosshairColor: '#00f3ff'
+};
 
 // Offline Bot System
 let activeBots = [];
@@ -152,6 +191,610 @@ function loadLocalProfile() {
     }
     updateAbilityHUD();
 }
+
+// ============================================================================
+// RTX POST-PROCESSING SHADER PASS & GRAPHICS CALIBRATION SYSTEM
+// ============================================================================
+const RTXUberShader = {
+    uniforms: {
+        tDiffuse: { value: null },
+        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uTime: { value: 0.0 },
+        uBrightness: { value: 1.0 },
+        uContrast: { value: 1.0 },
+        uGamma: { value: 1.0 },
+        uSaturation: { value: 1.1 },
+        uEnableACES: { value: true },
+        uEnableSSR: { value: true },
+        uSSRIntensity: { value: 1.0 },
+        uEnableAO: { value: true },
+        uAOIntensity: { value: 1.0 },
+        uEnableChromatic: { value: true },
+        uChromaticIntensity: { value: 1.0 },
+        uEnableVignette: { value: true },
+        uVignetteIntensity: { value: 1.0 },
+        uEnableFilmGrain: { value: true },
+        uGrainIntensity: { value: 1.0 },
+        uEnableAnamorphic: { value: true },
+        uAnamorphicIntensity: { value: 1.0 },
+        uEnableMotionBlur: { value: false },
+        uMotionBlurVec: { value: new THREE.Vector2(0, 0) }
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform float uBrightness;
+        uniform float uContrast;
+        uniform float uGamma;
+        uniform float uSaturation;
+        uniform bool uEnableACES;
+        uniform bool uEnableSSR;
+        uniform float uSSRIntensity;
+        uniform bool uEnableAO;
+        uniform float uAOIntensity;
+        uniform bool uEnableChromatic;
+        uniform float uChromaticIntensity;
+        uniform bool uEnableVignette;
+        uniform float uVignetteIntensity;
+        uniform bool uEnableFilmGrain;
+        uniform float uGrainIntensity;
+        uniform bool uEnableAnamorphic;
+        uniform float uAnamorphicIntensity;
+        uniform bool uEnableMotionBlur;
+        uniform vec2 uMotionBlurVec;
+        varying vec2 vUv;
+
+        vec3 ACESFilm(vec3 x) {
+            float a = 2.51;
+            float b = 0.03;
+            float c = 2.43;
+            float d = 0.59;
+            float e = 0.14;
+            return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+        }
+
+        void main() {
+            vec2 uv = vUv;
+            vec2 texel = 1.0 / max(uResolution, vec2(1.0));
+
+            vec4 baseColor = vec4(0.0);
+            if (uEnableMotionBlur && length(uMotionBlurVec) > 0.001) {
+                vec2 mbStep = clamp(uMotionBlurVec * 0.02, vec2(-0.02), vec2(0.02)) / 5.0;
+                for (int i = -2; i <= 2; i++) {
+                    baseColor += texture2D(tDiffuse, clamp(uv + float(i) * mbStep, 0.0, 1.0));
+                }
+                baseColor *= 0.2;
+            } else if (uEnableChromatic) {
+                vec2 distFromCenter = uv - 0.5;
+                float distSq = dot(distFromCenter, distFromCenter);
+                vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.028;
+                float r = texture2D(tDiffuse, clamp(uv + offset, 0.0, 1.0)).r;
+                float g = texture2D(tDiffuse, uv).g;
+                float b = texture2D(tDiffuse, clamp(uv - offset, 0.0, 1.0)).b;
+                baseColor = vec4(r, g, b, 1.0);
+            } else {
+                baseColor = texture2D(tDiffuse, uv);
+            }
+
+            vec3 col = baseColor.rgb;
+
+            // RTX Screen Space Reflections (SSR)
+            if (uEnableSSR) {
+                vec2 refUV = vec2(uv.x, 1.0 - uv.y * 0.88);
+                float jitter = fract(sin(dot(uv * 12.9898 + uTime * 0.04, vec2(12.9898, 78.233))) * 43758.5453);
+                refUV.x += (jitter - 0.5) * 0.007;
+                vec4 refSample = texture2D(tDiffuse, clamp(refUV, 0.0, 1.0));
+                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.42;
+                float luma = dot(refSample.rgb, vec3(0.299, 0.587, 0.114));
+                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.45, 0.9, luma) * uSSRIntensity;
+                col += ssr;
+            }
+
+            // RTX Ambient Occlusion / Contact Shadows
+            if (uEnableAO) {
+                float c0 = dot(texture2D(tDiffuse, uv).rgb, vec3(0.333));
+                float c1 = dot(texture2D(tDiffuse, clamp(uv + vec2(2.5, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c2 = dot(texture2D(tDiffuse, clamp(uv - vec2(2.5, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c3 = dot(texture2D(tDiffuse, clamp(uv + vec2(0.0, 2.5) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c4 = dot(texture2D(tDiffuse, clamp(uv - vec2(0.0, 2.5) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float edge = abs(c0 - c1) + abs(c0 - c2) + abs(c0 - c3) + abs(c0 - c4);
+                float ao = 1.0 - clamp(edge * 0.75 * uAOIntensity, 0.0, 0.45);
+                col *= ao;
+            }
+
+            // RTX Anamorphic Cyberpunk Glare Streaks
+            if (uEnableAnamorphic) {
+                vec3 streak = vec3(0.0);
+                for (int i = 1; i <= 5; i++) {
+                    float fi = float(i);
+                    vec4 sL = texture2D(tDiffuse, clamp(uv - vec2(fi * 8.0 * texel.x, 0.0), 0.0, 1.0));
+                    vec4 sR = texture2D(tDiffuse, clamp(uv + vec2(fi * 8.0 * texel.x, 0.0), 0.0, 1.0));
+                    float lL = dot(sL.rgb, vec3(0.299, 0.587, 0.114));
+                    float lR = dot(sR.rgb, vec3(0.299, 0.587, 0.114));
+                    streak += (smoothstep(0.72, 1.0, lL) * sL.rgb + smoothstep(0.72, 1.0, lR) * sR.rgb) * (0.045 / fi);
+                }
+                col += streak * uAnamorphicIntensity * vec3(0.2, 0.7, 1.0);
+            }
+
+            // ACES Filmic Tone Mapping
+            if (uEnableACES) {
+                col = ACESFilm(col);
+            }
+
+            // Display Calibration: Brightness, Contrast, Saturation, Gamma
+            col *= uBrightness;
+            col = (col - 0.5) * uContrast + 0.5;
+            float gray = dot(col, vec3(0.299, 0.587, 0.114));
+            col = mix(vec3(gray), col, uSaturation);
+            col = pow(max(col, vec3(0.0)), vec3(1.0 / max(0.01, uGamma)));
+
+            // RTX Cinematic Vignette
+            if (uEnableVignette) {
+                vec2 vigCoord = uv * (1.0 - uv.yx);
+                float vig = vigCoord.x * vigCoord.y * 15.0;
+                vig = clamp(pow(vig, 0.25 * uVignetteIntensity), 0.0, 1.0);
+                col *= vig;
+            }
+
+            // RTX Cyber Film Grain
+            if (uEnableFilmGrain) {
+                float grain = (fract(sin(dot(uv * 12.9898 + uTime * 8.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 2.0;
+                col += grain * 0.022 * uGrainIntensity;
+            }
+
+            gl_FragColor = vec4(col, baseColor.a);
+        }
+    `
+};
+
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem('cyberfort3d_settings');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            Object.assign(gameSettings, parsed);
+        }
+    } catch(e) {
+        console.warn('Failed to load settings:', e);
+    }
+}
+
+function saveSettings() {
+    try {
+        localStorage.setItem('cyberfort3d_settings', JSON.stringify(gameSettings));
+    } catch(e) {}
+}
+
+function applyShadowQuality(quality) {
+    if (!renderer) return;
+    if (quality === 'off') {
+        renderer.shadowMap.enabled = false;
+        if (dirLight) dirLight.castShadow = false;
+    } else {
+        renderer.shadowMap.enabled = true;
+        if (dirLight) {
+            dirLight.castShadow = true;
+            const size = (quality === 'ultra') ? 2048 : (quality === 'high' ? 1024 : 512);
+            dirLight.shadow.mapSize.width = size;
+            dirLight.shadow.mapSize.height = size;
+            if (dirLight.shadow.map) {
+                dirLight.shadow.map.dispose();
+                dirLight.shadow.map = null;
+            }
+        }
+    }
+}
+
+function applyFOV(fov) {
+    if (camera && !isScoped) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+    }
+}
+
+function applyCrosshairColor(color) {
+    document.querySelectorAll('.ch-line').forEach(el => {
+        el.style.backgroundColor = color;
+        el.style.boxShadow = '0 0 8px ' + color;
+    });
+}
+
+function applySettings() {
+    const dpr = Math.min(2.0, window.devicePixelRatio || 1) * gameSettings.resolutionScale;
+    if (renderer) {
+        renderer.setPixelRatio(dpr);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    if (composer) {
+        composer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    if (bloomPass) {
+        bloomPass.enabled = gameSettings.enableBloom;
+        bloomPass.strength = gameSettings.bloomStrength;
+        bloomPass.radius = gameSettings.bloomRadius;
+    }
+
+    if (rtxPass) {
+        rtxPass.uniforms.uResolution.value.set(window.innerWidth * dpr, window.innerHeight * dpr);
+        rtxPass.uniforms.uBrightness.value = gameSettings.brightness;
+        rtxPass.uniforms.uContrast.value = gameSettings.contrast;
+        rtxPass.uniforms.uGamma.value = gameSettings.gamma;
+        rtxPass.uniforms.uSaturation.value = gameSettings.saturation;
+        rtxPass.uniforms.uEnableACES.value = gameSettings.enableACES;
+        rtxPass.uniforms.uEnableSSR.value = gameSettings.enableSSR;
+        rtxPass.uniforms.uSSRIntensity.value = gameSettings.ssrIntensity;
+        rtxPass.uniforms.uEnableAO.value = gameSettings.enableAO;
+        rtxPass.uniforms.uAOIntensity.value = gameSettings.aoIntensity;
+        rtxPass.uniforms.uEnableChromatic.value = gameSettings.enableChromatic;
+        rtxPass.uniforms.uChromaticIntensity.value = gameSettings.chromaticIntensity;
+        rtxPass.uniforms.uEnableAnamorphic.value = gameSettings.enableAnamorphic;
+        rtxPass.uniforms.uAnamorphicIntensity.value = gameSettings.anamorphicIntensity;
+        rtxPass.uniforms.uEnableVignette.value = gameSettings.enableVignette;
+        rtxPass.uniforms.uVignetteIntensity.value = gameSettings.vignetteIntensity;
+        rtxPass.uniforms.uEnableFilmGrain.value = gameSettings.enableFilmGrain;
+        rtxPass.uniforms.uGrainIntensity.value = gameSettings.grainIntensity;
+        rtxPass.uniforms.uEnableMotionBlur.value = gameSettings.enableMotionBlur;
+    }
+
+    applyShadowQuality(gameSettings.shadowQuality);
+    applyFOV(gameSettings.fov);
+    applyCrosshairColor(gameSettings.crosshairColor);
+}
+
+function openSettingsModal() {
+    if (controls && controls.isLocked) {
+        controls.unlock();
+    }
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        syncSettingsToUI();
+    }
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    if (myHp > 0 && !isMobileDeploy && gameState.started) {
+        if (controls && !controls.isLocked) {
+            controls.lock();
+        }
+    }
+}
+
+function resetSettingsToDefault() {
+    gameSettings = {
+        resolutionScale: 1.0,
+        brightness: 1.0,
+        contrast: 1.0,
+        gamma: 1.0,
+        saturation: 1.1,
+        fov: 75,
+        shadowQuality: 'ultra',
+        maxFps: 0,
+        rtxPreset: 'ultra',
+        enableBloom: true,
+        bloomStrength: 1.4,
+        bloomRadius: 0.6,
+        enableSSR: true,
+        ssrIntensity: 1.0,
+        enableAO: true,
+        aoIntensity: 1.0,
+        enableACES: true,
+        enableChromatic: true,
+        chromaticIntensity: 1.0,
+        enableAnamorphic: true,
+        anamorphicIntensity: 1.0,
+        enableVignette: true,
+        vignetteIntensity: 1.0,
+        enableFilmGrain: true,
+        grainIntensity: 1.0,
+        enableMotionBlur: false,
+        mouseSensitivity: 1.0,
+        crosshairColor: '#00f3ff'
+    };
+    applySettings();
+    saveSettings();
+    syncSettingsToUI();
+}
+
+function syncSettingsToUI() {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    const setChecked = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!val;
+    };
+    const setText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = text;
+    };
+
+    setVal('setting-resolution', gameSettings.resolutionScale);
+    setText('lbl-resolution', (gameSettings.resolutionScale * 100).toFixed(0) + "% " + (gameSettings.resolutionScale === 1.0 ? "(Native)" : ""));
+    
+    setVal('setting-brightness', gameSettings.brightness);
+    setText('lbl-brightness', (gameSettings.brightness * 100).toFixed(0) + "%");
+    
+    setVal('setting-contrast', gameSettings.contrast);
+    setText('lbl-contrast', (gameSettings.contrast * 100).toFixed(0) + "%");
+    
+    setVal('setting-gamma', gameSettings.gamma);
+    setText('lbl-gamma', gameSettings.gamma.toFixed(2));
+    
+    setVal('setting-saturation', gameSettings.saturation);
+    setText('lbl-saturation', (gameSettings.saturation * 100).toFixed(0) + "%");
+    
+    setVal('setting-fov', gameSettings.fov);
+    setText('lbl-fov', gameSettings.fov + "°");
+    
+    setVal('setting-shadows', gameSettings.shadowQuality);
+    setVal('setting-fps', gameSettings.maxFps);
+    setVal('setting-rtx-preset', gameSettings.rtxPreset);
+    
+    setChecked('setting-rtx-bloom', gameSettings.enableBloom);
+    setVal('setting-bloom-strength', gameSettings.bloomStrength);
+    
+    setChecked('setting-rtx-ssr', gameSettings.enableSSR);
+    setVal('setting-ssr-intensity', gameSettings.ssrIntensity);
+    
+    setChecked('setting-rtx-ao', gameSettings.enableAO);
+    setVal('setting-ao-intensity', gameSettings.aoIntensity);
+    
+    setChecked('setting-rtx-aces', gameSettings.enableACES);
+    
+    setChecked('setting-rtx-chromatic', gameSettings.enableChromatic);
+    setVal('setting-chromatic-intensity', gameSettings.chromaticIntensity);
+    
+    setChecked('setting-rtx-anamorphic', gameSettings.enableAnamorphic);
+    setVal('setting-anamorphic-intensity', gameSettings.anamorphicIntensity);
+    
+    setChecked('setting-rtx-vignette', gameSettings.enableVignette);
+    setChecked('setting-rtx-motionblur', gameSettings.enableMotionBlur);
+    setVal('setting-crosshair-color', gameSettings.crosshairColor);
+}
+
+function setupSettingsUI() {
+    const bindInput = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', fn);
+    };
+    const bindChange = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', fn);
+    };
+
+    bindChange('setting-resolution', (e) => {
+        gameSettings.resolutionScale = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindInput('setting-brightness', (e) => {
+        gameSettings.brightness = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-brightness');
+        if (lbl) lbl.innerText = (gameSettings.brightness * 100).toFixed(0) + "%";
+    });
+
+    bindInput('setting-contrast', (e) => {
+        gameSettings.contrast = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-contrast');
+        if (lbl) lbl.innerText = (gameSettings.contrast * 100).toFixed(0) + "%";
+    });
+
+    bindInput('setting-gamma', (e) => {
+        gameSettings.gamma = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-gamma');
+        if (lbl) lbl.innerText = gameSettings.gamma.toFixed(2);
+    });
+
+    bindInput('setting-saturation', (e) => {
+        gameSettings.saturation = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-saturation');
+        if (lbl) lbl.innerText = (gameSettings.saturation * 100).toFixed(0) + "%";
+    });
+
+    bindInput('setting-fov', (e) => {
+        gameSettings.fov = parseInt(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-fov');
+        if (lbl) lbl.innerText = gameSettings.fov + "°";
+    });
+
+    bindChange('setting-shadows', (e) => {
+        gameSettings.shadowQuality = e.target.value;
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-fps', (e) => {
+        gameSettings.maxFps = parseInt(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-preset', (e) => {
+        const preset = e.target.value;
+        gameSettings.rtxPreset = preset;
+        if (preset === 'off') {
+            gameSettings.enableBloom = false;
+            gameSettings.enableSSR = false;
+            gameSettings.enableAO = false;
+            gameSettings.enableACES = false;
+            gameSettings.enableChromatic = false;
+            gameSettings.enableAnamorphic = false;
+            gameSettings.enableVignette = false;
+            gameSettings.enableFilmGrain = false;
+            gameSettings.enableMotionBlur = false;
+            gameSettings.shadowQuality = 'off';
+        } else if (preset === 'medium') {
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 0.9;
+            gameSettings.enableSSR = false;
+            gameSettings.enableAO = false;
+            gameSettings.enableACES = true;
+            gameSettings.enableChromatic = false;
+            gameSettings.enableAnamorphic = false;
+            gameSettings.enableVignette = true;
+            gameSettings.enableFilmGrain = false;
+            gameSettings.enableMotionBlur = false;
+            gameSettings.shadowQuality = 'high';
+        } else if (preset === 'high') {
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 1.3;
+            gameSettings.enableSSR = true;
+            gameSettings.ssrIntensity = 0.8;
+            gameSettings.enableAO = true;
+            gameSettings.aoIntensity = 0.8;
+            gameSettings.enableACES = true;
+            gameSettings.enableChromatic = true;
+            gameSettings.chromaticIntensity = 0.8;
+            gameSettings.enableAnamorphic = false;
+            gameSettings.enableVignette = true;
+            gameSettings.enableFilmGrain = true;
+            gameSettings.enableMotionBlur = false;
+            gameSettings.shadowQuality = 'high';
+        } else if (preset === 'ultra') {
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 1.5;
+            gameSettings.enableSSR = true;
+            gameSettings.ssrIntensity = 1.2;
+            gameSettings.enableAO = true;
+            gameSettings.aoIntensity = 1.2;
+            gameSettings.enableACES = true;
+            gameSettings.enableChromatic = true;
+            gameSettings.chromaticIntensity = 1.0;
+            gameSettings.enableAnamorphic = true;
+            gameSettings.anamorphicIntensity = 1.2;
+            gameSettings.enableVignette = true;
+            gameSettings.enableFilmGrain = true;
+            gameSettings.enableMotionBlur = true;
+            gameSettings.shadowQuality = 'ultra';
+        }
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindChange('setting-rtx-bloom', (e) => {
+        gameSettings.enableBloom = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+    bindInput('setting-bloom-strength', (e) => {
+        gameSettings.bloomStrength = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-ssr', (e) => {
+        gameSettings.enableSSR = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+    bindInput('setting-ssr-intensity', (e) => {
+        gameSettings.ssrIntensity = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-ao', (e) => {
+        gameSettings.enableAO = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+    bindInput('setting-ao-intensity', (e) => {
+        gameSettings.aoIntensity = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-aces', (e) => {
+        gameSettings.enableACES = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-chromatic', (e) => {
+        gameSettings.enableChromatic = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+    bindInput('setting-chromatic-intensity', (e) => {
+        gameSettings.chromaticIntensity = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-anamorphic', (e) => {
+        gameSettings.enableAnamorphic = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+    bindInput('setting-anamorphic-intensity', (e) => {
+        gameSettings.anamorphicIntensity = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-vignette', (e) => {
+        gameSettings.enableVignette = e.target.checked;
+        gameSettings.enableFilmGrain = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-motionblur', (e) => {
+        gameSettings.enableMotionBlur = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-crosshair-color', (e) => {
+        gameSettings.crosshairColor = e.target.value;
+        applySettings();
+        saveSettings();
+    });
+
+    const btnClose = document.getElementById('btn-settings-close');
+    if (btnClose) btnClose.addEventListener('click', closeSettingsModal);
+
+    const btnReset = document.getElementById('btn-settings-reset');
+    if (btnReset) btnReset.addEventListener('click', resetSettingsToDefault);
+
+    const trig = document.getElementById('settings-trigger');
+    if (trig) trig.addEventListener('click', openSettingsModal);
+
+    const lobbyBtn = document.getElementById('btn-lobby-settings');
+    if (lobbyBtn) lobbyBtn.addEventListener('click', openSettingsModal);
+
+    const pauseBtn = document.getElementById('btn-pause-settings');
+    if (pauseBtn) pauseBtn.addEventListener('click', openSettingsModal);
+}
+
 
 function ensureCustomNametag() {
     const unEl = document.getElementById('my-username');
@@ -487,10 +1130,13 @@ function applyAoEDamage(center, radius, directDamage, aoeDamage, type) {
 }
 
 function fireGrapple() {
-    if (grappleActive) {
-        releaseGrapple();
-        return;
+    isHoldingGrapple = true;
+    if (!grappleActive && grappleCooldownTimer <= 0) {
+        startGrapple();
     }
+}
+
+function startGrapple() {
     if (grappleCooldownTimer > 0 || myHp <= 0) return;
     
     const raycaster = new THREE.Raycaster();
@@ -500,25 +1146,32 @@ function fireGrapple() {
     if (intersects.length > 0 && intersects[0].distance <= GRAPPLE_MAX_DIST) {
         grappleActive = true;
         grappleTarget = intersects[0].point.clone();
-        grappleCooldownTimer = GRAPPLE_COOLDOWN;
+        grappleHoldDuration = 0;
         
         const pts = [camera.position.clone(), grappleTarget.clone()];
         const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x00f3ff, linewidth: 3 });
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00f3ff, linewidth: 4 });
         grappleLineMesh = new THREE.Line(lineGeo, lineMat);
         scene.add(grappleLineMesh);
         
-        playerBody.velocity.y += 12;
+        playerBody.velocity.y = Math.max(playerBody.velocity.y, 8);
+        createHitSpark(grappleTarget, 0x00f3ff);
+        updateGrappleHUD();
     }
 }
 
 function releaseGrapple() {
+    if (grappleActive) {
+        grappleCooldownTimer = GRAPPLE_COOLDOWN;
+    }
     grappleActive = false;
     grappleTarget = null;
+    grappleHoldDuration = 0;
     if (grappleLineMesh) {
         scene.remove(grappleLineMesh);
         grappleLineMesh = null;
     }
+    updateGrappleHUD();
 }
 
 function updateGrappleHUD() {
@@ -530,9 +1183,13 @@ function updateGrappleHUD() {
         statusEl.innerText = grappleCooldownTimer.toFixed(1) + "s";
         statusEl.style.color = "#ff0055";
         if (badgeEl) badgeEl.classList.add('cooldown');
+    } else if (grappleActive) {
+        statusEl.innerText = "PULLING...";
+        statusEl.style.color = "#ffd700";
+        if (badgeEl) badgeEl.classList.remove('cooldown');
     } else {
-        statusEl.innerText = grappleActive ? "HOOKED" : "READY";
-        statusEl.style.color = grappleActive ? "#ffd700" : "#00ffaa";
+        statusEl.innerText = "READY";
+        statusEl.style.color = "#00ffaa";
         if (badgeEl) badgeEl.classList.remove('cooldown');
     }
 }
@@ -2257,7 +2914,7 @@ function init() {
     scene.add( light );
 
     // High fidelity main directional light with soft shadows
-    const dirLight = new THREE.DirectionalLight( 0xffffff, 1.35 ); 
+    dirLight = new THREE.DirectionalLight( 0xffffff, 1.35 ); 
     dirLight.position.set( 120, 240, 100 ); 
     dirLight.castShadow = true;
     dirLight.shadow.camera.top = 220; 
@@ -2300,6 +2957,19 @@ function init() {
         document.getElementById('scope-overlay').classList.add('hidden'); 
         document.getElementById('hotbar').style.display = 'none'; 
         if (myHp > 0 && !isMobileDeploy) {
+            const settingsModal = document.getElementById('settings-modal');
+            const isSettingsOpen = settingsModal && !settingsModal.classList.contains('hidden');
+            const shopModal = document.getElementById('shop-modal');
+            const isShopOpen = shopModal && !shopModal.classList.contains('hidden');
+            const vipModal = document.getElementById('vip-modal');
+            const isVipOpen = vipModal && !vipModal.classList.contains('hidden');
+            const adminModal = document.getElementById('admin-modal');
+            const isAdminOpen = adminModal && !adminModal.classList.contains('hidden');
+            
+            if (isSettingsOpen || isShopOpen || isVipOpen || isAdminOpen) {
+                return;
+            }
+
             if (gameState.started) {
                 document.getElementById('exit-panel').classList.remove('hidden');
                 document.getElementById('exit-panel').style.display = 'flex';
@@ -2341,13 +3011,22 @@ function init() {
     window.addEventListener('resize', onWindowResize, false);
 
     const renderScene = new THREE.RenderPass( scene, camera );
-    const bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 ); 
+    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 ); 
     bloomPass.threshold = 0.1; 
-    bloomPass.strength = 1.4; 
-    bloomPass.radius = 0.6;
+    bloomPass.strength = gameSettings.bloomStrength; 
+    bloomPass.radius = gameSettings.bloomRadius;
+    bloomPass.enabled = gameSettings.enableBloom;
+
+    rtxPass = new THREE.ShaderPass( RTXUberShader );
+
     composer = new THREE.EffectComposer( renderer ); 
     composer.addPass( renderScene ); 
     composer.addPass( bloomPass );
+    composer.addPass( rtxPass );
+
+    loadSettings();
+    setupSettingsUI();
+    applySettings();
 
     // Cannon.js Physics
     world = new CANNON.World(); 
@@ -2928,7 +3607,13 @@ function updateUI() {
 
 function onKeyDown(e) {
     if (e.code === 'KeyR') isWallRunning = true;
-    if (e.code === 'KeyF') fireGrapple();
+    if (e.code === 'KeyF') {
+        isHoldingGrapple = true;
+        if (!grappleActive && grappleCooldownTimer <= 0) {
+            startGrapple();
+        }
+    }
+    if (e.code === 'KeyO') openSettingsModal();
     if (e.code === 'KeyQ') castActiveAbility();
     switch(e.code) {
         case 'KeyW': moveForward = true; break; 
@@ -2969,6 +3654,12 @@ function onKeyDown(e) {
 
 function onKeyUp(e) {
     if (e.code === 'KeyR') isWallRunning = false;
+    if (e.code === 'KeyF') {
+        isHoldingGrapple = false;
+        if (grappleActive) {
+            releaseGrapple();
+        }
+    }
     switch(e.code) {
         case 'KeyW': moveForward = false; break; 
         case 'KeyA': moveLeft = false; break; 
@@ -4003,8 +4694,13 @@ function addRamp(w, h, d, x, y, z, angleX, angleZ, color, glow) {
 function onWindowResize() { 
     camera.aspect = window.innerWidth / window.innerHeight; 
     camera.updateProjectionMatrix(); 
+    const dpr = Math.min(2.0, window.devicePixelRatio || 1) * (gameSettings ? gameSettings.resolutionScale : 1.0);
+    renderer.setPixelRatio( dpr );
     renderer.setSize( window.innerWidth, window.innerHeight ); 
     composer.setSize( window.innerWidth, window.innerHeight ); 
+    if (rtxPass && rtxPass.uniforms && rtxPass.uniforms.uResolution) {
+        rtxPass.uniforms.uResolution.value.set(window.innerWidth * dpr, window.innerHeight * dpr);
+    }
 }
 
 const downVector = new THREE.Vector3(0, -1, 0); 
@@ -4023,6 +4719,21 @@ const rightVec = new THREE.Vector3();
 // ============================================================================
 function animate() {
     requestAnimationFrame( animate );
+
+    const nowMs = performance.now();
+    if (gameSettings && gameSettings.maxFps > 0) {
+        const minDelta = 1000 / gameSettings.maxFps;
+        if (nowMs - lastFrameTime < minDelta) return;
+    }
+    lastFrameTime = nowMs;
+
+    if (rtxPass) {
+        rtxPass.uniforms.uTime.value = nowMs * 0.001;
+        if (gameSettings && gameSettings.enableMotionBlur) {
+            rtxPass.uniforms.uMotionBlurVec.value.set(gpLookX || 0, gpLookY || 0);
+        }
+    }
+
     const isActive = (controls && controls.isLocked === true) || isMobileDeploy;
 
     if ( isActive && myHp > 0 ) {
@@ -4069,25 +4780,39 @@ function animate() {
             }
         }
 
-        // Grapple Hook Physics
+        // Grapple Hook Physics (Hold F to fully grapple to target point)
         if (grappleActive && grappleTarget) {
-            const pPos = new THREE.Vector3().copy(playerBody.position);
-            const pullDir = new THREE.Vector3().subVectors(grappleTarget, pPos);
-            const dist = pullDir.length();
-            if (dist < 3.5 || pPos.y > grappleTarget.y + 2.5) {
+            grappleHoldDuration += 1/60;
+            if (!isHoldingGrapple || grappleHoldDuration > 6.0) {
                 releaseGrapple();
             } else {
-                pullDir.normalize();
-                playerBody.velocity.x = pullDir.x * 52;
-                playerBody.velocity.y = pullDir.y * 52 + 4;
-                playerBody.velocity.z = pullDir.z * 52;
-                myJumpsLeft = myJumps;
+                const pPos = new THREE.Vector3().copy(playerBody.position);
+                const toTarget = new THREE.Vector3().subVectors(grappleTarget, pPos);
+                const dist = toTarget.length();
                 
-                if (grappleLineMesh) {
-                    const posAttr = grappleLineMesh.geometry.attributes.position;
-                    posAttr.setXYZ(0, camera.position.x, camera.position.y - 0.2, camera.position.z);
-                    posAttr.setXYZ(1, grappleTarget.x, grappleTarget.y, grappleTarget.z);
-                    posAttr.needsUpdate = true;
+                if (dist <= 2.4) {
+                    playerBody.velocity.y = Math.max(playerBody.velocity.y, 16);
+                    forwardVec.set(0, 0, -1).applyQuaternion(camera.quaternion);
+                    forwardVec.y = 0;
+                    forwardVec.normalize();
+                    playerBody.velocity.x += forwardVec.x * 12;
+                    playerBody.velocity.z += forwardVec.z * 12;
+                    myJumpsLeft = myJumps;
+                    releaseGrapple();
+                } else {
+                    toTarget.normalize();
+                    const pullSpeed = Math.min(70, Math.max(45, dist * 1.65));
+                    playerBody.velocity.x = toTarget.x * pullSpeed;
+                    playerBody.velocity.y = toTarget.y * pullSpeed + 2.5;
+                    playerBody.velocity.z = toTarget.z * pullSpeed;
+                    myJumpsLeft = myJumps;
+                    
+                    if (grappleLineMesh) {
+                        const posAttr = grappleLineMesh.geometry.attributes.position;
+                        posAttr.setXYZ(0, camera.position.x, camera.position.y - 0.2, camera.position.z);
+                        posAttr.setXYZ(1, grappleTarget.x, grappleTarget.y, grappleTarget.z);
+                        posAttr.needsUpdate = true;
+                    }
                 }
             }
         }

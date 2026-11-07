@@ -46,7 +46,7 @@
         </div>
         <div class="tactical-badge" id="hud-grapple-badge">
             <span style="color:#00f3ff;">🪝</span>
-            <span>[F] GRAPPLE: <strong id="hud-grapple-status" style="color:#00ffaa;">READY</strong></span>
+            <span>[HOLD F] GRAPPLE: <strong id="hud-grapple-status" style="color:#00ffaa;">READY</strong></span>
         </div>
         <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
             <span>[W+R] CLIMB WALL</span>
@@ -63,7 +63,8 @@
     </div>
 
     <div id="ui-triggers">
-        <div id="admin-trigger" title="Admin">⚙️ ADMIN</div>
+        <div id="settings-trigger" title="Graphics & RTX Settings">⚡ SETTINGS</div>
+        <div id="admin-trigger" title="Admin">🛠️ ADMIN</div>
         <div id="vip-trigger" title="VIP Status">👑 VIP</div>
         <div id="shop-trigger" title="Shop">🛒 SHOP</div>
     </div>
@@ -159,7 +160,10 @@
                         <button id="btn-deploy-bots" class="deploy-btn" style="width:100%; padding:8px; background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:12px; font-weight:bold;">DEPLOY WITH BOTS</button>
                     </div>
 
-                    <button id="btn-solo" class="deploy-btn" style="width:100%; padding:6px; margin-top:8px; background:rgba(0,255,255,0.08); border-color:#00f3ff; color:#00f3ff; font-size:11px;">SOLO EXPLORE / PRACTICE</button>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button id="btn-solo" class="deploy-btn" style="flex:1; padding:6px; background:rgba(0,255,255,0.08); border-color:#00f3ff; color:#00f3ff; font-size:11px;">SOLO PRACTICE</button>
+                        <button id="btn-lobby-settings" class="deploy-btn" style="flex:1; padding:6px; background:rgba(0,243,255,0.15); border-color:#00f3ff; color:#00f3ff; font-size:11px;">⚙️ SETTINGS</button>
+                    </div>
                 </div>
                 
                 <!-- Middle Panel: Host Game with Full Settings -->
@@ -240,7 +244,8 @@
                     <span style="color:#00f3ff;">[WASD]</span> Move &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[SPACE]</span> Jump &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[W + R]</span> Climb Wall &nbsp;&bull;&nbsp; 
-                    <span style="color:#00f3ff;">[F]</span> Grapple Hook<br>
+                    <span style="color:#00f3ff;">[HOLD F]</span> Grapple Hook &nbsp;&bull;&nbsp; 
+                    <span style="color:#00f3ff;">[O]</span> Settings<br>
                     <span style="color:#00f3ff;">[Q]</span> Cast Ability &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[E]</span> Class Power &nbsp;&bull;&nbsp; 
                     <span style="color:#00f3ff;">[Click]</span> Shoot &nbsp;&bull;&nbsp; 
@@ -252,6 +257,210 @@
     </div>
 
     <!-- Modals -->
+    <!-- Settings & RTX Post-Processing Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content glass" style="max-width:920px; width:95%; max-height:88vh; overflow-y:auto; border-color:#00f3ff; box-shadow:0 0 40px rgba(0,243,255,0.4); padding:25px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(0,243,255,0.3); padding-bottom:12px; margin-bottom:18px;">
+                <h2 class="neon-title" style="color:#00f3ff; text-shadow:0 0 15px #00f3ff; margin:0; font-size:1.8rem; letter-spacing:3px;">GRAPHICS & RTX POST-PROCESSING</h2>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <span style="font-size:12px; color:#aaa;">RTX PRESET:</span>
+                    <select id="setting-rtx-preset" class="tech-select" style="padding:4px 10px; font-size:11px; width:auto; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
+                        <option value="custom">Custom</option>
+                        <option value="off">Off (Vanilla)</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High Cinematic</option>
+                        <option value="ultra" selected>RTX ULTRA 🔥</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Settings Grid: 2 Columns -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <!-- Column 1: Display & Calibration -->
+                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.25); border-radius:8px; padding:15px; display:flex; flex-direction:column; gap:12px;">
+                    <h3 style="color:#00f3ff; margin:0 0 4px 0; font-size:14px; letter-spacing:1px; border-bottom:1px solid rgba(0,243,255,0.2); padding-bottom:6px;">DISPLAY & CALIBRATION</h3>
+                    
+                    <!-- Resolution Scaling -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Resolution Scale</span>
+                            <span id="lbl-resolution" style="color:#00ffaa; font-weight:bold;">100% (Native)</span>
+                        </div>
+                        <select id="setting-resolution" class="tech-select" style="padding:6px; font-size:11px;">
+                            <option value="0.5">50% (Performance Boost)</option>
+                            <option value="0.75">75% (Balanced)</option>
+                            <option value="1.0" selected>100% (Native 1080p / Display)</option>
+                            <option value="1.25">125% (High Quality)</option>
+                            <option value="1.5">150% (Ultra Supersampled)</option>
+                        </select>
+                    </div>
+
+                    <!-- Brightness -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Brightness</span>
+                            <span id="lbl-brightness" style="color:#00f3ff; font-weight:bold;">100%</span>
+                        </div>
+                        <input type="range" id="setting-brightness" min="0.5" max="1.8" step="0.05" value="1.0" class="tech-range">
+                    </div>
+
+                    <!-- Contrast -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Contrast</span>
+                            <span id="lbl-contrast" style="color:#00f3ff; font-weight:bold;">100%</span>
+                        </div>
+                        <input type="range" id="setting-contrast" min="0.5" max="1.8" step="0.05" value="1.0" class="tech-range">
+                    </div>
+
+                    <!-- Gamma -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Gamma Curve</span>
+                            <span id="lbl-gamma" style="color:#00f3ff; font-weight:bold;">1.00</span>
+                        </div>
+                        <input type="range" id="setting-gamma" min="0.6" max="2.4" step="0.05" value="1.0" class="tech-range">
+                    </div>
+
+                    <!-- Saturation -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Color Saturation</span>
+                            <span id="lbl-saturation" style="color:#00f3ff; font-weight:bold;">110%</span>
+                        </div>
+                        <input type="range" id="setting-saturation" min="0.0" max="2.0" step="0.05" value="1.1" class="tech-range">
+                    </div>
+
+                    <!-- FOV -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Field of View (FOV)</span>
+                            <span id="lbl-fov" style="color:#00f3ff; font-weight:bold;">75°</span>
+                        </div>
+                        <input type="range" id="setting-fov" min="65" max="110" step="1" value="75" class="tech-range">
+                    </div>
+
+                    <!-- Shadows & Max FPS -->
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label style="font-size:11px; color:#aaa; margin-bottom:4px; display:block;">Shadow Maps</label>
+                            <select id="setting-shadows" class="tech-select" style="padding:6px; font-size:11px;">
+                                <option value="ultra" selected>Ultra Soft (2048)</option>
+                                <option value="high">High (1024)</option>
+                                <option value="low">Low (512)</option>
+                                <option value="off">Off (Max FPS)</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:11px; color:#aaa; margin-bottom:4px; display:block;">Max FPS Limit</label>
+                            <select id="setting-fps" class="tech-select" style="padding:6px; font-size:11px;">
+                                <option value="0" selected>Uncapped</option>
+                                <option value="144">144 FPS</option>
+                                <option value="120">120 FPS</option>
+                                <option value="60">60 FPS</option>
+                                <option value="30">30 FPS</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column 2: RTX Post-Processing Suite -->
+                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.25); border-radius:8px; padding:15px; display:flex; flex-direction:column; gap:10px;">
+                    <h3 style="color:#00ffaa; margin:0 0 4px 0; font-size:14px; letter-spacing:1px; border-bottom:1px solid rgba(0,255,170,0.2); padding-bottom:6px;">RTX POST-PROCESSING EFFECTS</h3>
+
+                    <!-- Bloom -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-bloom" checked>
+                            <span class="setting-title">RTX Volumetric Bloom & Glow</span>
+                        </label>
+                        <input type="range" id="setting-bloom-strength" min="0.2" max="3.0" step="0.1" value="1.4" class="tech-range" style="width:105px;" title="Bloom Intensity">
+                    </div>
+
+                    <!-- SSR -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-ssr" checked>
+                            <span class="setting-title">RTX Screen-Space Reflections (SSR)</span>
+                        </label>
+                        <input type="range" id="setting-ssr-intensity" min="0.2" max="2.0" step="0.1" value="1.0" class="tech-range" style="width:105px;" title="SSR Intensity">
+                    </div>
+
+                    <!-- SSAO -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-ao" checked>
+                            <span class="setting-title">RTX Ambient Occlusion (Contact Shadows)</span>
+                        </label>
+                        <input type="range" id="setting-ao-intensity" min="0.2" max="2.0" step="0.1" value="1.0" class="tech-range" style="width:105px;" title="AO Depth Intensity">
+                    </div>
+
+                    <!-- ACES Tonemapping -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-aces" checked>
+                            <span class="setting-title">RTX ACES Filmic HDR Tone Mapping</span>
+                        </label>
+                    </div>
+
+                    <!-- Chromatic Aberration -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-chromatic" checked>
+                            <span class="setting-title">RTX Chromatic Aberration & Optics</span>
+                        </label>
+                        <input type="range" id="setting-chromatic-intensity" min="0.2" max="2.5" step="0.1" value="1.0" class="tech-range" style="width:105px;" title="Aberration Dispersion">
+                    </div>
+
+                    <!-- Anamorphic Glare -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-anamorphic" checked>
+                            <span class="setting-title">RTX Anamorphic Cyber Flares</span>
+                        </label>
+                        <input type="range" id="setting-anamorphic-intensity" min="0.2" max="2.0" step="0.1" value="1.0" class="tech-range" style="width:105px;" title="Streak Flare Intensity">
+                    </div>
+
+                    <!-- Vignette & Grain -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-vignette" checked>
+                            <span class="setting-title">RTX Cinematic Vignette & Cyber Grain</span>
+                        </label>
+                    </div>
+
+                    <!-- Motion Blur -->
+                    <div class="setting-toggle-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="setting-rtx-motionblur">
+                            <span class="setting-title">RTX Velocity Motion Blur</span>
+                        </label>
+                    </div>
+
+                    <!-- Crosshair Customization -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px;">
+                        <span style="font-size:12px; color:#aaa;">Crosshair Color</span>
+                        <select id="setting-crosshair-color" class="tech-select" style="padding:4px 8px; font-size:11px; width:auto;">
+                            <option value="#00f3ff" selected>Cyber Cyan</option>
+                            <option value="#ffd700">Neon Gold</option>
+                            <option value="#00ffaa">Emerald Green</option>
+                            <option value="#ff0055">Crimson Red</option>
+                            <option value="#ffffff">Pure White</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Buttons -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid rgba(0,243,255,0.3); padding-top:15px;">
+                <button id="btn-settings-reset" class="close-btn" style="width:auto; padding:8px 18px; font-size:12px;">RESET TO DEFAULTS</button>
+                <div style="display:flex; gap:12px;">
+                    <button id="btn-settings-close" class="deploy-btn" style="padding:8px 30px; font-size:13px; background:linear-gradient(135deg, #0055aa, #00f3ff); border:none; color:#000; font-weight:bold;">DONE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="shop-modal" class="modal hidden">
         <div class="modal-content glass" style="max-width:850px; width:100%; border-color:#00f3ff; box-shadow:0 0 40px rgba(0,243,255,0.4);">
             <h2 class="neon-title" style="color:#00f3ff; text-shadow:0 0 15px #00f3ff; text-align:center; font-size:2.5rem; margin-top:0; margin-bottom:10px; letter-spacing:3px;">CYBER SHOP</h2>
@@ -449,9 +658,10 @@
     <div id="exit-panel" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,20,0.85); z-index:9999; flex-direction:column; align-items:center; justify-content:center; backdrop-filter:blur(10px);">
         <h1 class="neon-title" style="color:#ff0055; text-shadow:0 0 15px #ff0055; font-size:4rem; margin-bottom:10px;">SYSTEM PAUSED</h1>
         <p style="color:#aaa; letter-spacing:2px; margin-bottom:40px;">SIMULATION TEMPORARILY SUSPENDED</p>
-        <div style="display:flex; gap:30px;">
-            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:24px; padding:15px 50px;">RESUME GAME</button>
-            <button id="btn-exit-match" class="deploy-btn" style="background:rgba(255,0,0,0.2); border-color:#ff0000; color:#ff0000; font-size:24px; padding:15px 50px;">ABORT TO LOBBY</button>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center;">
+            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:20px; padding:12px 35px;">RESUME GAME</button>
+            <button id="btn-pause-settings" class="deploy-btn" style="background:rgba(0,243,255,0.2); border-color:#00f3ff; color:#00f3ff; font-size:20px; padding:12px 35px;">⚙️ SETTINGS</button>
+            <button id="btn-exit-match" class="deploy-btn" style="background:rgba(255,0,0,0.2); border-color:#ff0000; color:#ff0000; font-size:20px; padding:12px 35px;">ABORT TO LOBBY</button>
         </div>
     </div>
 
