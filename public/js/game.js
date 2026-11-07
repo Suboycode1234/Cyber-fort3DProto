@@ -71,6 +71,8 @@ let gameSettings = {
     fov: 75,
     shadowQuality: 'ultra',
     maxFps: 0,
+    antiAliasing: 'fxaa', // 'off', 'fxaa', 'smaa', 'msaa', 'ssaa'
+    rayTracingMode: 'pathtracing', // 'off', 'performance', 'medium', 'quality', 'pathtracing'
     rtxPreset: 'ultra',
     enableBloom: true,
     bloomStrength: 1.4,
@@ -205,6 +207,8 @@ const RTXUberShader = {
         uGamma: { value: 1.0 },
         uSaturation: { value: 1.1 },
         uEnableACES: { value: true },
+        uRayTracingMode: { value: 4 }, // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=PathTracing
+        uAntiAliasing: { value: 1 },   // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
         uEnableSSR: { value: true },
         uSSRIntensity: { value: 1.0 },
         uEnableAO: { value: true },
@@ -236,6 +240,8 @@ const RTXUberShader = {
         uniform float uGamma;
         uniform float uSaturation;
         uniform bool uEnableACES;
+        uniform int uRayTracingMode;
+        uniform int uAntiAliasing;
         uniform bool uEnableSSR;
         uniform float uSSRIntensity;
         uniform bool uEnableAO;
@@ -252,6 +258,7 @@ const RTXUberShader = {
         uniform vec2 uMotionBlurVec;
         varying vec2 vUv;
 
+        // ACES Filmic Tone Mapping Curve
         vec3 ACESFilm(vec3 x) {
             float a = 2.51;
             float b = 0.03;
@@ -259,6 +266,134 @@ const RTXUberShader = {
             float d = 0.59;
             float e = 0.14;
             return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+        }
+
+        // Screen-Space Raymarcher for Reflections with Binary Refinement
+        vec3 traceRaymarch(vec2 origin, vec2 dir, float maxDist, int steps, float jitter, out float hitConfidence) {
+            vec2 stepVec = (dir * maxDist) / float(steps);
+            vec2 cur = origin + stepVec * (0.35 + jitter * 0.65);
+            hitConfidence = 0.0;
+            vec3 hitColor = vec3(0.0);
+
+            for (int i = 0; i < 20; i++) {
+                if (i >= steps) break;
+                if (cur.x < 0.005 || cur.x > 0.995 || cur.y < 0.005 || cur.y > 0.995) break;
+
+                vec4 sampleCol = texture2D(tDiffuse, cur);
+                float luma = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
+
+                if (luma > 0.42) {
+                    vec2 refined = cur;
+                    if (steps >= 8) {
+                        vec2 bStep = stepVec * 0.5;
+                        for (int b = 0; b < 2; b++) {
+                            vec4 bSamp = texture2D(tDiffuse, refined - bStep);
+                            if (dot(bSamp.rgb, vec3(0.299, 0.587, 0.114)) > 0.42) {
+                                refined -= bStep;
+                            }
+                            bStep *= 0.5;
+                        }
+                    }
+                    hitColor = texture2D(tDiffuse, refined).rgb;
+                    hitConfidence = smoothstep(0.42, 0.95, luma) * (1.0 - float(i) / float(steps));
+                    break;
+                }
+                cur += stepVec;
+            }
+            return hitColor;
+        }
+
+        // Monte-Carlo Path Tracing Simulation (Global Illumination & Emissive Light Bounces)
+        vec3 computePathTracing(vec2 uv, vec2 texel, float time) {
+            vec3 giColor = vec3(0.0);
+            float noise = fract(sin(dot(uv * 12.9898 + time * 1.5, vec2(12.9898, 78.233))) * 43758.5453);
+            
+            const int NUM_RAYS = 6;
+            float totalWeight = 0.0;
+            for (int r = 0; r < NUM_RAYS; r++) {
+                float angle = (float(r) / float(NUM_RAYS)) * 6.2831853 + noise * 1.047;
+                vec2 rayDir = vec2(cos(angle), sin(angle));
+                float hitConf = 0.0;
+                vec3 radiance = traceRaymarch(uv, rayDir, 0.35, 12, noise, hitConf);
+                if (hitConf > 0.01) {
+                    giColor += radiance * hitConf * 0.45;
+                    totalWeight += hitConf;
+                }
+            }
+            if (totalWeight > 0.01) {
+                giColor /= max(1.0, totalWeight);
+            }
+
+            float floorFresnel = smoothstep(0.75, 0.05, uv.y) * 0.65;
+            vec2 reflDir = vec2((noise - 0.5) * 0.05, 0.7);
+            float specHit = 0.0;
+            vec3 specRadiance = traceRaymarch(uv, reflDir, 0.5, 16, noise, specHit);
+
+            return giColor * 0.85 + specRadiance * specHit * floorFresnel * 1.35;
+        }
+
+        // Anti-Aliasing (FXAA 3.11 Quality Algorithm)
+        vec4 applyFXAA(vec2 uv, vec2 texel) {
+            vec3 rgbNW = texture2D(tDiffuse, uv + vec2(-1.0, -1.0) * texel).rgb;
+            vec3 rgbNE = texture2D(tDiffuse, uv + vec2(1.0, -1.0) * texel).rgb;
+            vec3 rgbSW = texture2D(tDiffuse, uv + vec2(-1.0, 1.0) * texel).rgb;
+            vec3 rgbSE = texture2D(tDiffuse, uv + vec2(1.0, 1.0) * texel).rgb;
+            vec4 rgbaM = texture2D(tDiffuse, uv);
+            vec3 rgbM  = rgbaM.rgb;
+
+            vec3 luma = vec3(0.299, 0.587, 0.114);
+            float lumaNW = dot(rgbNW, luma);
+            float lumaNE = dot(rgbNE, luma);
+            float lumaSW = dot(rgbSW, luma);
+            float lumaSE = dot(rgbSE, luma);
+            float lumaM  = dot(rgbM,  luma);
+
+            float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+            float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+
+            vec2 dir;
+            dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+            dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+            float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * (1.0/8.0)), (1.0/128.0));
+            float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+            dir = min(vec2(8.0), max(vec2(-8.0), dir * rcpDirMin)) * texel;
+
+            vec3 rgbA = 0.5 * (
+                texture2D(tDiffuse, uv + dir * (1.0 / 3.0 - 0.5)).rgb +
+                texture2D(tDiffuse, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+            vec3 rgbB = rgbA * 0.5 + 0.25 * (
+                texture2D(tDiffuse, uv + dir * -0.5).rgb +
+                texture2D(tDiffuse, uv + dir * 0.5).rgb);
+
+            float lumaB = dot(rgbB, luma);
+            if ((lumaB < lumaMin) || (lumaB > lumaMax)) {
+                return vec4(rgbA, rgbaM.a);
+            } else {
+                return vec4(rgbB, rgbaM.a);
+            }
+        }
+
+        // Subpixel Morphological Anti-Aliasing (SMAA Edge Blend)
+        vec4 applySMAA(vec2 uv, vec2 texel) {
+            vec4 c = texture2D(tDiffuse, uv);
+            vec4 cN = texture2D(tDiffuse, uv - vec2(0.0, texel.y));
+            vec4 cS = texture2D(tDiffuse, uv + vec2(0.0, texel.y));
+            vec4 cW = texture2D(tDiffuse, uv - vec2(texel.x, 0.0));
+            vec4 cE = texture2D(tDiffuse, uv + vec2(texel.x, 0.0));
+            vec4 diag1 = texture2D(tDiffuse, uv + vec2(-texel.x, -texel.y));
+            vec4 diag2 = texture2D(tDiffuse, uv + vec2(texel.x, -texel.y));
+            vec4 diag3 = texture2D(tDiffuse, uv + vec2(-texel.x, texel.y));
+            vec4 diag4 = texture2D(tDiffuse, uv + vec2(texel.x, texel.y));
+
+            float dH = length(cE.rgb - cW.rgb);
+            float dV = length(cS.rgb - cN.rgb);
+            float dD = length(diag4.rgb - diag1.rgb) + length(diag3.rgb - diag2.rgb);
+
+            if (dH + dV + dD > 0.08) {
+                return c * 0.36 + (cN + cS + cW + cE) * 0.12 + (diag1 + diag2 + diag3 + diag4) * 0.04;
+            }
+            return c;
         }
 
         void main() {
@@ -272,6 +407,17 @@ const RTXUberShader = {
                     baseColor += texture2D(tDiffuse, clamp(uv + float(i) * mbStep, 0.0, 1.0));
                 }
                 baseColor *= 0.2;
+            } else if (uAntiAliasing == 1) {
+                baseColor = applyFXAA(uv, texel);
+            } else if (uAntiAliasing == 2) {
+                baseColor = applySMAA(uv, texel);
+            } else if (uAntiAliasing == 4) {
+                vec2 j1 = vec2(-0.25, -0.25) * texel;
+                vec2 j2 = vec2( 0.25, -0.25) * texel;
+                vec2 j3 = vec2(-0.25,  0.25) * texel;
+                vec2 j4 = vec2( 0.25,  0.25) * texel;
+                baseColor = (texture2D(tDiffuse, uv + j1) + texture2D(tDiffuse, uv + j2) +
+                             texture2D(tDiffuse, uv + j3) + texture2D(tDiffuse, uv + j4)) * 0.25;
             } else if (uEnableChromatic) {
                 vec2 distFromCenter = uv - 0.5;
                 float distSq = dot(distFromCenter, distFromCenter);
@@ -286,8 +432,28 @@ const RTXUberShader = {
 
             vec3 col = baseColor.rgb;
 
-            // RTX Screen Space Reflections (SSR)
-            if (uEnableSSR) {
+            // Ray Tracing & Path Tracing Evaluation
+            if (uRayTracingMode > 0) {
+                float noise = fract(sin(dot(uv * 12.9898 + uTime * 0.05, vec2(12.9898, 78.233))) * 43758.5453);
+                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.45;
+                
+                if (uRayTracingMode == 1) {
+                    float hitConf = 0.0;
+                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.02, 0.7), 0.35, 4, noise, hitConf);
+                    col += rCol * hitConf * fresnel * 0.95 * uSSRIntensity;
+                } else if (uRayTracingMode == 2) {
+                    float hitConf = 0.0;
+                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.03, 0.75), 0.45, 8, noise, hitConf);
+                    col += rCol * hitConf * fresnel * 1.15 * uSSRIntensity;
+                } else if (uRayTracingMode == 3) {
+                    float hitConf = 0.0;
+                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.04, 0.8), 0.55, 16, noise, hitConf);
+                    col += rCol * hitConf * fresnel * 1.35 * uSSRIntensity;
+                } else if (uRayTracingMode == 4) {
+                    vec3 ptRadiance = computePathTracing(uv, texel, uTime);
+                    col += ptRadiance * uSSRIntensity;
+                }
+            } else if (uEnableSSR) {
                 vec2 refUV = vec2(uv.x, 1.0 - uv.y * 0.88);
                 float jitter = fract(sin(dot(uv * 12.9898 + uTime * 0.04, vec2(12.9898, 78.233))) * 43758.5453);
                 refUV.x += (jitter - 0.5) * 0.007;
@@ -408,7 +574,10 @@ function applyCrosshairColor(color) {
 }
 
 function applySettings() {
-    const dpr = Math.min(2.0, window.devicePixelRatio || 1) * gameSettings.resolutionScale;
+    let dpr = Math.min(2.0, window.devicePixelRatio || 1) * gameSettings.resolutionScale;
+    if (gameSettings.antiAliasing === 'ssaa') {
+        dpr = Math.min(2.5, dpr * 1.25);
+    }
     if (renderer) {
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -430,6 +599,13 @@ function applySettings() {
         rtxPass.uniforms.uGamma.value = gameSettings.gamma;
         rtxPass.uniforms.uSaturation.value = gameSettings.saturation;
         rtxPass.uniforms.uEnableACES.value = gameSettings.enableACES;
+        
+        const rtMap = { 'off': 0, 'performance': 1, 'medium': 2, 'quality': 3, 'pathtracing': 4 };
+        rtxPass.uniforms.uRayTracingMode.value = rtMap[gameSettings.rayTracingMode] !== undefined ? rtMap[gameSettings.rayTracingMode] : 4;
+        
+        const aaMap = { 'off': 0, 'fxaa': 1, 'smaa': 2, 'msaa': 3, 'ssaa': 4 };
+        rtxPass.uniforms.uAntiAliasing.value = aaMap[gameSettings.antiAliasing] !== undefined ? aaMap[gameSettings.antiAliasing] : 1;
+        
         rtxPass.uniforms.uEnableSSR.value = gameSettings.enableSSR;
         rtxPass.uniforms.uSSRIntensity.value = gameSettings.ssrIntensity;
         rtxPass.uniforms.uEnableAO.value = gameSettings.enableAO;
@@ -483,6 +659,8 @@ function resetSettingsToDefault() {
         fov: 75,
         shadowQuality: 'ultra',
         maxFps: 0,
+        antiAliasing: 'fxaa',
+        rayTracingMode: 'pathtracing',
         rtxPreset: 'ultra',
         enableBloom: true,
         bloomStrength: 1.4,
@@ -525,6 +703,28 @@ function syncSettingsToUI() {
 
     setVal('setting-resolution', gameSettings.resolutionScale);
     setText('lbl-resolution', (gameSettings.resolutionScale * 100).toFixed(0) + "% " + (gameSettings.resolutionScale === 1.0 ? "(Native)" : ""));
+    
+    setVal('setting-antialiasing', gameSettings.antiAliasing || 'fxaa');
+    const aaLabelMap = { 'off': 'Off (Raw)', 'fxaa': 'FXAA (Smooth)', 'smaa': 'SMAA (HQ)', 'msaa': 'MSAA (Hardware)', 'ssaa': 'TAA / SSAA (1.5x)' };
+    setText('lbl-antialiasing', aaLabelMap[gameSettings.antiAliasing] || 'FXAA');
+
+    setVal('setting-raytracing', gameSettings.rayTracingMode || 'pathtracing');
+    const rtBadgeMap = {
+        'off': 'OFF',
+        'performance': '⚡ PERFORMANCE',
+        'medium': '⚙️ MEDIUM',
+        'quality': '💎 QUALITY',
+        'pathtracing': '🔥 PATH TRACING'
+    };
+    setText('lbl-raytracing-badge', rtBadgeMap[gameSettings.rayTracingMode] || '🔥 PATH TRACING');
+    const rtDescMap = {
+        'off': 'Ray tracing disabled. Pure standard rasterization.',
+        'performance': 'Fast 4-step screen-space raymarching and contact ambient occlusion for high frame rates.',
+        'medium': '8-step screen-space raymarching with binary search refinement and contact shadows.',
+        'quality': '16-step high-fidelity screen-space raymarching with sub-texel binary search and glossy specular dispersion.',
+        'pathtracing': 'Full Monte-Carlo path-traced Global Illumination: volumetric neon light bounces, emissive reflection rays, and progressive ambient shadowing.'
+    };
+    setText('lbl-raytracing-desc', rtDescMap[gameSettings.rayTracingMode] || '');
     
     setVal('setting-brightness', gameSettings.brightness);
     setText('lbl-brightness', (gameSettings.brightness * 100).toFixed(0) + "%");

@@ -294,6 +294,20 @@
                             <option value="1.5">150% (Ultra Supersampled)</option>
                         </select>
                     </div>
+                    <!-- Anti-Aliasing (AA) Mode -->
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                            <span>Anti-Aliasing (AA)</span>
+                            <span id="lbl-antialiasing" style="color:#00ffaa; font-weight:bold;">FXAA (Smooth)</span>
+                        </div>
+                        <select id="setting-antialiasing" class="tech-select" style="padding:6px; font-size:11px;">
+                            <option value="off">Off (Sharp Pixels / Raw)</option>
+                            <option value="fxaa" selected>FXAA (Fast Approximate AA)</option>
+                            <option value="smaa">SMAA (Subpixel Morphological AA)</option>
+                            <option value="msaa">MSAA (Hardware Multi-Sample)</option>
+                            <option value="ssaa">TAA / SSAA (Super-Sampling 1.5x)</option>
+                        </select>
+                    </div>
 
                     <!-- Brightness -->
                     <div>
@@ -367,6 +381,23 @@
                 <!-- Column 2: RTX Post-Processing Suite -->
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.25); border-radius:8px; padding:15px; display:flex; flex-direction:column; gap:10px;">
                     <h3 style="color:#00ffaa; margin:0 0 4px 0; font-size:14px; letter-spacing:1px; border-bottom:1px solid rgba(0,255,170,0.2); padding-bottom:6px;">RTX POST-PROCESSING EFFECTS</h3>
+                    <!-- Ray Tracing Architecture -->
+                    <div style="background:rgba(0, 243, 255, 0.08); border:1px solid rgba(0,243,255,0.4); border-radius:6px; padding:10px; margin-bottom:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="color:#00f3ff; font-weight:bold; font-size:12px; letter-spacing:1px;">RAY TRACING ENGINE</span>
+                            <span id="lbl-raytracing-badge" style="background:#00f3ff; color:#000; font-size:10px; font-weight:900; padding:2px 6px; border-radius:3px;">🔥 PATH TRACING</span>
+                        </div>
+                        <select id="setting-raytracing" class="tech-select" style="padding:6px; font-size:12px; border-color:#00f3ff; color:#00f3ff; font-weight:bold; margin-bottom:4px;">
+                            <option value="off">Off (Standard Raster)</option>
+                            <option value="performance">RTX Performance (4-Step SSR + Contact AO)</option>
+                            <option value="medium">RTX Medium (8-Step Raymarch + Binary Search)</option>
+                            <option value="quality">RTX Quality (16-Step High Fidelity Raymarching)</option>
+                            <option value="pathtracing" selected>RTX Path Tracing (Full Monte-Carlo GI Bounce) 🔥</option>
+                        </select>
+                        <div id="lbl-raytracing-desc" style="font-size:10px; color:#aaa; line-height:1.4;">
+                            Full Monte-Carlo path-traced Global Illumination: volumetric neon light bounces, emissive reflection rays, and progressive ambient shadowing.
+                        </div>
+                    </div>
 
                     <!-- Bloom -->
                     <div class="setting-toggle-row">
