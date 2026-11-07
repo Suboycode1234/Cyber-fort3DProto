@@ -167,6 +167,10 @@ let myJumps = 2, myJumpsLeft = 2;
 let jumpAntiGravityTimer = 0;
 let jumpMode = 'normal'; // 'normal' (snappy FPS jump) or 'floaty' (anti-gravity hang time)
 let isVipUnlocked = false;
+let isSmiteCinematicActive = false;
+let isSmiteInvincible = false;
+let currentSmiteStorm = null;
+let smiteCinematicTimeout = null;
 let myClass = 'assault', myEnergy = 100, myMaxEnergy = 100, energyRegen = 20, myShield = false, myLifesteal = false;
 
 // Tactical Mechanics & Perspective
@@ -1570,12 +1574,286 @@ function castActiveAbility() {
 // ============================================================================
 // DIVINE SMITE EXECUTION SYSTEM & CINEMATIC CONTROLLER
 // ============================================================================
-function playSmiteCinematic() {
+let smiteAudioCtx = null;
+function getSmiteAudio() {
+    try {
+        if (!smiteAudioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) smiteAudioCtx = new AudioContextClass();
+        }
+        if (smiteAudioCtx && smiteAudioCtx.state === 'suspended') {
+            smiteAudioCtx.resume().catch(() => {});
+        }
+        return smiteAudioCtx;
+    } catch(e) {
+        return null;
+    }
+}
+
+function playSmiteStrikeSound() {
+    const ctx = getSmiteAudio();
+    if (!ctx) return;
+    try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260 + Math.random() * 120, now);
+        osc.frequency.exponentialRampToValueAtTime(35, now + 0.11);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+    } catch(e) {}
+}
+
+function playSmiteDetonationSound() {
+    const ctx = getSmiteAudio();
+    if (!ctx) return;
+    try {
+        const now = ctx.currentTime;
+        // Deep sub-bass boom
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(25, now + 0.6);
+        gain.gain.setValueAtTime(0.45, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+        
+        // Thunder crack
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(440, now);
+        osc2.frequency.exponentialRampToValueAtTime(38, now + 0.35);
+        gain2.gain.setValueAtTime(0.3, now);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now);
+        osc2.stop(now + 0.35);
+    } catch(e) {}
+}
+
+function startContinuousSmiteLightning(targetPos, targetRef, targetType, targetId, durationSec = 5.5, onFinished = null) {
+    stopContinuousSmiteLightning(false);
+
+    const storm = {
+        pos: targetPos.clone(),
+        targetRef: targetRef,
+        targetType: targetType,
+        targetId: targetId,
+        intervalId: null,
+        cageMeshes: [],
+        onFinished: onFinished
+    };
+
+    // 1. Divine Golden Plasma Cage holding victim in place
+    const cageGeo = new THREE.SphereGeometry(2.4, 20, 20);
+    const cageMat = new THREE.MeshBasicMaterial({
+        color: 0xffd700,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.85
+    });
+    const cageMesh = new THREE.Mesh(cageGeo, cageMat);
+    cageMesh.position.copy(targetPos);
+    cageMesh.position.y += 1.2;
+    scene.add(cageMesh);
+    storm.cageMeshes.push(cageMesh);
+
+    const innerGeo = new THREE.SphereGeometry(1.8, 16, 16);
+    const innerMat = new THREE.MeshBasicMaterial({
+        color: 0xffea00,
+        transparent: true,
+        opacity: 0.32,
+        blending: THREE.AdditiveBlending
+    });
+    const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+    innerMesh.position.copy(cageMesh.position);
+    scene.add(innerMesh);
+    storm.cageMeshes.push(innerMesh);
+
+    // Ground Golden Holy Seal Ring
+    const sealGeo = new THREE.RingGeometry(1.5, 4.5, 32);
+    sealGeo.rotateX(-Math.PI / 2);
+    const sealMat = new THREE.MeshBasicMaterial({
+        color: 0xffd700,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+    });
+    const sealMesh = new THREE.Mesh(sealGeo, sealMat);
+    sealMesh.position.copy(targetPos);
+    sealMesh.position.y += 0.08;
+    scene.add(sealMesh);
+    storm.cageMeshes.push(sealMesh);
+
+    // Initial shockwave sound
+    playSmiteStrikeSound();
+
+    // 2. Interval: Golden Lightning continuously strikes down onto the victim
+    storm.intervalId = setInterval(() => {
+        let currentPos = storm.pos;
+        if (storm.targetRef && storm.targetRef.position) {
+            currentPos = storm.targetRef.position;
+            storm.pos.copy(currentPos);
+            cageMesh.position.copy(currentPos);
+            cageMesh.position.y += 1.2;
+            innerMesh.position.copy(cageMesh.position);
+            sealMesh.position.set(currentPos.x, currentPos.y + 0.08, currentPos.z);
+        }
+
+        cageMesh.rotation.y += 0.08;
+        cageMesh.rotation.x += 0.03;
+        innerMesh.rotation.y -= 0.06;
+
+        // Descending golden lightning bolt from sky
+        const jx = (Math.random() - 0.5) * 1.5;
+        const jz = (Math.random() - 0.5) * 1.5;
+        const boltHeight = 180;
+        const boltGeo = new THREE.CylinderGeometry(0.7 + Math.random()*0.5, 2.2 + Math.random()*0.8, boltHeight, 8);
+        const boltMat = new THREE.MeshBasicMaterial({
+            color: Math.random() < 0.25 ? 0xffffff : 0xffd700,
+            transparent: true,
+            opacity: 0.95
+        });
+        const bolt = new THREE.Mesh(boltGeo, boltMat);
+        bolt.position.set(currentPos.x + jx, currentPos.y + (boltHeight / 2), currentPos.z + jz);
+        scene.add(bolt);
+
+        // Ground ripple ring
+        const rGeo = new THREE.RingGeometry(0.5, 2.5 + Math.random() * 2.5, 20);
+        rGeo.rotateX(-Math.PI / 2);
+        const rMat = new THREE.MeshBasicMaterial({
+            color: 0xffea00,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.85
+        });
+        const rMesh = new THREE.Mesh(rGeo, rMat);
+        rMesh.position.set(currentPos.x + jx, currentPos.y + 0.12, currentPos.z + jz);
+        scene.add(rMesh);
+
+        // Golden sparks
+        createHitSpark(new THREE.Vector3(currentPos.x + jx, currentPos.y + 1.2, currentPos.z + jz), 0xffd700);
+
+        // Audio
+        playSmiteStrikeSound();
+
+        // Subtle camera rumble if close
+        if (camera) {
+            const dist = camera.position.distanceTo(currentPos);
+            if (dist < 55) {
+                camera.position.x += (Math.random() - 0.5) * (0.28 * (1 - dist / 55));
+                camera.position.y += (Math.random() - 0.5) * (0.28 * (1 - dist / 55));
+            }
+        }
+
+        setTimeout(() => {
+            scene.remove(bolt);
+            scene.remove(rMesh);
+            if (bolt.geometry) bolt.geometry.dispose();
+            if (rGeo) rGeo.dispose();
+        }, 75);
+    }, 130);
+
+    currentSmiteStorm = storm;
+}
+
+function stopContinuousSmiteLightning(triggerExplosion = true) {
+    if (!currentSmiteStorm) return;
+    const storm = currentSmiteStorm;
+    currentSmiteStorm = null;
+
+    if (storm.intervalId) {
+        clearInterval(storm.intervalId);
+        storm.intervalId = null;
+    }
+
+    // Remove plasma cage meshes
+    storm.cageMeshes.forEach(m => {
+        scene.remove(m);
+        if (m.geometry) m.geometry.dispose();
+    });
+
+    if (triggerExplosion) {
+        // Detonate Final Cataclysmic Golden Explosion
+        playSmiteDetonationSound();
+        const expPos = storm.pos.clone();
+
+        // Massive flash sphere
+        const expGeo = new THREE.SphereGeometry(3.5, 24, 24);
+        const expMat = new THREE.MeshBasicMaterial({
+            color: 0xffea00,
+            transparent: true,
+            opacity: 0.95,
+            blending: THREE.AdditiveBlending
+        });
+        const expMesh = new THREE.Mesh(expGeo, expMat);
+        expMesh.position.copy(expPos);
+        expMesh.position.y += 1.5;
+        scene.add(expMesh);
+
+        // Expanding shockwave ring
+        const shockGeo = new THREE.RingGeometry(2.0, 24.0, 32);
+        shockGeo.rotateX(-Math.PI / 2);
+        const shockMat = new THREE.MeshBasicMaterial({
+            color: 0xffd700,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.95
+        });
+        const shockMesh = new THREE.Mesh(shockGeo, shockMat);
+        shockMesh.position.copy(expPos);
+        shockMesh.position.y += 0.2;
+        scene.add(shockMesh);
+
+        // Sparks
+        for (let i = 0; i < 4; i++) {
+            createHitSpark(new THREE.Vector3(expPos.x + (Math.random()-0.5)*2, expPos.y + 1.5, expPos.z + (Math.random()-0.5)*2), 0xffd700);
+        }
+
+        // Camera shake
+        if (camera) {
+            const dist = camera.position.distanceTo(expPos);
+            if (dist < 80) {
+                camera.position.y += 0.6 * (1 - dist / 80);
+            }
+        }
+
+        setTimeout(() => {
+            scene.remove(expMesh);
+            scene.remove(shockMesh);
+            expGeo.dispose();
+            shockGeo.dispose();
+        }, 320);
+    }
+
+    if (storm.onFinished) {
+        storm.onFinished();
+    }
+}
+
+function playSmiteCinematic(isVictim = false, onCompleteCallback = null) {
     const container = document.getElementById('smite-cinematic-container');
     const video = document.getElementById('smite-cinematic-video');
+    const skipBtn = document.getElementById('smite-cinematic-skip');
     if (!container || !video) return;
 
+    isSmiteCinematicActive = true;
+    isSmiteInvincible = true;
+
+    // Suppress pointer lock and pause panel
     container.style.display = 'flex';
+    container.style.pointerEvents = 'auto';
     video.currentTime = 0;
     video.muted = false;
 
@@ -1584,23 +1862,66 @@ function playSmiteCinematic() {
         playPromise.catch(err => {
             console.warn('Smite cinematic sound autoplay blocked, retrying muted:', err);
             video.muted = true;
-            video.play();
+            video.play().catch(e => console.error('Smite video play error:', e));
         });
     }
 
-    const closeCinematic = () => {
-        video.pause();
-        container.style.display = 'none';
-        video.onended = null;
+    let isClosed = false;
+    const handleClose = () => {
+        if (isClosed) return;
+        isClosed = true;
+        if (smiteCinematicTimeout) {
+            clearTimeout(smiteCinematicTimeout);
+            smiteCinematicTimeout = null;
+        }
+        closeSmiteCinematic();
+        if (onCompleteCallback) onCompleteCallback();
     };
 
-    video.onended = closeCinematic;
+    video.onended = handleClose;
+    if (skipBtn) {
+        skipBtn.onclick = (e) => {
+            e.stopPropagation();
+            handleClose();
+        };
+    }
+    container.onclick = handleClose;
 
-    const skipBtn = document.getElementById('smite-cinematic-skip');
-    if (skipBtn) skipBtn.onclick = closeCinematic;
+    // Safety timeout: 7.5 seconds
+    smiteCinematicTimeout = setTimeout(handleClose, 7500);
+}
 
-    // Safety fallback: auto-close after 12 seconds
-    setTimeout(closeCinematic, 12000);
+function closeSmiteCinematic() {
+    const container = document.getElementById('smite-cinematic-container');
+    const video = document.getElementById('smite-cinematic-video');
+    if (video) {
+        video.pause();
+        video.onended = null;
+    }
+    if (container) {
+        container.style.display = 'none';
+        container.onclick = null;
+    }
+
+    isSmiteCinematicActive = false;
+
+    // Ensure exit-panel is never stuck open
+    const exitPanel = document.getElementById('exit-panel');
+    if (exitPanel) {
+        exitPanel.classList.add('hidden');
+        exitPanel.style.display = 'none';
+    }
+    const hotbar = document.getElementById('hotbar');
+    if (hotbar) hotbar.style.display = 'flex';
+
+    // Safely re-engage pointer lock if player is alive and desktop
+    if (myHp > 0 && !isMobileDeploy) {
+        try {
+            controls.lock();
+        } catch(e) {
+            console.warn('Pointer lock relock error:', e);
+        }
+    }
 }
 
 function castSmite() {
@@ -1632,9 +1953,12 @@ function castSmite() {
     setTimeout(() => {
         scene.remove(smitePillar);
         scene.remove(smiteRing);
+        smiteGeo.dispose();
+        smiteRingGeo.dispose();
     }, 450);
 
     createHitSpark(hitPoint, 0xffd700);
+    playSmiteStrikeSound();
 
     // Check victim hit
     if (intersects.length > 0) {
@@ -1650,36 +1974,96 @@ function castSmite() {
         if (botId) {
             const b = activeBots.find(x => x.id === botId);
             if (b && b.hp > 0) {
-                b.hp = 0;
-                b.deaths = (b.deaths || 0) + 1;
+                b.isSmiteTrapped = true;
+                const botPos = b.mesh.position.clone();
+
+                // Broadcast sequence to peers (observers see 3D lightning)
+                netBroadcast({
+                    type: 'smite_strike_sequence',
+                    casterId: myPeerId,
+                    casterName: myUsername,
+                    targetType: 'bot',
+                    targetId: b.id,
+                    targetName: b.name,
+                    pos: { x: botPos.x, y: botPos.y, z: botPos.z },
+                    duration: 5.5
+                });
+
+                // Start 3D continuous lightning storm on bot
+                startContinuousSmiteLightning(botPos, b.mesh, 'bot', b.id, 5.5, () => {
+                    b.isSmiteTrapped = false;
+                    b.hp = 0;
+                    b.deaths = (b.deaths || 0) + 1;
+                    b.mesh.visible = false;
+                    myKills++;
+                    myCoins += 100;
+                    updateUI();
+                    saveLocalProfile();
+                    adminLog(`⚡ [SMITE] Divine Execution on ${b.name}! (+100c)`);
+                    isSmiteInvincible = false;
+                    netBroadcast({
+                        type: 'smite_sequence_end',
+                        targetType: 'bot',
+                        targetId: b.id
+                    });
+                });
+
+                // Play cinematic for caster
+                playSmiteCinematic(false, () => {
+                    stopContinuousSmiteLightning(true);
+                    isSmiteInvincible = false;
+                });
+            }
+        } else if (peerId && remotePlayers[peerId]) {
+            const remote = remotePlayers[peerId];
+            const targetPos = remote.mesh ? remote.mesh.position.clone() : hitPoint.clone();
+
+            // Broadcast smite sequence to ALL peers (observers see 3D lightning)
+            netBroadcast({
+                type: 'smite_strike_sequence',
+                casterId: myPeerId,
+                casterName: myUsername,
+                targetType: 'peer',
+                targetId: peerId,
+                targetName: remote.username,
+                pos: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+                duration: 5.5
+            });
+
+            // Tell victim specifically to start their cinematic overlay
+            netSendTo(peerId, {
+                type: 'smite_victim_start',
+                caster: myUsername,
+                victim: remote.username,
+                duration: 5.5
+            });
+
+            // Start 3D continuous lightning storm on target in caster's scene
+            startContinuousSmiteLightning(targetPos, remote.mesh, 'peer', peerId, 5.5, () => {
+                netSendTo(peerId, {
+                    type: 'hit',
+                    damage: 99999,
+                    shooter: myPeerId,
+                    isSmite: true
+                });
+                netBroadcast({
+                    type: 'smite_sequence_end',
+                    targetType: 'peer',
+                    targetId: peerId
+                });
                 myKills++;
                 myCoins += 100;
                 updateUI();
                 saveLocalProfile();
-                adminLog(`⚡ [SMITE] Divine Execution on ${b.name}!`);
-                // Play cinematic for caster
-                playSmiteCinematic();
-            }
-        } else if (peerId && remotePlayers[peerId]) {
-            // 1-HIT KILL: Send lethal damage and cinematic packet specifically to victim
-            netSendTo(peerId, {
-                type: 'hit',
-                damage: 9999,
-                shooter: myPeerId,
-                isSmite: true
+                adminLog(`⚡ [SMITE] Divine Execution on ${remote.username}! (+100c)`);
+                isSmiteInvincible = false;
             });
-            netSendTo(peerId, {
-                type: 'play_smite_cinematic',
-                caster: myUsername,
-                victim: remotePlayers[peerId].username
-            });
-            myKills++;
-            myCoins += 100;
-            updateUI();
-            saveLocalProfile();
-            adminLog(`⚡ [SMITE] Divine Execution on ${remotePlayers[peerId].username}!`);
+
             // Play cinematic for caster
-            playSmiteCinematic();
+            playSmiteCinematic(false, () => {
+                stopContinuousSmiteLightning(true);
+                isSmiteInvincible = false;
+            });
         }
     }
 }
@@ -2101,6 +2485,11 @@ function updateBots(dt) {
     activeBots.forEach(bot => {
         if (!bot.mesh) return;
 
+        if (bot.isSmiteTrapped) {
+            if (bot.body) bot.body.velocity.set(0, 0, 0);
+            return;
+        }
+
         if (bot.hp <= 0) {
             bot.respawnTimer -= dt;
             if (bot.respawnTimer <= 0) {
@@ -2254,7 +2643,7 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
         const dot = toPlayer.normalize().dot(aimVec);
         if (dot > 0.985) {
             const dmg = bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 15 : 10);
-            if (!myShield) {
+            if (!myShield && !isSmiteInvincible) {
                 myHp -= dmg;
                 lastHitBy = bot.id;
                 updateUI();
@@ -2276,7 +2665,7 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
 
 function damageBot(botId, damage, isHeadshot = false) {
     const bot = activeBots.find(b => b.id === botId);
-    if (!bot || bot.hp <= 0) return;
+    if (!bot || bot.hp <= 0 || bot.isSmiteTrapped) return;
 
     bot.hp -= damage;
     if (bot.nametag) {
@@ -3113,9 +3502,64 @@ function handleIncomingPacket(senderId, data) {
         remote.matPants.color.setHex(0xFFD700); 
     }
 
+    // Smite network synchronization (Victim & Observers)
+    if (data.type === 'smite_victim_start' || (data.type === 'smite_strike_sequence' && data.targetType === 'peer' && data.targetId === myPeerId)) {
+        isSmiteInvincible = true;
+        isSmiteCinematicActive = true;
+        if (playerBody) playerBody.velocity.set(0, 0, 0);
+
+        const myPos = camera ? camera.position.clone() : new THREE.Vector3();
+        startContinuousSmiteLightning(myPos, null, 'self', myPeerId, data.duration || 5.5);
+
+        playSmiteCinematic(true, () => {
+            stopContinuousSmiteLightning(true);
+            isSmiteInvincible = false;
+            myHp = 0;
+            die();
+        });
+    }
+
+    if (data.type === 'smite_strike_sequence') {
+        if (data.targetId !== myPeerId && data.casterId !== myPeerId) {
+            const pos = new THREE.Vector3(data.pos.x, data.pos.y, data.pos.z);
+            let targetRef = null;
+            if (data.targetType === 'peer' && remotePlayers[data.targetId]) {
+                targetRef = remotePlayers[data.targetId].mesh;
+            } else if (data.targetType === 'bot') {
+                const b = activeBots.find(x => x.id === data.targetId);
+                if (b) {
+                    b.isSmiteTrapped = true;
+                    targetRef = b.mesh;
+                }
+            }
+
+            adminLog(`⚡ [OBSERVER] Divine Smite raining upon ${data.targetName || 'target'}!`);
+            startContinuousSmiteLightning(pos, targetRef, data.targetType, data.targetId, data.duration || 5.5, () => {
+                if (data.targetType === 'bot') {
+                    const b = activeBots.find(x => x.id === data.targetId);
+                    if (b) {
+                        b.isSmiteTrapped = false;
+                        b.hp = 0;
+                        if (b.mesh) b.mesh.visible = false;
+                    }
+                }
+            });
+        }
+    }
+
+    if (data.type === 'smite_sequence_end') {
+        if (currentSmiteStorm && currentSmiteStorm.targetId === data.targetId) {
+            stopContinuousSmiteLightning(true);
+        }
+        if (isSmiteCinematicActive && isSmiteInvincible) {
+            closeSmiteCinematic();
+            isSmiteInvincible = false;
+        }
+    }
+
     if (data.type === 'hit') {
         if (data.target === myPeerId) {
-            if (myShield) return;
+            if (myShield || isSmiteInvincible) return;
             myHp -= data.damage || 25;
             lastHitBy = senderId;
             updateUI();
@@ -3732,6 +4176,9 @@ function init() {
     });
 
     controls.addEventListener( 'unlock', () => { 
+        if (isSmiteCinematicActive) {
+            return;
+        }
         isScoped = false; 
         camera.fov = 75; 
         camera.updateProjectionMatrix(); 
@@ -4032,9 +4479,19 @@ function generateCards() {
 generateCards();
 
 function die() {
+    if (isSmiteInvincible) return;
     myDeaths++;
     saveLocalProfile();
     netBroadcast({ type: 'killed', victim: myPeerId, killer: lastHitBy });
+
+    let killerName = "Combat";
+    if (lastHitBy) {
+        if (remotePlayers[lastHitBy]) killerName = remotePlayers[lastHitBy].username;
+        else {
+            const b = activeBots.find(x => x.id === lastHitBy);
+            if (b) killerName = b.name;
+        }
+    }
     lastHitBy = null;
 
     if (!isMobileDeploy) controls.unlock();
@@ -4043,74 +4500,64 @@ function die() {
     camera.updateProjectionMatrix(); 
     document.getElementById('scope-overlay').classList.add('hidden');
     document.getElementById('blocker').style.display = 'none'; 
-    document.getElementById('draft-modal').classList.remove('hidden'); 
     document.getElementById('hotbar').style.display = 'none';
     hideMobileControls();
 
-    const opts = document.getElementById('draft-options'); 
-    opts.innerHTML = '';
-    
-    const abilityKeys = Object.keys(ABILITY_DEFINITIONS);
-    const chosenAbilities = [...abilityKeys].sort(() => 0.5 - Math.random()).slice(0, 2);
-    const chosenCards = [...availableCards].sort(() => 0.5 - Math.random()).slice(0, 1);
-    
-    const draftItems = [];
-    chosenAbilities.forEach(key => {
-        const ab = ABILITY_DEFINITIONS[key];
-        draftItems.push({
-            name: `${ab.icon} ${ab.name}`,
-            desc: ab.desc,
-            isAbility: true,
-            abilityKey: key
-        });
-    });
-    chosenCards.forEach(c => {
-        draftItems.push({
-            name: `⚡ ${c.name}`,
-            desc: c.desc,
-            isAbility: false,
-            card: c
-        });
-    });
+    const respawnModal = document.getElementById('respawn-modal');
+    const killerText = document.getElementById('respawn-killer-text');
+    const timerDisplay = document.getElementById('respawn-timer-display');
+    const btnRespawnNow = document.getElementById('btn-respawn-now');
 
-    draftItems.forEach(item => {
-        const btn = document.createElement('div'); 
-        btn.className = 'draft-card'; 
-        btn.innerHTML = `<h3>${item.name}</h3><p>${item.desc}</p>`;
-        btn.onclick = () => { 
-            if (item.isAbility) {
-                myActiveAbility = item.abilityKey;
-                updateAbilityHUD();
-                saveLocalProfile();
-            } else if (item.card) {
-                item.card.apply();
-            }
-            myHp = myMaxHp; 
-            updateUI(); 
-            respawn(); 
-            document.getElementById('draft-modal').classList.add('hidden'); 
-            document.getElementById('hotbar').style.display = 'flex';
-            if (!isMobileDeploy) {
-                controls.lock();
-            } else {
-                showMobileControls();
-            }
-            netBroadcast({
-                type: 'pos',
-                pos: { x: playerBody.position.x, y: playerBody.position.y - 1.5, z: playerBody.position.z },
-                rot: { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w },
-                isCrouching: false,
-                gun: myGun,
-                hp: myHp,
-                maxHp: myMaxHp,
-                coins: myCoins,
-                speed: mySpeed,
-                kothScore: myKothScore
-            });
-            netBroadcast({ type: 'respawn', id: myPeerId });
-        }; 
-        opts.appendChild(btn);
-    });
+    if (respawnModal) {
+        respawnModal.classList.remove('hidden');
+        if (killerText) killerText.innerText = `Eliminated by ${killerName}. Tactical redeploy in progress...`;
+    }
+
+    let countdown = 3;
+    if (timerDisplay) timerDisplay.innerText = countdown;
+
+    let respawnInterval = null;
+    const performRespawn = () => {
+        if (respawnInterval) {
+            clearInterval(respawnInterval);
+            respawnInterval = null;
+        }
+        if (respawnModal) respawnModal.classList.add('hidden');
+        myHp = myMaxHp;
+        updateUI();
+        respawn();
+        document.getElementById('hotbar').style.display = 'flex';
+        if (!isMobileDeploy) {
+            controls.lock();
+        } else {
+            showMobileControls();
+        }
+        netBroadcast({
+            type: 'pos',
+            pos: { x: playerBody.position.x, y: playerBody.position.y - 1.5, z: playerBody.position.z },
+            rot: { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w },
+            isCrouching: false,
+            gun: myGun,
+            hp: myHp,
+            maxHp: myMaxHp,
+            coins: myCoins,
+            speed: mySpeed,
+            kothScore: myKothScore
+        });
+        netBroadcast({ type: 'respawn', id: myPeerId });
+    };
+
+    if (btnRespawnNow) {
+        btnRespawnNow.onclick = performRespawn;
+    }
+
+    respawnInterval = setInterval(() => {
+        countdown--;
+        if (timerDisplay) timerDisplay.innerText = Math.max(0, countdown);
+        if (countdown <= 0) {
+            performRespawn();
+        }
+    }, 1000);
 }
 
 function updateWeaponVisuals(humanoidObj, weaponType) {
@@ -4434,6 +4881,15 @@ function updateUI() {
 }
 
 function onKeyDown(e) {
+    if (isSmiteCinematicActive) {
+        if (e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyQ' || e.code === 'Enter') {
+            e.preventDefault();
+            closeSmiteCinematic();
+            stopContinuousSmiteLightning(true);
+            isSmiteInvincible = false;
+        }
+        return;
+    }
     if (e.code === 'KeyR') isWallRunning = true;
     if (e.code === 'KeyF') {
         isHoldingGrapple = true;
@@ -5609,15 +6065,29 @@ function animate() {
         }
     }
 
-    const isActive = (controls && controls.isLocked === true) || isMobileDeploy;
+    const isControlLocked = (controls && controls.isLocked === true) || isMobileDeploy;
+    const isSimActive = isControlLocked || isSmiteCinematicActive;
 
-    if ( isActive && myHp > 0 ) {
-        if (jumpAntiGravityTimer > 0) { 
+    if ( isSimActive && myHp > 0 ) {
+        if (isSmiteCinematicActive) {
+            playerBody.velocity.x = 0;
+            playerBody.velocity.z = 0;
+            if (playerBody.velocity.y > 0) playerBody.velocity.y = 0;
+            moveForward = false;
+            moveBackward = false;
+            moveLeft = false;
+            moveRight = false;
+            isShooting = false;
+        }
+
+        if (jumpAntiGravityTimer > 0 && !isSmiteCinematicActive) { 
             jumpAntiGravityTimer -= 1/60; 
             playerBody.force.y += playerBody.mass * 55; 
         }
         world.step(1/60); 
-        updateGamepads();
+        if (!isSmiteCinematicActive) {
+            updateGamepads();
+        }
         
         let isGrounded = false;
         if (playerBody.position.y <= 1.6) isGrounded = true;
@@ -5705,7 +6175,10 @@ function animate() {
             updateBots(1/60);
         }
 
-        if (playerBody.position.y < -10) die();
+        if (playerBody.position.y < -10) {
+            if (!isSmiteInvincible) die();
+            else playerBody.position.set(0, 5, 0);
+        }
         if (fireCooldown > 0) fireCooldown--; 
         myEnergy = Math.min(myMaxEnergy, myEnergy + (energyRegen * 1/60)); 
         updateUI();
