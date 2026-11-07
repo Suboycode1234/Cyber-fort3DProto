@@ -48,6 +48,10 @@
             <span style="color:#00f3ff;">🪝</span>
             <span>[HOLD F] GRAPPLE: <strong id="hud-grapple-status" style="color:#00ffaa;">READY</strong></span>
         </div>
+        <div class="tactical-badge" id="hud-fsr-badge" style="display:none; border-color:rgba(255, 170, 0, 0.4); color:#ffaa00;">
+            <span style="color:#ffaa00;">⚡</span>
+            <span>FSR: <strong id="hud-fsr-status" style="color:#00ffaa;">QUALITY</strong></span>
+        </div>
         <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
             <span>[W+R] CLIMB WALL</span>
         </div>
@@ -274,16 +278,63 @@
                 </div>
             </div>
 
+            <!-- Hardware Profiler & Dedicated GPU (dGPU) Card -->
+            <div style="background:linear-gradient(90deg, rgba(255, 0, 85, 0.12), rgba(0, 243, 255, 0.08)); border:1px solid rgba(0, 243, 255, 0.35); border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:10px; color:#aaa; letter-spacing:1px; text-transform:uppercase;">HARDWARE PROFILER</span>
+                        <span id="lbl-gpu-type-badge" style="background:#00f3ff; color:#000; font-size:10px; font-weight:900; padding:2px 8px; border-radius:3px;">PROFILING GPU...</span>
+                    </div>
+                    <div id="lbl-detected-gpu-name" style="color:#fff; font-size:13px; font-weight:bold; font-family:monospace; margin-top:3px;">
+                        Querying WebGL context...
+                    </div>
+                    <div style="font-size:11px; color:#aaa; margin-top:2px;">
+                        AMD FidelityFX™ Super Resolution dynamically scales internal render targets while preserving native edge fidelity.
+                    </div>
+                </div>
+                <button id="btn-dgpu-optimize" class="tech-btn" style="padding:8px 14px; font-size:11px; background:linear-gradient(90deg, #ff0055, #00f3ff); color:#fff; font-weight:900; border:none; border-radius:4px; box-shadow:0 0 12px rgba(0,243,255,0.4); cursor:pointer;">
+                    ⚡ OPTIMIZE FOR DEDICATED GPU
+                </button>
+            </div>
+
             <!-- Settings Grid: 2 Columns -->
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
                 <!-- Column 1: Display & Calibration -->
                 <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(0,243,255,0.25); border-radius:8px; padding:15px; display:flex; flex-direction:column; gap:12px;">
                     <h3 style="color:#00f3ff; margin:0 0 4px 0; font-size:14px; letter-spacing:1px; border-bottom:1px solid rgba(0,243,255,0.2); padding-bottom:6px;">DISPLAY & CALIBRATION</h3>
                     
+                    <!-- AMD FidelityFX Super Resolution (FSR 1.0) -->
+                    <div style="background:rgba(255, 136, 0, 0.08); border:1px solid rgba(255, 170, 0, 0.35); border-radius:6px; padding:10px; margin-bottom:4px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="color:#ffaa00; font-weight:bold; font-size:12px; letter-spacing:1px;">AMD FIDELITYFX™ SUPER RESOLUTION (FSR)</span>
+                            <span id="lbl-fsr-badge" style="background:#ffaa00; color:#000; font-size:10px; font-weight:900; padding:2px 6px; border-radius:3px;">OFF (NATIVE)</span>
+                        </div>
+                        <div style="font-size:10px; color:#aaa; margin-bottom:6px; line-height:1.4;">
+                            Edge-Adaptive Spatial Upsampling (EASU) & Contrast-Adaptive Sharpening (RCAS). Delivers high framerates on dedicated GPUs with near-native image fidelity.
+                        </div>
+                        <select id="setting-fsr-mode" class="tech-select" style="padding:6px; font-size:11px; border-color:#ffaa00; color:#ffaa00; font-weight:bold; margin-bottom:6px;">
+                            <option value="off" selected>Off (Native 1.0x Resolution)</option>
+                            <option value="ultra_quality">FSR Ultra Quality (1.3x Upscale - 77% Internal Scale)</option>
+                            <option value="quality">FSR Quality (1.5x Upscale - 67% Internal Scale - Recommended dGPU)</option>
+                            <option value="balanced">FSR Balanced (1.7x Upscale - 59% Internal Scale)</option>
+                            <option value="performance">FSR Performance (2.0x Upscale - 50% Internal Scale - Max FPS)</option>
+                        </select>
+                        <div>
+                            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+                                <span style="color:#ccc;">RCAS Sharpness</span>
+                                <span id="lbl-fsr-sharpness" style="color:#ffaa00; font-weight:bold;">80%</span>
+                            </div>
+                            <input type="range" id="setting-fsr-sharpness" min="0.0" max="1.0" step="0.05" value="0.8" class="tech-range">
+                        </div>
+                        <div id="lbl-fsr-render-res" style="font-size:10px; color:#888; margin-top:4px; font-family:monospace;">
+                            Render Target: 100% Native
+                        </div>
+                    </div>
+
                     <!-- Resolution Scaling -->
                     <div>
                         <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
-                            <span>Resolution Scale</span>
+                            <span>Display Resolution Scale</span>
                             <span id="lbl-resolution" style="color:#00ffaa; font-weight:bold;">100% (Native)</span>
                         </div>
                         <select id="setting-resolution" class="tech-select" style="padding:6px; font-size:11px;">

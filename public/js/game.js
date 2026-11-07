@@ -1,3 +1,91 @@
+
+// ============================================================================
+// HARDWARE DETECTION & DEDICATED GPU (dGPU) OPTIMIZER
+// ============================================================================
+function detectHardwareGPU() {
+    let gpu = {
+        vendor: 'Standard',
+        renderer: 'Default WebGL Renderer',
+        isDedicated: false,
+        type: 'Integrated / Default GPU',
+        name: 'Standard Graphics'
+    };
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (dbg) {
+                gpu.vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || '';
+                gpu.renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '';
+            }
+        }
+    } catch (e) {
+        console.warn('GPU Detection fallback:', e);
+    }
+    
+    const r = (gpu.renderer + ' ' + gpu.vendor).toLowerCase();
+    const isNvidia = r.includes('nvidia') || r.includes('geforce') || r.includes('rtx') || r.includes('gtx') || r.includes('quadro') || r.includes('titan');
+    const isAmd = r.includes('radeon') || r.includes('amd') || r.includes('rx ') || r.includes('rdna') || r.includes('navi');
+    const isIntelArc = r.includes('arc') || r.includes('iris xe max') || r.includes('intel arc');
+    const isAppleM = r.includes('apple') && (r.includes('m1') || r.includes('m2') || r.includes('m3') || r.includes('m4'));
+
+    if (isNvidia || isAmd || isIntelArc) {
+        gpu.isDedicated = true;
+        gpu.type = 'Dedicated High-End GPU (dGPU)';
+    } else if (isAppleM) {
+        gpu.isDedicated = true;
+        gpu.type = 'Apple Silicon Unified GPU';
+    } else if (r.includes('intel') || r.includes('uhd') || r.includes('hd graphics')) {
+        gpu.isDedicated = false;
+        gpu.type = 'Integrated GPU (iGPU)';
+    } else {
+        gpu.isDedicated = false;
+        gpu.type = 'Standard GPU';
+    }
+    
+    let cleanName = gpu.renderer;
+    if (cleanName.includes('ANGLE (')) {
+        const match = cleanName.match(/ANGLE \([^,]+,\s*([^,]+)/);
+        if (match && match[1]) cleanName = match[1].trim();
+    }
+    gpu.name = cleanName || 'Dedicated Graphics Device';
+    return gpu;
+}
+
+function optimizeForDedicatedGPU() {
+    const gpu = detectHardwareGPU();
+    gameSettings.fsrMode = 'quality'; // 67% render scale + EASU + RCAS
+    gameSettings.fsrSharpness = 0.85;
+    gameSettings.rayTracingMode = 'pathtracing';
+    gameSettings.antiAliasing = 'fxaa';
+    gameSettings.shadowQuality = 'ultra';
+    gameSettings.enableBloom = true;
+    gameSettings.bloomStrength = 1.3;
+    gameSettings.enableSSR = true;
+    gameSettings.ssrIntensity = 1.0;
+    gameSettings.enableAO = true;
+    gameSettings.aoIntensity = 1.0;
+    gameSettings.enableACES = true;
+    gameSettings.enableChromatic = true;
+    gameSettings.chromaticIntensity = 0.8;
+    gameSettings.enableAnamorphic = true;
+    gameSettings.anamorphicIntensity = 1.0;
+    gameSettings.enableVignette = true;
+    gameSettings.enableFilmGrain = true;
+    
+    applySettings();
+    saveSettings();
+    syncSettingsToUI();
+    
+    const badge = document.getElementById('lbl-gpu-type-badge');
+    if (badge) {
+        badge.innerText = '⚡ OPTIMIZED FOR dGPU!';
+        badge.style.background = '#00ffaa';
+        badge.style.color = '#000';
+    }
+}
+
 // --- Cyber-Fort 3D Core Engine & PeerJS Mesh Architecture ---
 
 // Core Three.js & Physics Systems
@@ -73,6 +161,8 @@ let gameSettings = {
     maxFps: 0,
     antiAliasing: 'fxaa', // 'off', 'fxaa', 'smaa', 'msaa', 'ssaa'
     rayTracingMode: 'pathtracing', // 'off', 'performance', 'medium', 'quality', 'pathtracing'
+    fsrMode: 'off', // 'off', 'ultra_quality', 'quality', 'balanced', 'performance'
+    fsrSharpness: 0.8,
     rtxPreset: 'ultra',
     enableBloom: true,
     bloomStrength: 1.4,
@@ -209,6 +299,9 @@ const RTXUberShader = {
         uEnableACES: { value: true },
         uRayTracingMode: { value: 4 }, // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=PathTracing
         uAntiAliasing: { value: 1 },   // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
+        uFSRMode: { value: 0 },        // 0=Off, 1=UltraQuality, 2=Quality, 3=Balanced, 4=Performance
+        uFSRSharpness: { value: 0.8 },
+        uFSRScale: { value: 1.0 },
         uEnableSSR: { value: true },
         uSSRIntensity: { value: 1.0 },
         uEnableAO: { value: true },
@@ -242,6 +335,9 @@ const RTXUberShader = {
         uniform bool uEnableACES;
         uniform int uRayTracingMode;
         uniform int uAntiAliasing;
+        uniform int uFSRMode;
+        uniform float uFSRSharpness;
+        uniform float uFSRScale;
         uniform bool uEnableSSR;
         uniform float uSSRIntensity;
         uniform bool uEnableAO;
@@ -257,6 +353,78 @@ const RTXUberShader = {
         uniform bool uEnableMotionBlur;
         uniform vec2 uMotionBlurVec;
         varying vec2 vUv;
+
+        // AMD FidelityFX Super Resolution 1.0 - Edge-Adaptive Spatial Upsampling (EASU)
+        vec4 applyFSR_EASU(vec2 uv, vec2 texel) {
+            vec2 pos = uv / texel - 0.5;
+            vec2 f = fract(pos);
+            vec2 baseUv = (floor(pos) + 0.5) * texel;
+
+            vec4 c00 = texture2D(tDiffuse, baseUv);
+            vec4 c10 = texture2D(tDiffuse, baseUv + vec2(texel.x, 0.0));
+            vec4 c01 = texture2D(tDiffuse, baseUv + vec2(0.0, texel.y));
+            vec4 c11 = texture2D(tDiffuse, baseUv + texel);
+
+            float l00 = dot(c00.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float l10 = dot(c10.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float l01 = dot(c01.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float l11 = dot(c11.rgb, vec3(0.2126, 0.7152, 0.0722));
+
+            // Directional edge gradient
+            vec2 dir;
+            dir.x = (l10 + l11) - (l00 + l01);
+            dir.y = (l01 + l11) - (l00 + l10);
+            float len = length(dir);
+
+            // Anisotropic directional weight along edge
+            float wx = f.x;
+            float wy = f.y;
+            if (len > 0.015) {
+                vec2 normDir = dir / len;
+                float dDot = dot(f - 0.5, vec2(-normDir.y, normDir.x));
+                float stretch = clamp(1.0 - abs(dDot) * 1.6, 0.2, 1.0);
+                wx = mix(f.x, smoothstep(0.0, 1.0, f.x), stretch);
+                wy = mix(f.y, smoothstep(0.0, 1.0, f.y), stretch);
+            }
+
+            vec4 colTop = mix(c00, c10, wx);
+            vec4 colBot = mix(c01, c11, wx);
+            vec4 res = mix(colTop, colBot, wy);
+
+            // Clamp between min and max local bounding box to prevent ringing
+            vec4 minC = min(min(c00, c10), min(c01, c11));
+            vec4 maxC = max(max(c00, c10), max(c01, c11));
+            return clamp(res, minC, maxC);
+        }
+
+        // AMD FidelityFX Super Resolution 1.0 - Robust Contrast-Adaptive Sharpening (RCAS)
+        vec3 applyFSR_RCAS(vec3 c, vec2 uv, vec2 texel, float sharpness) {
+            if (sharpness <= 0.01) return c;
+
+            vec3 n = texture2D(tDiffuse, clamp(uv + vec2(0.0, -texel.y), 0.0, 1.0)).rgb;
+            vec3 s = texture2D(tDiffuse, clamp(uv + vec2(0.0,  texel.y), 0.0, 1.0)).rgb;
+            vec3 w = texture2D(tDiffuse, clamp(uv + vec2(-texel.x, 0.0), 0.0, 1.0)).rgb;
+            vec3 e = texture2D(tDiffuse, clamp(uv + vec2( texel.x, 0.0), 0.0, 1.0)).rgb;
+
+            float lumaC = dot(c, vec3(0.2126, 0.7152, 0.0722));
+            float lumaN = dot(n, vec3(0.2126, 0.7152, 0.0722));
+            float lumaS = dot(s, vec3(0.2126, 0.7152, 0.0722));
+            float lumaW = dot(w, vec3(0.2126, 0.7152, 0.0722));
+            float lumaE = dot(e, vec3(0.2126, 0.7152, 0.0722));
+
+            float minLuma = min(min(min(lumaN, lumaS), min(lumaW, lumaE)), lumaC);
+            float maxLuma = max(max(max(lumaN, lumaS), max(lumaW, lumaE)), lumaC);
+
+            vec3 minCol = min(min(min(n, s), min(w, e)), c);
+            vec3 maxCol = max(max(max(n, s), max(w, e)), c);
+
+            // Contrast attenuation
+            float nz = min(minLuma, 1.0 - maxLuma) / max(0.0001, maxLuma);
+            float lobe = -sqrt(max(0.0, nz)) * (sharpness * 0.28);
+
+            vec3 sharpCol = (c + lobe * (n + s + w + e)) / (1.0 + 4.0 * lobe);
+            return clamp(sharpCol, minCol, maxCol);
+        }
 
         // ACES Filmic Tone Mapping Curve
         vec3 ACESFilm(vec3 x) {
@@ -401,7 +569,9 @@ const RTXUberShader = {
             vec2 texel = 1.0 / max(uResolution, vec2(1.0));
 
             vec4 baseColor = vec4(0.0);
-            if (uEnableMotionBlur && length(uMotionBlurVec) > 0.001) {
+            if (uFSRMode > 0) {
+                baseColor = applyFSR_EASU(uv, texel);
+            } else if (uEnableMotionBlur && length(uMotionBlurVec) > 0.001) {
                 vec2 mbStep = clamp(uMotionBlurVec * 0.02, vec2(-0.02), vec2(0.02)) / 5.0;
                 for (int i = -2; i <= 2; i++) {
                     baseColor += texture2D(tDiffuse, clamp(uv + float(i) * mbStep, 0.0, 1.0));
@@ -502,6 +672,11 @@ const RTXUberShader = {
             col = mix(vec3(gray), col, uSaturation);
             col = pow(max(col, vec3(0.0)), vec3(1.0 / max(0.01, uGamma)));
 
+            // AMD FidelityFX Robust Contrast-Adaptive Sharpening (RCAS)
+            if (uFSRMode > 0) {
+                col = applyFSR_RCAS(col, uv, texel, uFSRSharpness);
+            }
+
             // RTX Cinematic Vignette
             if (uEnableVignette) {
                 vec2 vigCoord = uv * (1.0 - uv.yx);
@@ -574,7 +749,14 @@ function applyCrosshairColor(color) {
 }
 
 function applySettings() {
-    let dpr = Math.min(2.0, window.devicePixelRatio || 1) * gameSettings.resolutionScale;
+    let fsrScale = 1.0;
+    if (gameSettings.fsrMode === 'ultra_quality') fsrScale = 0.77;
+    else if (gameSettings.fsrMode === 'quality') fsrScale = 0.67;
+    else if (gameSettings.fsrMode === 'balanced') fsrScale = 0.59;
+    else if (gameSettings.fsrMode === 'performance') fsrScale = 0.50;
+
+    let baseDpr = Math.min(2.0, window.devicePixelRatio || 1) * gameSettings.resolutionScale;
+    let dpr = baseDpr * fsrScale;
     if (gameSettings.antiAliasing === 'ssaa') {
         dpr = Math.min(2.5, dpr * 1.25);
     }
@@ -606,6 +788,11 @@ function applySettings() {
         const aaMap = { 'off': 0, 'fxaa': 1, 'smaa': 2, 'msaa': 3, 'ssaa': 4 };
         rtxPass.uniforms.uAntiAliasing.value = aaMap[gameSettings.antiAliasing] !== undefined ? aaMap[gameSettings.antiAliasing] : 1;
         
+        const fsrMap = { 'off': 0, 'ultra_quality': 1, 'quality': 2, 'balanced': 3, 'performance': 4 };
+        rtxPass.uniforms.uFSRMode.value = fsrMap[gameSettings.fsrMode] !== undefined ? fsrMap[gameSettings.fsrMode] : 0;
+        rtxPass.uniforms.uFSRSharpness.value = gameSettings.fsrSharpness !== undefined ? gameSettings.fsrSharpness : 0.8;
+        rtxPass.uniforms.uFSRScale.value = fsrScale;
+        
         rtxPass.uniforms.uEnableSSR.value = gameSettings.enableSSR;
         rtxPass.uniforms.uSSRIntensity.value = gameSettings.ssrIntensity;
         rtxPass.uniforms.uEnableAO.value = gameSettings.enableAO;
@@ -633,6 +820,23 @@ function openSettingsModal() {
     const modal = document.getElementById('settings-modal');
     if (modal) {
         modal.classList.remove('hidden');
+        const gpu = detectHardwareGPU();
+        const gpuBadge = document.getElementById('lbl-gpu-type-badge');
+        const gpuName = document.getElementById('lbl-detected-gpu-name');
+        if (gpuBadge) {
+            if (gpu.isDedicated) {
+                gpuBadge.innerText = '⚡ DEDICATED GPU (dGPU)';
+                gpuBadge.style.background = '#00ffaa';
+                gpuBadge.style.color = '#000';
+            } else {
+                gpuBadge.innerText = '🔋 ' + gpu.type.toUpperCase();
+                gpuBadge.style.background = '#ffaa00';
+                gpuBadge.style.color = '#000';
+            }
+        }
+        if (gpuName) {
+            gpuName.innerText = gpu.name + (gpu.isDedicated ? ' — Dedicated Hardware Accelerated' : '');
+        }
         syncSettingsToUI();
     }
 }
@@ -661,6 +865,8 @@ function resetSettingsToDefault() {
         maxFps: 0,
         antiAliasing: 'fxaa',
         rayTracingMode: 'pathtracing',
+        fsrMode: 'off',
+        fsrSharpness: 0.8,
         rtxPreset: 'ultra',
         enableBloom: true,
         bloomStrength: 1.4,
@@ -703,6 +909,50 @@ function syncSettingsToUI() {
 
     setVal('setting-resolution', gameSettings.resolutionScale);
     setText('lbl-resolution', (gameSettings.resolutionScale * 100).toFixed(0) + "% " + (gameSettings.resolutionScale === 1.0 ? "(Native)" : ""));
+    
+    setVal('setting-fsr-mode', gameSettings.fsrMode || 'off');
+    const fsrBadgeMap = {
+        'off': 'OFF (NATIVE)',
+        'ultra_quality': 'ULTRA QUALITY (1.3x)',
+        'quality': 'QUALITY (1.5x - dGPU)',
+        'balanced': 'BALANCED (1.7x)',
+        'performance': 'PERFORMANCE (2.0x)'
+    };
+    setText('lbl-fsr-badge', fsrBadgeMap[gameSettings.fsrMode] || 'OFF');
+    
+    setVal('setting-fsr-sharpness', gameSettings.fsrSharpness !== undefined ? gameSettings.fsrSharpness : 0.8);
+    setText('lbl-fsr-sharpness', ((gameSettings.fsrSharpness !== undefined ? gameSettings.fsrSharpness : 0.8) * 100).toFixed(0) + "%");
+
+    let scaleFactor = 1.0;
+    if (gameSettings.fsrMode === 'ultra_quality') scaleFactor = 0.77;
+    else if (gameSettings.fsrMode === 'quality') scaleFactor = 0.67;
+    else if (gameSettings.fsrMode === 'balanced') scaleFactor = 0.59;
+    else if (gameSettings.fsrMode === 'performance') scaleFactor = 0.50;
+
+    const nativeW = Math.round(window.innerWidth * (window.devicePixelRatio || 1) * gameSettings.resolutionScale);
+    const nativeH = Math.round(window.innerHeight * (window.devicePixelRatio || 1) * gameSettings.resolutionScale);
+    const renderW = Math.round(nativeW * scaleFactor);
+    const renderH = Math.round(nativeH * scaleFactor);
+
+    const renderResEl = document.getElementById('lbl-fsr-render-res');
+    if (renderResEl) {
+        if (gameSettings.fsrMode === 'off') {
+            renderResEl.innerText = `Render Target: ${nativeW}x${nativeH} (100% Native)`;
+        } else {
+            renderResEl.innerText = `Render Target: ${renderW}x${renderH} (${(scaleFactor * 100).toFixed(0)}%) → FSR ${nativeW}x${nativeH}`;
+        }
+    }
+
+    const hudFsrBadge = document.getElementById('hud-fsr-badge');
+    const hudFsrStatus = document.getElementById('hud-fsr-status');
+    if (hudFsrBadge && hudFsrStatus) {
+        if (gameSettings.fsrMode && gameSettings.fsrMode !== 'off') {
+            hudFsrBadge.style.display = 'flex';
+            hudFsrStatus.innerText = fsrBadgeMap[gameSettings.fsrMode] || 'ACTIVE';
+        } else {
+            hudFsrBadge.style.display = 'none';
+        }
+    }
     
     setVal('setting-antialiasing', gameSettings.antiAliasing || 'fxaa');
     const aaLabelMap = { 'off': 'Off (Raw)', 'fxaa': 'FXAA (Smooth)', 'smaa': 'SMAA (HQ)', 'msaa': 'MSAA (Hardware)', 'ssaa': 'TAA / SSAA (1.5x)' };
@@ -783,6 +1033,42 @@ function setupSettingsUI() {
         saveSettings();
         syncSettingsToUI();
     });
+
+    bindChange('setting-antialiasing', (e) => {
+        gameSettings.antiAliasing = e.target.value;
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindChange('setting-raytracing', (e) => {
+        gameSettings.rayTracingMode = e.target.value;
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindChange('setting-fsr-mode', (e) => {
+        gameSettings.fsrMode = e.target.value;
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindInput('setting-fsr-sharpness', (e) => {
+        gameSettings.fsrSharpness = parseFloat(e.target.value);
+        applySettings();
+        saveSettings();
+        const lbl = document.getElementById('lbl-fsr-sharpness');
+        if (lbl) lbl.innerText = (gameSettings.fsrSharpness * 100).toFixed(0) + "%";
+    });
+
+    const btnDgpuOpt = document.getElementById('btn-dgpu-optimize');
+    if (btnDgpuOpt) {
+        btnDgpuOpt.addEventListener('click', () => {
+            optimizeForDedicatedGPU();
+        });
+    }
 
     bindInput('setting-brightness', (e) => {
         gameSettings.brightness = parseFloat(e.target.value);
