@@ -1,4 +1,14 @@
 
+function updateJumpHUD() {
+    const el = document.getElementById('hud-jump-status');
+    const badge = document.getElementById('hud-jump-badge');
+    if (el) {
+        el.innerText = jumpMode.toUpperCase();
+        el.style.color = (jumpMode === 'normal') ? '#00ffaa' : '#00f3ff';
+    }
+}
+
+
 // ============================================================================
 // HARDWARE DETECTION & DEDICATED GPU (dGPU) OPTIMIZER
 // ============================================================================
@@ -155,6 +165,8 @@ let myHp = 100, myMaxHp = 100, myCoins = 0;
 let baseSpeed = 25, baseMaxSpeed = 40, mySpeed = 25, myMaxSpeed = 40;
 let myJumps = 2, myJumpsLeft = 2; 
 let jumpAntiGravityTimer = 0;
+let jumpMode = 'normal'; // 'normal' (snappy FPS jump) or 'floaty' (anti-gravity hang time)
+let isVipUnlocked = false;
 let myClass = 'assault', myEnergy = 100, myMaxEnergy = 100, energyRegen = 20, myShield = false, myLifesteal = false;
 
 // Tactical Mechanics & Perspective
@@ -274,7 +286,10 @@ const WEAPON_STATS = {
     'pistol': { name: 'Golden Eagle', type: 'gun', fireRate: 7, damage: 35, color: 0xffd700, spread: 0 },
     'lmg': { name: 'LMG', type: 'gun', fireRate: 4, damage: 22, color: 0xff8800, spread: 0.035 },
     'katana': { name: 'Katana', type: 'melee', fireRate: 14, damage: 90, range: 7.0, color: 0xffffff },
-    'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 }
+    'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 },
+    // Exclusive KOTH (King of the Hill) Weapons
+    'knockback_rifle': { name: 'Knockback Rifle', type: 'gun', fireRate: 8, damage: 0, color: 0x00f3ff, spread: 0, knockback: 85, lift: 18 },
+    'knock_stick': { name: 'Knock Stick', type: 'melee', fireRate: 13, damage: 0, range: 8.5, color: 0xffd700, knockback: 260, lift: 140 }
 };
 
 let myInventory = ['default', null, null, null, null];
@@ -1490,6 +1505,15 @@ const ABILITY_DEFINITIONS = {
         cost: 150,
         color: '#00ffaa',
         cooldown: 8.0
+    },
+    'smite': {
+        name: 'DIVINE SMITE',
+        icon: '⚡☠️',
+        desc: 'ADMIN VIP EXCLUSIVE: Instant 1-hit execution. Triggers exclusive cinematic on caster & victim.',
+        cost: 0,
+        color: '#ffd700',
+        cooldown: 5.0,
+        vipLocked: true
     }
 };
 
@@ -1534,10 +1558,130 @@ function castActiveAbility() {
         castOvercharge();
     } else if (myActiveAbility === 'nanite_regen') {
         castNaniteRegen();
+    } else if (myActiveAbility === 'smite') {
+        castSmite();
     }
     
     abilityCooldownTimer = ab.cooldown;
     updateAbilityHUD();
+}
+
+
+// ============================================================================
+// DIVINE SMITE EXECUTION SYSTEM & CINEMATIC CONTROLLER
+// ============================================================================
+function playSmiteCinematic() {
+    const container = document.getElementById('smite-cinematic-container');
+    const video = document.getElementById('smite-cinematic-video');
+    if (!container || !video) return;
+
+    container.style.display = 'flex';
+    video.currentTime = 0;
+    video.muted = false;
+
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(err => {
+            console.warn('Smite cinematic sound autoplay blocked, retrying muted:', err);
+            video.muted = true;
+            video.play();
+        });
+    }
+
+    const closeCinematic = () => {
+        video.pause();
+        container.style.display = 'none';
+        video.onended = null;
+    };
+
+    video.onended = closeCinematic;
+
+    const skipBtn = document.getElementById('smite-cinematic-skip');
+    if (skipBtn) skipBtn.onclick = closeCinematic;
+
+    // Safety fallback: auto-close after 12 seconds
+    setTimeout(closeCinematic, 12000);
+}
+
+function castSmite() {
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const targets = [];
+    mapMeshes.forEach(m => targets.push(m));
+    Object.keys(remotePlayers).forEach(pid => { if (remotePlayers[pid]?.mesh) targets.push(remotePlayers[pid].mesh); });
+    activeBots.forEach(b => { if (b?.mesh && b.hp > 0) targets.push(b.mesh); });
+
+    const intersects = raycaster.intersectObjects(targets, true);
+    const hitPoint = intersects.length > 0 ? intersects[0].point.clone() : new THREE.Vector3().copy(camera.position).add(raycaster.ray.direction.multiplyScalar(80));
+
+    // Divine golden lightning pillar VFX
+    const smiteGeo = new THREE.CylinderGeometry(1.6, 3.8, 220, 16);
+    const smiteMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.95 });
+    const smitePillar = new THREE.Mesh(smiteGeo, smiteMat);
+    smitePillar.position.set(hitPoint.x, hitPoint.y + 110, hitPoint.z);
+    scene.add(smitePillar);
+
+    const smiteRingGeo = new THREE.RingGeometry(2, 18, 32);
+    smiteRingGeo.rotateX(-Math.PI / 2);
+    const smiteRingMat = new THREE.MeshBasicMaterial({ color: 0xffea00, side: THREE.DoubleSide, transparent: true, opacity: 0.95 });
+    const smiteRing = new THREE.Mesh(smiteRingGeo, smiteRingMat);
+    smiteRing.position.copy(hitPoint);
+    smiteRing.position.y += 0.25;
+    scene.add(smiteRing);
+
+    setTimeout(() => {
+        scene.remove(smitePillar);
+        scene.remove(smiteRing);
+    }, 450);
+
+    createHitSpark(hitPoint, 0xffd700);
+
+    // Check victim hit
+    if (intersects.length > 0) {
+        let cur = intersects[0].object;
+        let botId = null;
+        let peerId = null;
+        while (cur) {
+            if (cur.userData?.botId) { botId = cur.userData.botId; break; }
+            if (cur.userData?.peerId) { peerId = cur.userData.peerId; break; }
+            cur = cur.parent;
+        }
+
+        if (botId) {
+            const b = activeBots.find(x => x.id === botId);
+            if (b && b.hp > 0) {
+                b.hp = 0;
+                b.deaths = (b.deaths || 0) + 1;
+                myKills++;
+                myCoins += 100;
+                updateUI();
+                saveLocalProfile();
+                adminLog(`⚡ [SMITE] Divine Execution on ${b.name}!`);
+                // Play cinematic for caster
+                playSmiteCinematic();
+            }
+        } else if (peerId && remotePlayers[peerId]) {
+            // 1-HIT KILL: Send lethal damage and cinematic packet specifically to victim
+            netSendTo(peerId, {
+                type: 'hit',
+                damage: 9999,
+                shooter: myPeerId,
+                isSmite: true
+            });
+            netSendTo(peerId, {
+                type: 'play_smite_cinematic',
+                caster: myUsername,
+                victim: remotePlayers[peerId].username
+            });
+            myKills++;
+            myCoins += 100;
+            updateUI();
+            saveLocalProfile();
+            adminLog(`⚡ [SMITE] Divine Execution on ${remotePlayers[peerId].username}!`);
+            // Play cinematic for caster
+            playSmiteCinematic();
+        }
+    }
 }
 
 function castLightning() {
@@ -1850,7 +1994,9 @@ function spawnBots(count, difficulty, split, gamemode) {
     });
     activeBots = [];
 
-    const botGuns = ['default', 'smg', 'golden_eagle', 'shotgun', 'sniper'];
+    const botGuns = (gamemode === 'KOTH') 
+        ? ['knockback_rifle', 'knock_stick'] 
+        : ['default', 'smg', 'golden_eagle', 'shotgun', 'sniper'];
 
     for (let i = 0; i < count; i++) {
         const botName = BOT_NAMES[i % BOT_NAMES.length];
@@ -1907,28 +2053,45 @@ function spawnBots(count, difficulty, split, gamemode) {
     }
 }
 
+function getTerrainHeightAt(x, z) {
+    if (!mapMeshes || mapMeshes.length === 0) return 0;
+    const ray = new THREE.Raycaster(
+        new THREE.Vector3(x, 150, z),
+        new THREE.Vector3(0, -1, 0),
+        0,
+        250
+    );
+    const hits = ray.intersectObjects(mapMeshes, false);
+    if (hits.length > 0) {
+        return hits[0].point.y;
+    }
+    return 0;
+}
+
 function getBotSpawnPoint(team, gamemode) {
-    let x = 0, y = 4, z = 0;
+    let x = 0, y = 1.0, z = 0;
     if (gamemode === 'TDM' || gamemode === 'CTF') {
         if (team === 'red') {
             x = 450 + (Math.random() - 0.5) * 30;
-            y = 70;
             z = (Math.random() - 0.5) * 30;
         } else if (team === 'blue') {
             x = -450 + (Math.random() - 0.5) * 30;
-            y = 70;
             z = (Math.random() - 0.5) * 30;
         } else {
-            x = (Math.random() - 0.5) * 80;
-            y = 20;
-            z = (Math.random() - 0.5) * 80;
+            x = (Math.random() - 0.5) * 70;
+            z = (Math.random() - 0.5) * 70;
         }
+    } else if (gamemode === 'KOTH') {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 35 + Math.random() * 25;
+        x = Math.cos(angle) * radius;
+        z = Math.sin(angle) * radius;
     } else {
-        x = (Math.random() - 0.5) * 120;
-        y = 20;
-        z = (Math.random() - 0.5) * 120;
+        x = (Math.random() - 0.5) * 100;
+        z = (Math.random() - 0.5) * 100;
     }
-    return new THREE.Vector3(x, y, z);
+    y = getTerrainHeightAt(x, z);
+    return new THREE.Vector3(x, y + 0.5, z);
 }
 
 function updateBots(dt) {
@@ -2015,6 +2178,25 @@ function updateBots(dt) {
             } else {
                 bot.pos.addScaledVector(bot.moveDir, speed * 0.5 * dt);
                 moving = true;
+            }
+
+            // Real-Time Physics: Gravity & Terrain Surface Tracking
+            bot.velocityY = (bot.velocityY || 0) - 55 * dt;
+            bot.pos.y += bot.velocityY * dt;
+
+            const floorY = getTerrainHeightAt(bot.pos.x, bot.pos.z);
+            if (bot.pos.y <= floorY) {
+                bot.pos.y = floorY;
+                bot.velocityY = 0;
+            }
+
+            // Void fall elimination
+            if (bot.pos.y < -30) {
+                bot.hp = 0;
+                bot.deaths = (bot.deaths || 0) + 1;
+                bot.respawnTimer = 2.5;
+                bot.mesh.visible = false;
+                adminLog(`${bot.name} fell into the abyss.`);
             }
 
             bot.mesh.position.copy(bot.pos);
@@ -3348,6 +3530,12 @@ function initGamemode(mode, isNewGame = true) {
             myInventory = ['default', null, null, null, null];
             currentSlot = 0;
             if (typeof window.equipSlot === 'function') window.equipSlot(0);
+        } else if (mode === 'KOTH') {
+            // KOTH Exclusive: Only Knockback Rifle & Knock Stick are allowed
+            myInventory = ['knockback_rifle', 'knock_stick', null, null, null];
+            myOwnedWeapons = ['knockback_rifle', 'knock_stick'];
+            currentSlot = 0;
+            if (typeof window.equipSlot === 'function') window.equipSlot(0);
         }
     }
     
@@ -3620,6 +3808,7 @@ function init() {
 
     loadSettings();
     setupSettingsUI();
+    updateJumpHUD();
     applySettings();
 
     // Cannon.js Physics
@@ -3686,7 +3875,7 @@ function initJoysticks() {
         const el = document.getElementById(id); 
         el.addEventListener('touchstart', (e)=>{ e.preventDefault(); e.stopPropagation(); fn(); }, { passive:false }); 
     };
-    bindTouch('btn-m-jump', () => { if (myJumpsLeft>0){ playerBody.velocity.y = 25; jumpAntiGravityTimer = 0.5; myJumpsLeft--; canJump = false; } });
+    bindTouch('btn-m-jump', () => { if (myJumpsLeft>0){ playerBody.velocity.y = (jumpMode === 'normal' ? 22 : 25); jumpAntiGravityTimer = (jumpMode === 'normal' ? 0 : 0.5); myJumpsLeft--; canJump = false; } });
     bindTouch('btn-m-ability', () => triggerAbility()); 
     bindTouch('btn-m-scope', () => toggleScope());
 }
@@ -3701,7 +3890,7 @@ function updateGamepads() {
         if (Math.abs(gp.axes[3]) > deadzone) gpLookY = gp.axes[3]; else if (!isMobile) gpLookY = 0;
         
         if (!gpBtnPrev[gp.index]) gpBtnPrev[gp.index] = []; const prev = gpBtnPrev[gp.index];
-        if (gp.buttons[0]?.pressed && !prev[0]) { if (myJumpsLeft > 0) { playerBody.velocity.y = 25; jumpAntiGravityTimer = 0.5; myJumpsLeft--; canJump = false; } }
+        if (gp.buttons[0]?.pressed && !prev[0]) { if (myJumpsLeft > 0) { playerBody.velocity.y = (jumpMode === 'normal' ? 22 : 25); jumpAntiGravityTimer = (jumpMode === 'normal' ? 0 : 0.5); myJumpsLeft--; canJump = false; } }
         if (gp.buttons[2]?.pressed && !prev[2]) triggerAbility();
         if (gp.buttons[1]?.pressed && !prev[1]) toggleCrouch(); 
         if (gp.buttons[10]?.pressed && !prev[10]) isThirdPerson = !isThirdPerson; 
@@ -3940,6 +4129,9 @@ function updateViewModel(weaponType) {
 }
 
 window.equipSlot = function(index) {
+    if (gameState.mode === 'KOTH' || currentGamemode === 'KOTH') {
+        if (index > 1) return; // In KOTH only slots 0 (Knockback Rifle) and 1 (Knock Stick) are usable
+    }
     currentSlot = index;
     for(let i=0; i<5; i++) {
         const el = document.getElementById(`slot-${i}`);
@@ -3998,16 +4190,40 @@ function setupUIEvents() {
     };
     document.getElementById('btn-vip-login').onclick = () => { 
         if (document.getElementById('vip-password').value === 'Seth1234@!') { 
+            isVipUnlocked = true;
             document.getElementById('vip-modal').classList.add('hidden'); 
+            const smiteSec = document.getElementById('vip-smite-section');
+            if (smiteSec) smiteSec.style.display = 'block';
             opCards.forEach(c => c.apply()); 
+            myActiveAbility = 'smite';
+            updateAbilityHUD();
+            saveLocalProfile();
             updateUI(); 
-            alert("VIP UNLOCKED!"); 
+            alert("⚡ VIP UNLOCKED: DIVINE SMITE ABILITY GRANTED!\nInstant 1-Hit Execution [Q] with exclusive Cinematic!"); 
             netBroadcast({ type: 'vip' }); 
             if (isMobileDeploy && myHp > 0) showMobileControls(); 
         } else {
             alert("Incorrect VIP Passcode.");
         }
     };
+
+    const btnEquipSmite = document.getElementById('btn-vip-equip-smite');
+    if (btnEquipSmite) {
+        btnEquipSmite.onclick = () => {
+            myActiveAbility = 'smite';
+            updateAbilityHUD();
+            saveLocalProfile();
+            alert("⚡ DIVINE SMITE MODULE EQUIPPED!\nPress [Q] to execute targets in 1 hit with cinematic execution!");
+        };
+    }
+
+    const hudJumpBadge = document.getElementById('hud-jump-badge');
+    if (hudJumpBadge) {
+        hudJumpBadge.onclick = () => {
+            jumpMode = (jumpMode === 'normal') ? 'floaty' : 'normal';
+            updateJumpHUD();
+        };
+    }
 
     // Admin Terminal Trigger & Login
     document.getElementById('admin-trigger').onclick = () => { 
@@ -4077,6 +4293,18 @@ function setupUIEvents() {
             }
         };
 
+        const btnAdminSmite = document.getElementById('btn-admin-equip-smite');
+        if (btnAdminSmite) {
+            btnAdminSmite.onclick = () => {
+                isVipUnlocked = true;
+                myActiveAbility = 'smite';
+                updateAbilityHUD();
+                saveLocalProfile();
+                adminLog("⚡ Equipped DIVINE SMITE on local operator!");
+                alert("⚡ DIVINE SMITE EQUIPPED!\nPress [Q] to execute targets in 1 hit with cinematic execution!");
+            };
+        }
+
         document.getElementById('btn-admin-vip').onclick = () => {
             if (adminSelectedPeer && remotePlayers[adminSelectedPeer]) {
                 netSendTo(adminSelectedPeer, { 
@@ -4136,6 +4364,12 @@ function setupUIEvents() {
                 
                 if (type === 'ability') {
                     const abId = btnEl.getAttribute('data-id');
+                    if (abId === 'smite' && !isVipUnlocked) {
+                        alert("ACCESS DENIED: Divine Smite is locked with the Admin Passcode!\nAccess through the VIP terminal.");
+                        document.getElementById('shop-modal').classList.add('hidden');
+                        document.getElementById('vip-modal').classList.remove('hidden');
+                        return;
+                    }
                     if (ABILITY_DEFINITIONS[abId]) {
                         myActiveAbility = abId;
                         updateAbilityHUD();
@@ -4216,11 +4450,20 @@ function onKeyDown(e) {
         case 'KeyD': moveRight = true; break;
         case 'Space': 
             if (myJumpsLeft > 0) { 
-                playerBody.velocity.y = 25; 
-                jumpAntiGravityTimer = 0.5; 
+                if (jumpMode === 'normal') {
+                    playerBody.velocity.y = 22; // Snappy standard FPS jump
+                    jumpAntiGravityTimer = 0;   // No floatiness!
+                } else {
+                    playerBody.velocity.y = 25; // Floaty jump
+                    jumpAntiGravityTimer = 0.5; // Anti-gravity hang time
+                }
                 myJumpsLeft--; 
                 canJump = false; 
             } 
+            break;
+        case 'KeyJ':
+            jumpMode = (jumpMode === 'normal') ? 'floaty' : 'normal';
+            updateJumpHUD();
             break;
         case 'ShiftLeft': 
             isSprinting = !isSprinting; 
@@ -4400,6 +4643,27 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
             let finalDamage = damage;
             const dist = camera.position.distanceTo(hitPoint);
 
+            const wStats = WEAPON_STATS[myGun];
+            if (wStats && wStats.knockback) {
+                const kDir = new THREE.Vector3().subVectors(hitPoint, camera.position).normalize();
+                kDir.y = 0.2;
+                kDir.normalize();
+                if (isBotHit) {
+                    const b = activeBots.find(x => x.id === hitId);
+                    if (b) {
+                        b.pos.addScaledVector(kDir, wStats.knockback * 0.15);
+                        b.velocityY = wStats.lift || 15;
+                    }
+                } else if (remotePlayers[hitId]) {
+                    netSendTo(hitId, { 
+                        type: 'knockback', 
+                        forceX: kDir.x * wStats.knockback, 
+                        forceY: wStats.lift || 15, 
+                        forceZ: kDir.z * wStats.knockback 
+                    });
+                }
+            }
+
             if (myGun === 'sniper') {
                 if (isHeadshot) {
                     finalDamage = targetMaxHp;
@@ -4441,9 +4705,14 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
         endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(350)); 
     }
     
-    const bMat = new THREE.MeshBasicMaterial({ color: colorHex }); 
-    const bullet = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8.0, 8), bMat); 
+    const bMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.95 }); 
+    const bullet = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 9.0, 8), bMat); 
     bullet.geometry.rotateX(Math.PI/2);
+
+    // Glowing white-hot projectile tip for intense visibility
+    const tipMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    tipMesh.position.set(0, 0, 4.5);
+    bullet.add(tipMesh);
     
     let startPoint = new THREE.Vector3().copy(camera.position); 
     if (isThirdPerson && !isScoped && myAvatar && myAvatar.gunContainer) {
@@ -4454,14 +4723,17 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
     bullet.lookAt(endPoint); 
     scene.add(bullet);
 
-    const dir = new THREE.Vector3().subVectors(endPoint, startPoint).normalize(); 
-    bullet.position.add(dir.multiplyScalar(4));
+    const dist = startPoint.distanceTo(endPoint);
+    // Smooth visible duration: 0.10s to 0.22s (visible to the human eye, perfectly responsive)
+    const travelTime = Math.min(0.22, Math.max(0.10, dist / 280));
+
     activeBullets.push({ 
         mesh: bullet, 
-        start: new THREE.Vector3().copy(bullet.position), 
-        end: endPoint, 
+        start: startPoint.clone(), 
+        end: endPoint.clone(), 
         progress: 0,
-        speed: 35 
+        travelTime: travelTime,
+        color: colorHex
     });
 }
 
@@ -5571,16 +5843,15 @@ function animate() {
             if (r.nametag) r.nametag.quaternion.copy(camera.quaternion);
         });
 
-        // Bullet Tracers (Supersonic High-Velocity)
+        // Visible Cyberpunk Laser Tracers (Smooth travel & impact sparks)
         for(let i=activeBullets.length-1; i>=0; i--) {
             const b = activeBullets[i]; 
-            const dist = b.start.distanceTo(b.end); 
-            const speed = b.speed || 35;
-            const step = dist > 0.001 ? speed / dist : 1.0; 
+            const step = (1 / 60) / (b.travelTime || 0.15);
             b.progress += step;
             if (b.progress >= 1.0) { 
                 scene.remove(b.mesh); 
                 activeBullets.splice(i, 1); 
+                createHitSpark(b.end, b.color || 0x00f3ff);
             } else { 
                 b.mesh.position.lerpVectors(b.start, b.end, b.progress); 
             }

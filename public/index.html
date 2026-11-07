@@ -52,6 +52,10 @@
             <span style="color:#ffaa00;">⚡</span>
             <span>FSR: <strong id="hud-fsr-status" style="color:#00ffaa;">QUALITY</strong></span>
         </div>
+        <div class="tactical-badge" id="hud-jump-badge" style="border-color:rgba(0, 243, 255, 0.4); color:#00f3ff; cursor:pointer;" title="Click or Press J to Toggle">
+            <span style="color:#00f3ff;">🚀</span>
+            <span>[J] JUMP: <strong id="hud-jump-status" style="color:#00ffaa;">NORMAL</strong></span>
+        </div>
         <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
             <span>[W+R] CLIMB WALL</span>
         </div>
@@ -578,6 +582,7 @@
                         <button class="shop-btn buy-btn" data-type="ability" data-id="vampiric_drain" data-cost="280" style="border-color:#ff0055; color:#ff0055; font-weight:bold;">🩸 Vampiric Drain (280c)</button>
                         <button class="shop-btn buy-btn" data-type="ability" data-id="overcharge" data-cost="240" style="border-color:#ffd700; color:#ffd700; font-weight:bold;">⚡ Overcharge (240c)</button>
                         <button class="shop-btn buy-btn" data-type="ability" data-id="nanite_regen" data-cost="150" style="border-color:#00ffaa; color:#00ffaa; font-weight:bold;">💚 Nanite Repair (150c)</button>
+                        <button class="shop-btn buy-btn" data-type="ability" data-id="smite" data-cost="0" style="border-color:#ffd700; color:#ffd700; font-weight:bold; background:rgba(255,215,0,0.12); box-shadow:0 0 10px rgba(255,215,0,0.3);">⚡☠️ Divine Smite (VIP / Admin Access)</button>
                     </div>
                 </div>
 
@@ -600,6 +605,9 @@
             <p class="desc" style="text-align:center; color:#aaa;">Enter clearance code to override statistics.</p>
             <input type="password" id="vip-password" placeholder="Enter Access Key" class="glass-input">
             <button id="btn-vip-login" class="shop-btn vip-border vip-text">Unlock VIP</button>
+            <div id="vip-smite-section" style="display:none; margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,215,0,0.3);">
+                <button id="btn-vip-equip-smite" class="shop-btn" style="border-color:#ffd700; color:#ffd700; background:rgba(255,215,0,0.15); font-weight:900;">⚡ EQUIP DIVINE SMITE (1-HIT KILL)</button>
+            </div>
             <button id="btn-vip-close" class="close-btn" style="margin-top:10px;">Close</button>
         </div>
     </div>
@@ -699,6 +707,7 @@
                         </div>
                         
                         <button id="btn-admin-give-card" class="shop-btn" style="border-color:#aa00ff; color:#aa00ff; padding:10px;">INJECT RANDOM ABILITY</button>
+                        <button id="btn-admin-equip-smite" class="shop-btn" style="border-color:#ffd700; color:#ffd700; background:rgba(255,215,0,0.15); font-weight:900; padding:10px;">⚡ EQUIP DIVINE SMITE (1-HIT KILL)</button>
                         
                         <div style="display:flex; gap:10px; margin-top:auto;">
                             <button id="btn-admin-vip" class="shop-btn" style="flex:1; border-color:#ffd700; color:#ffd700; background:rgba(255,215,0,0.1);">GRANT VIP</button>
@@ -732,13 +741,14 @@
         </div>
     </div>
 
-    <div id="draft-modal" class="modal hidden">
-        <div class="modal-content glass" style="max-width:800px; width:100%; border-color:#ff0055; box-shadow:0 0 30px rgba(255,0,85,0.4);">
-            <h2 id="draft-title" class="neon-text" style="color:#ff0055; text-shadow:0 0 10px #ff0055; font-size:2rem;">SYSTEM FAILURE</h2>
-            <p style="text-align:center; color:#ccc; letter-spacing:2px;">SELECT A TACTICAL ABILITY MODULE TO REDEPLOY</p>
-            <div id="draft-options" style="display:flex; gap:15px; margin-top:30px; flex-wrap:wrap; justify-content:center;">
-                <!-- Cards injected here -->
-            </div>
+    <!-- Tactical Redeploy Modal (No free card selection on death, preserving Shop economy) -->
+    <div id="respawn-modal" class="modal hidden">
+        <div class="modal-content glass" style="max-width:400px; width:100%; text-align:center; border-color:#ff0055; box-shadow:0 0 30px rgba(255,0,85,0.4); padding:30px 24px;">
+            <h2 class="neon-text" style="color:#ff0055; text-shadow:0 0 15px #ff0055; font-size:2rem; margin:0 0 10px 0;">TACTICAL FAILURE</h2>
+            <p id="respawn-killer-text" style="color:#aaa; font-size:13px; margin-bottom:18px;">You were eliminated in combat.</p>
+            <div style="font-size:11px; color:#00f3ff; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">REDEPLOY IN</div>
+            <div id="respawn-timer-display" style="font-size:42px; font-weight:900; color:#00ffaa; font-family:monospace; margin-bottom:20px; text-shadow:0 0 12px rgba(0,255,170,0.6);">3</div>
+            <button id="btn-respawn-now" class="deploy-btn" style="width:100%; padding:12px; font-size:13px; background:rgba(0,243,255,0.15); border-color:#00f3ff; color:#00f3ff; font-weight:900;">REDEPLOY IMMEDIATELY</button>
         </div>
     </div>
 
@@ -783,6 +793,11 @@
         <button class="m-btn" id="btn-m-jump">JUMP</button>
         <button class="m-btn" id="btn-m-ability">SKILL</button>
         <button class="m-btn" id="btn-m-scope">AIM</button>
+    </div>
+    <!-- Smite Cinematic Overlay (Seen strictly by Caster and Victim) -->
+    <div id="smite-cinematic-container" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9999999; background:#000; align-items:center; justify-content:center; flex-direction:column;">
+        <video id="smite-cinematic-video" src="Smite_Cinematic.mp4" playsinline style="width:100%; height:100%; object-fit:contain;"></video>
+        <div id="smite-cinematic-skip" style="position:absolute; bottom:25px; right:30px; color:#aaa; font-size:12px; font-family:monospace; cursor:pointer; background:rgba(0,0,0,0.75); padding:8px 14px; border:1px solid #555; border-radius:4px; z-index:10000000; letter-spacing:1px;">[CLICK / SPACE TO SKIP]</div>
     </div>
 </body>
 </html>
