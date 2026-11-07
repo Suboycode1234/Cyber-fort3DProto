@@ -17,8 +17,8 @@ const I5_4590_DEFAULT_SETTINGS = {
     fsrSharpness: 0.8,
     rtxPreset: 'i5_4590',
     enableBloom: false,            // Bypasses UnrealBloomPass 5-mip Gaussian blur
-    bloomStrength: 0.8,
-    bloomRadius: 0.5,
+    bloomStrength: 0.4,
+    bloomRadius: 0.35,
     enableSSR: false,              // No SSR overhead
     ssrIntensity: 0.0,
     enableAO: false,               // No SSAO overhead
@@ -112,24 +112,24 @@ function optimizeForI5_4590() {
 
 function optimizeForDedicatedGPU() {
     gameSettings.fsrMode = 'quality'; // 67% render scale + EASU + RCAS
-    gameSettings.fsrSharpness = 0.85;
-    gameSettings.rayTracingMode = 'pathtracing';
+    gameSettings.fsrSharpness = 0.65;
+    gameSettings.rayTracingMode = 'quality'; // High-fidelity raymarching
     gameSettings.antiAliasing = 'fxaa';
-    gameSettings.shadowQuality = 'ultra';
+    gameSettings.shadowQuality = 'high';
     gameSettings.enableBloom = true;
-    gameSettings.bloomStrength = 1.3;
+    gameSettings.bloomStrength = 0.45; // Subtle, silky-smooth neon glow
+    gameSettings.bloomRadius = 0.4;
     gameSettings.enableSSR = true;
-    gameSettings.ssrIntensity = 1.0;
+    gameSettings.ssrIntensity = 0.6;
     gameSettings.enableAO = true;
-    gameSettings.aoIntensity = 1.0;
+    gameSettings.aoIntensity = 0.5;
     gameSettings.enableACES = true;
-    gameSettings.enableChromatic = true;
-    gameSettings.chromaticIntensity = 0.8;
-    gameSettings.enableAnamorphic = true;
-    gameSettings.anamorphicIntensity = 1.0;
-    gameSettings.enableVignette = true;
-    gameSettings.enableFilmGrain = true;
-    gameSettings.rtxPreset = 'ultra';
+    gameSettings.enableChromatic = false; // Crystal-clear competitive vision
+    gameSettings.enableAnamorphic = false; // No distracting horizontal stripes
+    gameSettings.enableVignette = false;   // No blackened screen borders
+    gameSettings.enableFilmGrain = false;  // No TV static noise
+    gameSettings.enableMotionBlur = false;
+    gameSettings.rtxPreset = 'high';
     
     applySettings();
     saveSettings();
@@ -477,7 +477,7 @@ const RTXUberShader = {
 
             // Contrast attenuation
             float nz = min(minLuma, 1.0 - maxLuma) / max(0.0001, maxLuma);
-            float lobe = -sqrt(max(0.0, nz)) * (sharpness * 0.28);
+            float lobe = -sqrt(max(0.0, nz)) * (sharpness * 0.16);
 
             vec3 sharpCol = (c + lobe * (n + s + w + e)) / (1.0 + 4.0 * lobe);
             return clamp(sharpCol, minCol, maxCol);
@@ -650,7 +650,8 @@ const RTXUberShader = {
             } else if (uEnableChromatic) {
                 vec2 distFromCenter = uv - 0.5;
                 float distSq = dot(distFromCenter, distFromCenter);
-                vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.028;
+                // Subtle high-end optical lens dispersion (0.008 instead of 0.028)
+                vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.008;
                 float r = texture2D(tDiffuse, clamp(uv + offset, 0.0, 1.0)).r;
                 float g = texture2D(tDiffuse, uv).g;
                 float b = texture2D(tDiffuse, clamp(uv - offset, 0.0, 1.0)).b;
@@ -661,93 +662,95 @@ const RTXUberShader = {
 
             vec3 col = baseColor.rgb;
 
-            // Ray Tracing & Path Tracing Evaluation
+            // Ray Tracing & Path Tracing Evaluation (Stable spatial sampling, zero temporal jitter)
             if (uRayTracingMode > 0) {
-                float noise = fract(sin(dot(uv * 12.9898 + uTime * 0.05, vec2(12.9898, 78.233))) * 43758.5453);
-                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.45;
+                float noise = fract(sin(dot(uv * 12.9898, vec2(12.9898, 78.233))) * 43758.5453);
+                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.35;
                 
                 if (uRayTracingMode == 1) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.02, 0.7), 0.35, 4, noise, hitConf);
-                    col += rCol * hitConf * fresnel * 0.95 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.7), 0.35, 4, 0.5, hitConf);
+                    col += rCol * hitConf * fresnel * 0.65 * uSSRIntensity;
                 } else if (uRayTracingMode == 2) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.03, 0.75), 0.45, 8, noise, hitConf);
-                    col += rCol * hitConf * fresnel * 1.15 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.75), 0.45, 8, 0.5, hitConf);
+                    col += rCol * hitConf * fresnel * 0.85 * uSSRIntensity;
                 } else if (uRayTracingMode == 3) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2((noise - 0.5) * 0.04, 0.8), 0.55, 16, noise, hitConf);
-                    col += rCol * hitConf * fresnel * 1.35 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.8), 0.55, 16, 0.5, hitConf);
+                    col += rCol * hitConf * fresnel * 1.05 * uSSRIntensity;
                 } else if (uRayTracingMode == 4) {
                     vec3 ptRadiance = computePathTracing(uv, texel, uTime);
-                    col += ptRadiance * uSSRIntensity;
+                    col += ptRadiance * (0.65 * uSSRIntensity);
                 }
             } else if (uEnableSSR) {
                 vec2 refUV = vec2(uv.x, 1.0 - uv.y * 0.88);
-                float jitter = fract(sin(dot(uv * 12.9898 + uTime * 0.04, vec2(12.9898, 78.233))) * 43758.5453);
-                refUV.x += (jitter - 0.5) * 0.007;
                 vec4 refSample = texture2D(tDiffuse, clamp(refUV, 0.0, 1.0));
-                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.42;
+                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.3;
                 float luma = dot(refSample.rgb, vec3(0.299, 0.587, 0.114));
-                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.45, 0.9, luma) * uSSRIntensity;
+                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.55, 0.95, luma) * uSSRIntensity;
                 col += ssr;
             }
 
-            // RTX Ambient Occlusion / Contact Shadows
+            // RTX Ambient Occlusion / Soft Contact Shadows
             if (uEnableAO) {
                 float c0 = dot(texture2D(tDiffuse, uv).rgb, vec3(0.333));
-                float c1 = dot(texture2D(tDiffuse, clamp(uv + vec2(2.5, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c2 = dot(texture2D(tDiffuse, clamp(uv - vec2(2.5, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c3 = dot(texture2D(tDiffuse, clamp(uv + vec2(0.0, 2.5) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c4 = dot(texture2D(tDiffuse, clamp(uv - vec2(0.0, 2.5) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c1 = dot(texture2D(tDiffuse, clamp(uv + vec2(2.0, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c2 = dot(texture2D(tDiffuse, clamp(uv - vec2(2.0, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c3 = dot(texture2D(tDiffuse, clamp(uv + vec2(0.0, 2.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
+                float c4 = dot(texture2D(tDiffuse, clamp(uv - vec2(0.0, 2.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
                 float edge = abs(c0 - c1) + abs(c0 - c2) + abs(c0 - c3) + abs(c0 - c4);
-                float ao = 1.0 - clamp(edge * 0.75 * uAOIntensity, 0.0, 0.45);
+                float ao = 1.0 - clamp(edge * 0.45 * uAOIntensity, 0.0, 0.3);
                 col *= ao;
             }
 
-            // RTX Anamorphic Cyberpunk Glare Streaks
+            // RTX Anamorphic Cyberpunk Glare Streaks (High threshold > 0.88 to avoid streaks on regular walls)
             if (uEnableAnamorphic) {
                 vec3 streak = vec3(0.0);
                 for (int i = 1; i <= 5; i++) {
                     float fi = float(i);
-                    vec4 sL = texture2D(tDiffuse, clamp(uv - vec2(fi * 8.0 * texel.x, 0.0), 0.0, 1.0));
-                    vec4 sR = texture2D(tDiffuse, clamp(uv + vec2(fi * 8.0 * texel.x, 0.0), 0.0, 1.0));
+                    vec4 sL = texture2D(tDiffuse, clamp(uv - vec2(fi * 6.0 * texel.x, 0.0), 0.0, 1.0));
+                    vec4 sR = texture2D(tDiffuse, clamp(uv + vec2(fi * 6.0 * texel.x, 0.0), 0.0, 1.0));
                     float lL = dot(sL.rgb, vec3(0.299, 0.587, 0.114));
                     float lR = dot(sR.rgb, vec3(0.299, 0.587, 0.114));
-                    streak += (smoothstep(0.72, 1.0, lL) * sL.rgb + smoothstep(0.72, 1.0, lR) * sR.rgb) * (0.045 / fi);
+                    streak += (smoothstep(0.88, 1.0, lL) * sL.rgb + smoothstep(0.88, 1.0, lR) * sR.rgb) * (0.035 / fi);
                 }
                 col += streak * uAnamorphicIntensity * vec3(0.2, 0.7, 1.0);
             }
 
-            // ACES Filmic Tone Mapping
+            // ACES Filmic Tone Mapping (Clean single-stage cinema curve: deep blacks, punchy highlights)
             if (uEnableACES) {
                 col = ACESFilm(col);
             }
 
             // Display Calibration: Brightness, Contrast, Saturation, Gamma
-            col *= uBrightness;
-            col = (col - 0.5) * uContrast + 0.5;
-            float gray = dot(col, vec3(0.299, 0.587, 0.114));
-            col = mix(vec3(gray), col, uSaturation);
-            col = pow(max(col, vec3(0.0)), vec3(1.0 / max(0.01, uGamma)));
+            if (abs(uBrightness - 1.0) > 0.005) col *= uBrightness;
+            if (abs(uContrast - 1.0) > 0.005) col = (col - 0.5) * uContrast + 0.5;
+            if (abs(uSaturation - 1.0) > 0.005) {
+                float gray = dot(col, vec3(0.299, 0.587, 0.114));
+                col = mix(vec3(gray), col, uSaturation);
+            }
+            if (abs(uGamma - 1.0) > 0.005) {
+                col = pow(max(col, vec3(0.0)), vec3(1.0 / max(0.01, uGamma)));
+            }
 
             // AMD FidelityFX Robust Contrast-Adaptive Sharpening (RCAS)
             if (uFSRMode > 0) {
                 col = applyFSR_RCAS(col, uv, texel, uFSRSharpness);
             }
 
-            // RTX Cinematic Vignette
+            // Gentle Vignette (Soft border shading without blinding corners)
             if (uEnableVignette) {
                 vec2 vigCoord = uv * (1.0 - uv.yx);
                 float vig = vigCoord.x * vigCoord.y * 15.0;
-                vig = clamp(pow(vig, 0.25 * uVignetteIntensity), 0.0, 1.0);
+                vig = clamp(pow(vig, 0.12 * uVignetteIntensity), 0.0, 1.0);
                 col *= vig;
             }
 
-            // RTX Cyber Film Grain
+            // Subtle Film Grain (Very gentle 0.008 intensity so it doesn't look like noisy TV static)
             if (uEnableFilmGrain) {
-                float grain = (fract(sin(dot(uv * 12.9898 + uTime * 8.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 2.0;
-                col += grain * 0.022 * uGrainIntensity;
+                float grain = (fract(sin(dot(uv * 12.9898 + uTime * 2.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 2.0;
+                col += grain * 0.008 * uGrainIntensity;
             }
 
             gl_FragColor = vec4(col, baseColor.a);
@@ -855,6 +858,8 @@ function applySettings() {
     }
 
     if (bloomPass) {
+        bloomPass.setSize(window.innerWidth * dpr, window.innerHeight * dpr);
+        bloomPass.threshold = 0.85; // Only real bright neon, lasers & emissive objects bloom
         bloomPass.enabled = gameSettings.enableBloom;
         bloomPass.strength = gameSettings.bloomStrength;
         bloomPass.radius = gameSettings.bloomRadius;
@@ -1236,47 +1241,50 @@ function setupSettingsUI() {
             gameSettings.enableMotionBlur = false;
             gameSettings.shadowQuality = 'off';
         } else if (preset === 'medium') {
+            // Clean E-Sports Clarity: subtle smooth glow, rich contrast, zero distractions
             gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 0.9;
+            gameSettings.bloomStrength = 0.35;
+            gameSettings.bloomRadius = 0.35;
             gameSettings.enableSSR = false;
             gameSettings.enableAO = false;
             gameSettings.enableACES = true;
             gameSettings.enableChromatic = false;
             gameSettings.enableAnamorphic = false;
-            gameSettings.enableVignette = true;
+            gameSettings.enableVignette = false;
+            gameSettings.enableFilmGrain = false;
+            gameSettings.enableMotionBlur = false;
+            gameSettings.shadowQuality = 'low';
+        } else if (preset === 'high') {
+            // High Cinematic: pristine soft glow, smooth contact shadows, clean vision
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 0.45;
+            gameSettings.bloomRadius = 0.4;
+            gameSettings.enableSSR = true;
+            gameSettings.ssrIntensity = 0.5;
+            gameSettings.enableAO = true;
+            gameSettings.aoIntensity = 0.5;
+            gameSettings.enableACES = true;
+            gameSettings.enableChromatic = false;
+            gameSettings.enableAnamorphic = false;
+            gameSettings.enableVignette = false;
             gameSettings.enableFilmGrain = false;
             gameSettings.enableMotionBlur = false;
             gameSettings.shadowQuality = 'high';
-        } else if (preset === 'high') {
-            gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 1.3;
-            gameSettings.enableSSR = true;
-            gameSettings.ssrIntensity = 0.8;
-            gameSettings.enableAO = true;
-            gameSettings.aoIntensity = 0.8;
-            gameSettings.enableACES = true;
-            gameSettings.enableChromatic = true;
-            gameSettings.chromaticIntensity = 0.8;
-            gameSettings.enableAnamorphic = false;
-            gameSettings.enableVignette = true;
-            gameSettings.enableFilmGrain = true;
-            gameSettings.enableMotionBlur = false;
-            gameSettings.shadowQuality = 'high';
         } else if (preset === 'ultra') {
+            // Ultra Quality: high-fidelity raymarching, silky glow, zero dirty grain
             gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 1.5;
+            gameSettings.bloomStrength = 0.55;
+            gameSettings.bloomRadius = 0.45;
             gameSettings.enableSSR = true;
-            gameSettings.ssrIntensity = 1.2;
+            gameSettings.ssrIntensity = 0.7;
             gameSettings.enableAO = true;
-            gameSettings.aoIntensity = 1.2;
+            gameSettings.aoIntensity = 0.7;
             gameSettings.enableACES = true;
-            gameSettings.enableChromatic = true;
-            gameSettings.chromaticIntensity = 1.0;
-            gameSettings.enableAnamorphic = true;
-            gameSettings.anamorphicIntensity = 1.2;
-            gameSettings.enableVignette = true;
-            gameSettings.enableFilmGrain = true;
-            gameSettings.enableMotionBlur = true;
+            gameSettings.enableChromatic = false;
+            gameSettings.enableAnamorphic = false;
+            gameSettings.enableVignette = false;
+            gameSettings.enableFilmGrain = false;
+            gameSettings.enableMotionBlur = false;
             gameSettings.shadowQuality = 'ultra';
         }
         applySettings();
@@ -3590,16 +3598,17 @@ function init() {
     renderer.setSize( window.innerWidth, window.innerHeight );
     renderer.shadowMap.enabled = true; 
     renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
-    renderer.toneMapping = THREE.ReinhardToneMapping; 
-    renderer.toneMappingExposure = 1.2; 
+    renderer.toneMapping = THREE.NoToneMapping; // Single unified ACES tone mapping in RTXUberShader
+    renderer.toneMappingExposure = 1.0; 
     document.body.appendChild( renderer.domElement ); 
     window.addEventListener('resize', onWindowResize, false);
 
     const renderScene = new THREE.RenderPass( scene, camera );
-    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 ); 
-    bloomPass.threshold = 0.1; 
-    bloomPass.strength = gameSettings.bloomStrength; 
-    bloomPass.radius = gameSettings.bloomRadius;
+    // Clean, silky smooth Gaussian bloom: high threshold (0.85) so only pure neon/lasers glow, never walls or floors
+    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.45, 0.4, 0.85 ); 
+    bloomPass.threshold = 0.85; 
+    bloomPass.strength = gameSettings.bloomStrength !== undefined ? gameSettings.bloomStrength : 0.45; 
+    bloomPass.radius = gameSettings.bloomRadius !== undefined ? gameSettings.bloomRadius : 0.4;
     bloomPass.enabled = gameSettings.enableBloom;
 
     rtxPass = new THREE.ShaderPass( RTXUberShader );
@@ -5279,10 +5288,19 @@ function addRamp(w, h, d, x, y, z, angleX, angleZ, color, glow) {
 function onWindowResize() { 
     camera.aspect = window.innerWidth / window.innerHeight; 
     camera.updateProjectionMatrix(); 
-    const dpr = Math.min(2.0, window.devicePixelRatio || 1) * (gameSettings ? gameSettings.resolutionScale : 1.0);
+    let fsrScale = 1.0;
+    if (gameSettings && gameSettings.fsrMode === 'ultra_quality') fsrScale = 0.77;
+    else if (gameSettings && gameSettings.fsrMode === 'quality') fsrScale = 0.67;
+    else if (gameSettings && gameSettings.fsrMode === 'balanced') fsrScale = 0.59;
+    else if (gameSettings && gameSettings.fsrMode === 'performance') fsrScale = 0.50;
+
+    const dpr = Math.min(2.0, window.devicePixelRatio || 1) * (gameSettings ? gameSettings.resolutionScale : 1.0) * fsrScale;
     renderer.setPixelRatio( dpr );
     renderer.setSize( window.innerWidth, window.innerHeight ); 
     composer.setSize( window.innerWidth, window.innerHeight ); 
+    if (bloomPass) {
+        bloomPass.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
+    }
     if (rtxPass && rtxPass.uniforms && rtxPass.uniforms.uResolution) {
         rtxPass.uniforms.uResolution.value.set(window.innerWidth * dpr, window.innerHeight * dpr);
     }
