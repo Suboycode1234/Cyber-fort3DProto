@@ -409,6 +409,24 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                                 <option value="hard">Cyborg (Hard)</option>
                             </select>
                         </div>
+                        <div style="display:flex; gap:6px;">
+                            <div style="flex:1;">
+                                <label style="font-size:10px; color:#aaa; margin-bottom:2px; display:block;">Gamemode</label>
+                                <select id="bot-gamemode" class="tech-select" style="padding:4px 6px; font-size:11px; width:100%;">
+                                    <option value="FFA">Free For All</option>
+                                    <option value="TDM">Team Deathmatch</option>
+                                    <option value="CTF">Capture the Flag</option>
+                                    <option value="KOTH">King of the Hill</option>
+                                    <option value="GUN_GAME">Gun Game</option>
+                                    <option value="ZOMBIES">Infection / Zombies</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:10px; color:#aaa; margin-bottom:2px; display:block;">Map</label>
+                                <select id="bot-map" class="tech-select" style="padding:4px 6px; font-size:11px; width:100%; border-color:#00ffaa; color:#00ffaa;">
+                                </select>
+                            </div>
+                        </div>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <span style="font-size:11px; color:#aaa;">Count:</span>
                             <select id="bot-count" class="tech-select" style="padding:4px 6px; font-size:11px; flex:1;">
@@ -439,13 +457,17 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                 <div class="menu-section" style="border-right:1px solid rgba(255,255,255,0.1); padding:0 15px;">
                     <h3>HOST MATCH (P2P)</h3>
                     <label class="section-label" style="font-size:11px; margin-bottom:4px;">Gamemode</label>
-                    <select id="host-gamemode" class="tech-select" style="margin-bottom:10px; padding:8px;">
+                    <select id="host-gamemode" class="tech-select" style="margin-bottom:8px; padding:8px;">
                         <option value="FFA">Free For All</option>
                         <option value="TDM">Team Deathmatch</option>
                         <option value="CTF">Capture the Flag</option>
                         <option value="KOTH">King of the Hill</option>
                         <option value="GUN_GAME">Gun Game</option>
                         <option value="ZOMBIES">Infection / Zombies</option>
+                    </select>
+
+                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Map (RT Water & Reflections)</label>
+                    <select id="host-map" class="tech-select" style="margin-bottom:10px; padding:8px; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
                     </select>
 
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -724,18 +746,18 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                     <div class="setting-toggle-row">
                         <label class="switch-label">
                             <input type="checkbox" id="setting-rtx-bloom" checked>
-                            <span class="setting-title">RTX Volumetric Bloom & Glow</span>
+                            <span class="setting-title">RTX Silky Bloom & Glow (16-bit Float)</span>
                         </label>
-                        <input type="range" id="setting-bloom-strength" min="0.1" max="1.5" step="0.05" value="0.45" class="tech-range" style="width:105px;" title="Bloom Intensity">
+                        <input type="range" id="setting-bloom-strength" min="0.05" max="0.9" step="0.05" value="0.35" class="tech-range" style="width:105px;" title="Bloom Intensity">
                     </div>
 
                     <!-- SSR -->
                     <div class="setting-toggle-row">
                         <label class="switch-label">
                             <input type="checkbox" id="setting-rtx-ssr" checked>
-                            <span class="setting-title">RTX Screen-Space Reflections (SSR)</span>
+                            <span class="setting-title">RTX Water & Screen-Space Reflections (SSR)</span>
                         </label>
-                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.6" class="tech-range" style="width:105px;" title="SSR Intensity">
+                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.75" class="tech-range" style="width:105px;" title="SSR Intensity">
                     </div>
 
                     <!-- SSAO -->
@@ -747,12 +769,21 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                         <input type="range" id="setting-ao-intensity" min="0.1" max="1.5" step="0.05" value="0.5" class="tech-range" style="width:105px;" title="AO Depth Intensity">
                     </div>
 
-                    <!-- ACES Tonemapping -->
-                    <div class="setting-toggle-row">
-                        <label class="switch-label">
-                            <input type="checkbox" id="setting-rtx-aces" checked>
-                            <span class="setting-title">RTX ACES Filmic HDR Tone Mapping</span>
-                        </label>
+                    <!-- Tone Mapping Engine -->
+                    <div style="background:rgba(0, 243, 255, 0.06); border:1px solid rgba(0, 243, 255, 0.3); border-radius:6px; padding:8px 10px; margin-bottom:4px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span style="color:#00f3ff; font-weight:bold; font-size:11px; letter-spacing:1px;">HDR TONE MAPPING (ZERO BLEACH)</span>
+                            <span id="lbl-tonemapping-badge" style="background:#00ffaa; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px;">VIBRANT FILMIC</span>
+                        </div>
+                        <select id="setting-rtx-tonemapping" class="tech-select" style="padding:6px; font-size:11px; border-color:#00f3ff; color:#00f3ff; margin-bottom:4px;">
+                            <option value="vibrant" selected>Vibrant Filmic (Luminance-Preserved, Zero Bleach - Recommended)</option>
+                            <option value="neutral">Khronos PBR Neutral (True Balance)</option>
+                            <option value="aces">ACES Classic (Legacy Filmic)</option>
+                            <option value="off">Off (Raw HDR Output)</option>
+                        </select>
+                        <div style="font-size:10px; color:#aaa; line-height:1.3;">
+                            Luminance-Preserving curve maps dynamic range without skewing RGB ratios, eliminating bleached or washed-out looks.
+                        </div>
                     </div>
 
                     <!-- Chromatic Aberration -->
@@ -777,7 +808,11 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                     <div class="setting-toggle-row">
                         <label class="switch-label">
                             <input type="checkbox" id="setting-rtx-vignette" checked>
-                            <span class="setting-title">RTX Cinematic Vignette & Cyber Grain</span>
+                            <span class="setting-title">RTX Cinematic Vignette</span>
+                        </label>
+                        <label class="switch-label" style="margin-left:12px;">
+                            <input type="checkbox" id="setting-rtx-grain">
+                            <span class="setting-title" style="font-size:11px; color:#aaa;">Film Grain (Off)</span>
                         </label>
                     </div>
 
@@ -1216,6 +1251,7 @@ let flagMeshBlue = null;
 // Game State
 let gameState = {
     mode: 'FFA',
+    map: 'ffa_neon_spire',
     timer: 300,
     timeLimit: 300, // 0 = infinite
     scoreLimit: 25, // 0 = infinite
@@ -1230,6 +1266,65 @@ let gameState = {
 let myKothScore = 0;
 let isHost = false;
 let currentGamemode = 'FFA';
+let activeWaterPlanes = [];
+let activeJumpPads = [];
+
+// Map Catalog - 18 Distinct Maps Across 6 Gamemodes with Reflective RTX Water & Mirror Surfaces
+const MAP_CATALOG = {
+    'FFA': [
+        { id: 'ffa_neon_spire', name: 'Neon Spire Basin', desc: 'Central titan skyscraper encircled by reflective water moats, glass walkways, and mirror obelisks.' },
+        { id: 'ffa_cyber_atlantis', name: 'Cyber Atlantis', desc: 'Flooded high-tech city with glistening canals, submerged ruins, and floating combat decks.' },
+        { id: 'ffa_mirrored_canyon', name: 'Mirrored Canyon', desc: 'Sinuous river canyon with chrome rock formations, mirror waterfalls, and sky bridges.' }
+    ],
+    'TDM': [
+        { id: 'tdm_twin_canals', name: 'Twin Canals', desc: 'Dual team battle stations divided by a wide neon reflection river and central glass choke-points.' },
+        { id: 'tdm_hydro_reservoir', name: 'Hydro Reservoir', desc: 'Multi-tiered industrial hydro-electric dam with water basins and mirror cooling towers.' },
+        { id: 'tdm_cyber_haven', name: 'Cyber Haven', desc: 'Futuristic maritime port with reflecting ocean slips, container docks, and mirror lighthouses.' }
+    ],
+    'CTF': [
+        { id: 'ctf_lagoon_outpost', name: 'Lagoon Outpost', desc: 'Red & Blue fortresses across an expansive cyber lagoon with high-speed glass sky-bridges.' },
+        { id: 'ctf_mirror_archipelago', name: 'Mirror Archipelago', desc: 'Island bases connected by glistening water shoals and chrome transit arches.' },
+        { id: 'ctf_canal_bastion', name: 'Canal Bastion', desc: 'Grand stone & neon fortress bisected by cross canals, mirror towers, and stealth waterways.' }
+    ],
+    'KOTH': [
+        { id: 'koth_sunken_citadel', name: 'Sunken Citadel', desc: 'The Hill sits on an elevated temple dais surrounded by an expansive reflective neon lake.' },
+        { id: 'koth_mirrored_oasis', name: 'Mirrored Oasis', desc: 'Step-pyramid capture zone with cascading water terraces, mirror walls, and bounce pads.' },
+        { id: 'koth_aqua_spire', name: 'Aqua Spire', desc: 'Vertical tower rising out of deep cyber waters, with the capture point on an open glass pavilion.' }
+    ],
+    'GUN_GAME': [
+        { id: 'gungame_hydro_docks', name: 'Hydro Docks', desc: 'Fast-paced arena with intersecting water channels, reflective shipping crates, and glass ramps.' },
+        { id: 'gungame_glass_matrix', name: 'Glass Matrix', desc: 'Multi-story translucent glass arena suspended directly over a glowing endless ocean.' },
+        { id: 'gungame_neon_marina', name: 'Neon Marina', desc: 'Reflective yacht basin with mirror berths, neon catwalks, and intense close-quarters combat.' }
+    ],
+    'ZOMBIES': [
+        { id: 'zombies_toxic_swamp', name: 'Toxic Swamp', desc: 'Atmospheric marsh with glowing toxic bio-water, sunken platforms, and mirror ruins.' },
+        { id: 'zombies_flooded_facility', name: 'Flooded Facility', desc: 'Submerged research lab with knee-deep water corridors, emergency red alarms, and catwalks.' },
+        { id: 'zombies_drowned_temple', name: 'Drowned Temple', desc: 'Ancient high-tech sanctuary drowned in dark reflective water with defensive mirror altars.' }
+    ]
+};
+
+function getMapName(mapId) {
+    for (const mode in MAP_CATALOG) {
+        const found = MAP_CATALOG[mode].find(m => m.id === mapId);
+        if (found) return found.name;
+    }
+    return mapId || 'Standard Arena';
+}
+
+function updateMapDropdown(selectId, mode) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const key = (mode === 'Gun Game') ? 'GUN_GAME' : ((mode === 'Zombies') ? 'ZOMBIES' : mode);
+    const maps = MAP_CATALOG[key] || MAP_CATALOG['FFA'];
+    sel.innerHTML = '';
+    maps.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.innerText = `${m.name} (RT Water & SSR)`;
+        opt.title = m.desc;
+        sel.appendChild(opt);
+    });
+}
 
 // Tactical Abilities & Grapple Hook System
 let myActiveAbility = 'lightning';
@@ -1264,21 +1359,22 @@ let gameSettings = {
     fsrSharpness: 0.8,
     rtxPreset: 'ultra',
     enableBloom: true,
-    bloomStrength: 1.4,
-    bloomRadius: 0.6,
+    bloomStrength: 0.35,
+    bloomRadius: 0.50,
     enableSSR: true,
-    ssrIntensity: 1.0,
+    ssrIntensity: 0.85,
     enableAO: true,
-    aoIntensity: 1.0,
+    aoIntensity: 0.7,
+    toneMappingMode: 'vibrant', // 'vibrant' (Luminance Preserved, Zero Bleach), 'neutral', 'aces', 'off'
     enableACES: true,
-    enableChromatic: true,
-    chromaticIntensity: 1.0,
-    enableAnamorphic: true,
-    anamorphicIntensity: 1.0,
+    enableChromatic: false,
+    chromaticIntensity: 0.5,
+    enableAnamorphic: false,
+    anamorphicIntensity: 0.5,
     enableVignette: true,
-    vignetteIntensity: 1.0,
-    enableFilmGrain: true,
-    grainIntensity: 1.0,
+    vignetteIntensity: 0.7,
+    enableFilmGrain: false,
+    grainIntensity: 0.0,
     enableMotionBlur: false,
     mouseSensitivity: 1.0,
     crosshairColor: '#00f3ff'
@@ -1398,6 +1494,7 @@ const RTXUberShader = {
         uContrast: { value: 1.0 },
         uGamma: { value: 1.0 },
         uSaturation: { value: 1.1 },
+        uToneMappingMode: { value: 0 }, // 0=Vibrant Filmic (Zero Bleach), 1=PBR Neutral, 2=ACES Classic, 3=Off
         uEnableACES: { value: true },
         uRayTracingMode: { value: 4 }, // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=PathTracing
         uAntiAliasing: { value: 1 },   // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
@@ -1408,14 +1505,14 @@ const RTXUberShader = {
         uSSRIntensity: { value: 1.0 },
         uEnableAO: { value: true },
         uAOIntensity: { value: 1.0 },
-        uEnableChromatic: { value: true },
-        uChromaticIntensity: { value: 1.0 },
+        uEnableChromatic: { value: false },
+        uChromaticIntensity: { value: 0.5 },
         uEnableVignette: { value: true },
-        uVignetteIntensity: { value: 1.0 },
-        uEnableFilmGrain: { value: true },
-        uGrainIntensity: { value: 1.0 },
-        uEnableAnamorphic: { value: true },
-        uAnamorphicIntensity: { value: 1.0 },
+        uVignetteIntensity: { value: 0.7 },
+        uEnableFilmGrain: { value: false },
+        uGrainIntensity: { value: 0.0 },
+        uEnableAnamorphic: { value: false },
+        uAnamorphicIntensity: { value: 0.5 },
         uEnableMotionBlur: { value: false },
         uMotionBlurVec: { value: new THREE.Vector2(0, 0) }
     },
@@ -1434,6 +1531,7 @@ const RTXUberShader = {
         uniform float uContrast;
         uniform float uGamma;
         uniform float uSaturation;
+        uniform int uToneMappingMode;
         uniform bool uEnableACES;
         uniform int uRayTracingMode;
         uniform int uAntiAliasing;
@@ -1528,7 +1626,40 @@ const RTXUberShader = {
             return clamp(sharpCol, minCol, maxCol);
         }
 
-        // ACES Filmic Tone Mapping Curve
+        // Luminance-Preserving Vibrant Filmic Tone Mapping (Zero Bleaching, Rich Colors & Deep Inky Blacks)
+        vec3 TonemapVibrant(vec3 col) {
+            float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            if (luma <= 0.0001) return vec3(0.0);
+            // Smooth filmic compression curve applied purely to scalar luminance
+            float a = 2.45;
+            float b = 0.04;
+            float c = 2.38;
+            float d = 0.58;
+            float e = 0.12;
+            float mappedLuma = (luma * (a * luma + b)) / (luma * (c * luma + d) + e);
+            mappedLuma = clamp(mappedLuma, 0.0, 1.0);
+            // Rescale color by the tone-mapped luminance ratio, strictly preserving color ratios (100% hue & saturation)
+            vec3 mappedCol = col * (mappedLuma / luma);
+            return clamp(mappedCol, 0.0, 1.0);
+        }
+
+        // Khronos PBR Neutral Tone Mapper (Industry Standard True-Color Balance)
+        vec3 TonemapPBRNeutral(vec3 color) {
+            const float startCompression = 0.8 - 0.04;
+            const float desaturation = 0.15;
+            float x = min(color.r, min(color.g, color.b));
+            float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+            color -= offset;
+            float peak = max(color.r, max(color.g, color.b));
+            if (peak < startCompression) return max(vec3(0.0), color);
+            const float d = 1.0 - startCompression;
+            float newPeak = 1.0 - d * d / (peak + d - startCompression);
+            color *= newPeak / peak;
+            float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+            return clamp(mix(color, vec3(newPeak), g), 0.0, 1.0);
+        }
+
+        // ACES Filmic Tone Mapping Curve (Legacy Per-Channel)
         vec3 ACESFilm(vec3 x) {
             float a = 2.51;
             float b = 0.03;
@@ -1538,7 +1669,7 @@ const RTXUberShader = {
             return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
         }
 
-        // Screen-Space Raymarcher for Reflections with Binary Refinement
+        // Screen-Space Raymarcher for Real-Time Reflections with Binary Refinement
         vec3 traceRaymarch(vec2 origin, vec2 dir, float maxDist, int steps, float jitter, out float hitConfidence) {
             hitConfidence = 0.0;
             if (uRayTracingMode == 0 || steps <= 0) return vec3(0.0);
@@ -1553,20 +1684,20 @@ const RTXUberShader = {
                 vec4 sampleCol = texture2D(tDiffuse, cur);
                 float luma = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
 
-                if (luma > 0.42) {
+                if (luma > 0.20) {
                     vec2 refined = cur;
                     if (steps >= 8) {
                         vec2 bStep = stepVec * 0.5;
                         for (int b = 0; b < 2; b++) {
                             vec4 bSamp = texture2D(tDiffuse, refined - bStep);
-                            if (dot(bSamp.rgb, vec3(0.299, 0.587, 0.114)) > 0.42) {
+                            if (dot(bSamp.rgb, vec3(0.299, 0.587, 0.114)) > 0.20) {
                                 refined -= bStep;
                             }
                             bStep *= 0.5;
                         }
                     }
                     hitColor = texture2D(tDiffuse, refined).rgb;
-                    hitConfidence = smoothstep(0.42, 0.95, luma) * (1.0 - float(i) / float(steps));
+                    hitConfidence = smoothstep(0.20, 0.85, luma) * (1.0 - float(i) / float(steps));
                     break;
                 }
                 cur += stepVec;
@@ -1597,11 +1728,12 @@ const RTXUberShader = {
             }
 
             float floorFresnel = smoothstep(0.75, 0.05, uv.y) * 0.65;
-            vec2 reflDir = vec2((noise - 0.5) * 0.05, 0.7);
+            float waterWave = sin(uv.x * 24.0 + time * 2.8) * 0.005;
+            vec2 reflDir = vec2((noise - 0.5) * 0.05 + waterWave, 0.85);
             float specHit = 0.0;
-            vec3 specRadiance = traceRaymarch(uv, reflDir, 0.5, 16, noise, specHit);
+            vec3 specRadiance = traceRaymarch(uv, reflDir, 0.55, 16, noise, specHit);
 
-            return giColor * 0.85 + specRadiance * specHit * floorFresnel * 1.35;
+            return giColor * 0.85 + specRadiance * specHit * floorFresnel * 1.45;
         }
 
         // Anti-Aliasing (FXAA 3.11 Quality Algorithm)
@@ -1695,7 +1827,6 @@ const RTXUberShader = {
             } else if (uEnableChromatic) {
                 vec2 distFromCenter = uv - 0.5;
                 float distSq = dot(distFromCenter, distFromCenter);
-                // Subtle high-end optical lens dispersion (0.008 instead of 0.028)
                 vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.008;
                 float r = texture2D(tDiffuse, clamp(uv + offset, 0.0, 1.0)).r;
                 float g = texture2D(tDiffuse, uv).g;
@@ -1707,33 +1838,35 @@ const RTXUberShader = {
 
             vec3 col = baseColor.rgb;
 
-            // Ray Tracing & Path Tracing Evaluation (Stable spatial sampling, zero temporal jitter)
+            // Screen-Space Reflections & Ray Tracing with Dynamic Water Ripple Distortion
+            float waterWave = sin(uv.x * 24.0 + uTime * 2.8) * 0.004 + cos(uv.y * 28.0 + uTime * 2.2) * 0.003;
+            float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.45;
+
             if (uRayTracingMode > 0) {
-                float noise = fract(sin(dot(uv * 12.9898, vec2(12.9898, 78.233))) * 43758.5453);
-                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.35;
-                
+                float jitter = fract(sin(dot(uv * 12.9898, vec2(12.9898, 78.233))) * 43758.5453) * 0.15;
+                vec2 rayDir = vec2(waterWave * 1.5, 0.85); // Upward reflection trace towards towers & sky
+
                 if (uRayTracingMode == 1) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.7), 0.35, 4, 0.5, hitConf);
-                    col += rCol * hitConf * fresnel * 0.65 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, rayDir, 0.38, 5, jitter, hitConf);
+                    col += rCol * hitConf * fresnel * 0.75 * uSSRIntensity;
                 } else if (uRayTracingMode == 2) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.75), 0.45, 8, 0.5, hitConf);
-                    col += rCol * hitConf * fresnel * 0.85 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, rayDir, 0.48, 9, jitter, hitConf);
+                    col += rCol * hitConf * fresnel * 0.95 * uSSRIntensity;
                 } else if (uRayTracingMode == 3) {
                     float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, vec2(0.0, 0.8), 0.55, 16, 0.5, hitConf);
-                    col += rCol * hitConf * fresnel * 1.05 * uSSRIntensity;
+                    vec3 rCol = traceRaymarch(uv, rayDir, 0.60, 16, jitter, hitConf);
+                    col += rCol * hitConf * fresnel * 1.15 * uSSRIntensity;
                 } else if (uRayTracingMode == 4) {
                     vec3 ptRadiance = computePathTracing(uv, texel, uTime);
-                    col += ptRadiance * (0.65 * uSSRIntensity);
+                    col += ptRadiance * (0.75 * uSSRIntensity);
                 }
             } else if (uEnableSSR) {
-                vec2 refUV = vec2(uv.x, 1.0 - uv.y * 0.88);
-                vec4 refSample = texture2D(tDiffuse, clamp(refUV, 0.0, 1.0));
-                float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.3;
+                vec2 refUV = clamp(vec2(uv.x + waterWave, 1.0 - uv.y * 0.88 + waterWave * 0.5), 0.0, 1.0);
+                vec4 refSample = texture2D(tDiffuse, refUV);
                 float luma = dot(refSample.rgb, vec3(0.299, 0.587, 0.114));
-                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.55, 0.95, luma) * uSSRIntensity;
+                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.30, 0.90, luma) * uSSRIntensity;
                 col += ssr;
             }
 
@@ -1749,7 +1882,7 @@ const RTXUberShader = {
                 col *= ao;
             }
 
-            // RTX Anamorphic Cyberpunk Glare Streaks (High threshold > 0.88 to avoid streaks on regular walls)
+            // RTX Anamorphic Cyberpunk Glare Streaks
             if (uEnableAnamorphic) {
                 vec3 streak = vec3(0.0);
                 for (int i = 1; i <= 5; i++) {
@@ -1763,16 +1896,20 @@ const RTXUberShader = {
                 col += streak * uAnamorphicIntensity * vec3(0.2, 0.7, 1.0);
             }
 
-            // ACES Filmic Tone Mapping (Clean single-stage cinema curve: deep blacks, punchy highlights)
-            if (uEnableACES) {
-                col = ACESFilm(col);
+            // High-Fidelity HDR Tone Mapping (Zero Bleaching: Preserves Hue, Saturation & Inky Contrast)
+            if (uToneMappingMode == 0) {
+                col = TonemapVibrant(col); // Zero bleaching, preserved color ratios
+            } else if (uToneMappingMode == 1) {
+                col = TonemapPBRNeutral(col); // Khronos PBR Neutral
+            } else if (uToneMappingMode == 2 || uEnableACES) {
+                col = ACESFilm(col); // Legacy per-channel ACES
             }
 
             // Display Calibration: Brightness, Contrast, Saturation, Gamma
             if (abs(uBrightness - 1.0) > 0.005) col *= uBrightness;
             if (abs(uContrast - 1.0) > 0.005) col = (col - 0.5) * uContrast + 0.5;
             if (abs(uSaturation - 1.0) > 0.005) {
-                float gray = dot(col, vec3(0.299, 0.587, 0.114));
+                float gray = dot(col, vec3(0.2126, 0.7152, 0.0722));
                 col = mix(vec3(gray), col, uSaturation);
             }
             if (abs(uGamma - 1.0) > 0.005) {
@@ -1784,7 +1921,7 @@ const RTXUberShader = {
                 col = applyFSR_RCAS(col, uv, texel, uFSRSharpness);
             }
 
-            // Gentle Vignette (Soft border shading without blinding corners)
+            // Gentle Vignette
             if (uEnableVignette) {
                 vec2 vigCoord = uv * (1.0 - uv.yx);
                 float vig = vigCoord.x * vigCoord.y * 15.0;
@@ -1792,8 +1929,8 @@ const RTXUberShader = {
                 col *= vig;
             }
 
-            // Subtle Film Grain (Very gentle 0.008 intensity so it doesn't look like noisy TV static)
-            if (uEnableFilmGrain) {
+            // Film Grain (Clean and disabled by default)
+            if (uEnableFilmGrain && uGrainIntensity > 0.01) {
                 float grain = (fract(sin(dot(uv * 12.9898 + uTime * 2.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 2.0;
                 col += grain * 0.008 * uGrainIntensity;
             }
@@ -1819,6 +1956,21 @@ function loadSettings() {
                 console.log('Intel HD 4600 / iGPU detected with heavy RTX profile. Auto-migrating to i5-4590 60 FPS profile...');
                 Object.assign(gameSettings, I5_4590_DEFAULT_SETTINGS);
                 saveSettings();
+            }
+
+            // Auto-Migration for Silky Bloom & Zero-Bleach HDR Tone Mapping:
+            if (gameSettings.bloomStrength > 0.8) {
+                gameSettings.bloomStrength = 0.35;
+            }
+            if (gameSettings.bloomRadius > 0.6) {
+                gameSettings.bloomRadius = 0.50;
+            }
+            if (gameSettings.toneMappingMode === undefined) {
+                gameSettings.toneMappingMode = 'vibrant';
+            }
+            if (gameSettings.enableFilmGrain === undefined) {
+                gameSettings.enableFilmGrain = false;
+                gameSettings.grainIntensity = 0.0;
             }
         } else {
             // First time load: Default configuration based on hardware!
@@ -1904,7 +2056,7 @@ function applySettings() {
 
     if (bloomPass) {
         bloomPass.setSize(window.innerWidth * dpr, window.innerHeight * dpr);
-        bloomPass.threshold = 0.85; // Only real bright neon, lasers & emissive objects bloom
+        bloomPass.threshold = 0.70; // Silky smooth threshold - soft, natural glow without graininess
         bloomPass.enabled = gameSettings.enableBloom;
         bloomPass.strength = gameSettings.bloomStrength;
         bloomPass.radius = gameSettings.bloomRadius;
@@ -1916,7 +2068,10 @@ function applySettings() {
         rtxPass.uniforms.uContrast.value = gameSettings.contrast;
         rtxPass.uniforms.uGamma.value = gameSettings.gamma;
         rtxPass.uniforms.uSaturation.value = gameSettings.saturation;
-        rtxPass.uniforms.uEnableACES.value = gameSettings.enableACES;
+        
+        const tmMap = { 'vibrant': 0, 'neutral': 1, 'aces': 2, 'off': 3 };
+        rtxPass.uniforms.uToneMappingMode.value = tmMap[gameSettings.toneMappingMode] !== undefined ? tmMap[gameSettings.toneMappingMode] : 0;
+        rtxPass.uniforms.uEnableACES.value = (gameSettings.toneMappingMode === 'aces' || gameSettings.enableACES);
         
         const rtMap = { 'off': 0, 'performance': 1, 'medium': 2, 'quality': 3, 'pathtracing': 4 };
         rtxPass.uniforms.uRayTracingMode.value = rtMap[gameSettings.rayTracingMode] !== undefined ? rtMap[gameSettings.rayTracingMode] : 4;
@@ -2144,6 +2299,18 @@ function syncSettingsToUI() {
     setChecked('setting-rtx-ao', gameSettings.enableAO);
     setVal('setting-ao-intensity', gameSettings.aoIntensity);
     
+    setVal('setting-rtx-tonemapping', gameSettings.toneMappingMode || 'vibrant');
+    const tmBadge = document.getElementById('lbl-tonemapping-badge');
+    if (tmBadge) {
+        const tmBadgeMap = {
+            'vibrant': 'VIBRANT FILMIC (ZERO BLEACH)',
+            'neutral': 'KHRONOS PBR NEUTRAL',
+            'aces': 'ACES CLASSIC',
+            'off': 'OFF (RAW HDR)'
+        };
+        tmBadge.innerText = tmBadgeMap[gameSettings.toneMappingMode] || 'VIBRANT FILMIC';
+    }
+
     setChecked('setting-rtx-aces', gameSettings.enableACES);
     
     setChecked('setting-rtx-chromatic', gameSettings.enableChromatic);
@@ -2153,6 +2320,7 @@ function syncSettingsToUI() {
     setVal('setting-anamorphic-intensity', gameSettings.anamorphicIntensity);
     
     setChecked('setting-rtx-vignette', gameSettings.enableVignette);
+    setChecked('setting-rtx-grain', gameSettings.enableFilmGrain);
     setChecked('setting-rtx-motionblur', gameSettings.enableMotionBlur);
     setVal('setting-crosshair-color', gameSettings.crosshairColor);
 }
@@ -2370,10 +2538,22 @@ function setupSettingsUI() {
         saveSettings();
     });
 
-    bindChange('setting-rtx-aces', (e) => {
-        gameSettings.enableACES = e.target.checked;
+    bindChange('setting-rtx-tonemapping', (e) => {
+        gameSettings.toneMappingMode = e.target.value;
+        if (e.target.value === 'aces') gameSettings.enableACES = true;
         applySettings();
         saveSettings();
+        syncSettingsToUI();
+    });
+
+    bindChange('setting-rtx-aces', (e) => {
+        gameSettings.enableACES = e.target.checked;
+        if (e.target.checked && gameSettings.toneMappingMode === 'off') {
+            gameSettings.toneMappingMode = 'vibrant';
+        }
+        applySettings();
+        saveSettings();
+        syncSettingsToUI();
     });
 
     bindChange('setting-rtx-chromatic', (e) => {
@@ -2400,7 +2580,13 @@ function setupSettingsUI() {
 
     bindChange('setting-rtx-vignette', (e) => {
         gameSettings.enableVignette = e.target.checked;
+        applySettings();
+        saveSettings();
+    });
+
+    bindChange('setting-rtx-grain', (e) => {
         gameSettings.enableFilmGrain = e.target.checked;
+        gameSettings.grainIntensity = e.target.checked ? 0.35 : 0.0;
         applySettings();
         saveSettings();
     });
@@ -3376,7 +3562,12 @@ function startBotMatch() {
     const splitEl = document.getElementById('bot-team-split');
     botTeamSplit = splitEl ? splitEl.value : 'balanced';
     
-    currentGamemode = document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA';
+    const botModeEl = document.getElementById('bot-gamemode');
+    currentGamemode = botModeEl ? botModeEl.value : (document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA');
+    
+    const botMapEl = document.getElementById('bot-map');
+    const selectedMap = botMapEl && botMapEl.value ? botMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_neon_spire');
+    gameState.map = selectedMap;
     
     const tlEl = document.getElementById('host-timelimit');
     gameState.timeLimit = tlEl ? parseInt(tlEl.value) : 300;
@@ -3411,7 +3602,7 @@ function startBotMatch() {
         if (!controls.isLocked) controls.lock();
     }
 
-    initGamemode(currentGamemode, true);
+    initGamemode(currentGamemode, true, gameState.map);
     spawnBots(botCount, botDifficulty, botTeamSplit, currentGamemode);
     setConnectionStatus(`Offline Match: ${botCount} Bots (${botDifficulty.toUpperCase()})`, true);
     adminLog(`Spawned ${botCount} autonomous combat bots on ${currentGamemode} mode.`);
@@ -4110,6 +4301,7 @@ function setupDataConnection(conn) {
                 hostId: myPeerId,
                 peers: roomPeerIds,
                 mode: currentGamemode,
+                map: gameState.map,
                 timer: gameState.timer,
                 timeLimit: gameState.timeLimit,
                 scoreLimit: gameState.scoreLimit,
@@ -4322,6 +4514,9 @@ function hostMatch(customRoomCode = null) {
         hostPeerId = myPeerId;
         roomPeerIds = [myPeerId];
         currentGamemode = document.getElementById('host-gamemode').value;
+        const hostMapEl = document.getElementById('host-map');
+        const selectedMap = hostMapEl && hostMapEl.value ? hostMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_neon_spire');
+        gameState.map = selectedMap;
 
         let pref = document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto';
         if (currentGamemode === 'TDM' || currentGamemode === 'CTF') {
@@ -4341,7 +4536,7 @@ function hostMatch(customRoomCode = null) {
             if (!controls.isLocked) controls.lock();
         }
 
-        initGamemode(currentGamemode, true);
+        initGamemode(currentGamemode, true, gameState.map);
         startHeartbeat();
         if (isPublicRoom) {
             startPublicLobbyPings();
@@ -4459,7 +4654,8 @@ function handleIncomingPacket(senderId, data) {
             });
         }
 
-        initGamemode(currentGamemode, false);
+        if (data.map) gameState.map = data.map;
+        initGamemode(currentGamemode, false, gameState.map);
         gameState.started = true;
         updateRoomHUD();
         return;
@@ -4556,6 +4752,7 @@ function handleIncomingPacket(senderId, data) {
             netSendTo(senderId, {
                 type: 'init_game',
                 mode: currentGamemode,
+                map: gameState.map,
                 timer: gameState.timer,
                 timeLimit: gameState.timeLimit,
                 scoreLimit: gameState.scoreLimit,
@@ -4622,7 +4819,8 @@ function handleIncomingPacket(senderId, data) {
         gameState.myTeam = data.team;
         if (data.flagRed) gameState.flagRed = data.flagRed;
         if (data.flagBlue) gameState.flagBlue = data.flagBlue;
-        initGamemode(currentGamemode, false);
+        if (data.map) gameState.map = data.map;
+        initGamemode(currentGamemode, false, gameState.map);
         gameState.started = true;
         updateMyNametag();
         updateMatchHUD();
@@ -5165,10 +5363,15 @@ function hideMobileControls() {
     document.getElementById('touch-zones').style.display = 'none';
 }
 
-function initGamemode(mode, isNewGame = true) {
-    console.log("[Gamemode Init]:", mode);
+function initGamemode(mode, isNewGame = true, mapId = null) {
+    if (mapId) gameState.map = mapId;
+    if (!gameState.map) {
+        const key = (mode === 'Gun Game') ? 'GUN_GAME' : ((mode === 'Zombies') ? 'ZOMBIES' : mode);
+        gameState.map = MAP_CATALOG[key] ? MAP_CATALOG[key][0].id : 'ffa_neon_spire';
+    }
+    console.log("[Gamemode Init]:", mode, "Map:", gameState.map);
     document.getElementById('match-hud').style.display = 'flex';
-    document.getElementById('match-mode-text').innerText = mode;
+    document.getElementById('match-mode-text').innerText = `${mode} — ${getMapName(gameState.map)}`;
     gameState.mode = mode;
     currentGamemode = mode;
     
@@ -5203,7 +5406,9 @@ function initGamemode(mode, isNewGame = true) {
     mapBodies = [];
     mapDecorations = [];
     animatedMapObjects = [];
-    buildMap(mode);
+    activeWaterPlanes = [];
+    activeJumpPads = [];
+    buildMap(mode, gameState.map);
     respawn();
     updateMatchHUD();
 }
@@ -5213,6 +5418,23 @@ function initGamemode(mode, isNewGame = true) {
 // ============================================================================
 function init() {
     loadLocalProfile();
+
+    // Initialize Map Dropdowns for Host and Offline Bots
+    const hostGamemodeEl = document.getElementById('host-gamemode');
+    if (hostGamemodeEl) {
+        updateMapDropdown('host-map', hostGamemodeEl.value);
+        hostGamemodeEl.addEventListener('change', (e) => {
+            updateMapDropdown('host-map', e.target.value);
+        });
+    }
+
+    const botGamemodeEl = document.getElementById('bot-gamemode');
+    if (botGamemodeEl) {
+        updateMapDropdown('bot-map', botGamemodeEl.value);
+        botGamemodeEl.addEventListener('change', (e) => {
+            updateMapDropdown('bot-map', e.target.value);
+        });
+    }
 
     // Pre-initialize PeerJS to acquire peer ID immediately
     initPeer(null, (id) => {
@@ -5477,16 +5699,23 @@ function resumeGame() {
     window.addEventListener('resize', onWindowResize, false);
 
     const renderScene = new THREE.RenderPass( scene, camera );
-    // Clean, silky smooth Gaussian bloom: high threshold (0.85) so only pure neon/lasers glow, never walls or floors
-    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.45, 0.4, 0.85 ); 
-    bloomPass.threshold = 0.85; 
-    bloomPass.strength = gameSettings.bloomStrength !== undefined ? gameSettings.bloomStrength : 0.45; 
-    bloomPass.radius = gameSettings.bloomRadius !== undefined ? gameSettings.bloomRadius : 0.4;
+    // Clean, silky smooth Gaussian bloom (16-bit Half-Float Target: eliminates 8-bit banding & graininess)
+    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.35, 0.50, 0.70 ); 
+    bloomPass.threshold = 0.70; 
+    bloomPass.strength = gameSettings.bloomStrength !== undefined ? gameSettings.bloomStrength : 0.35; 
+    bloomPass.radius = gameSettings.bloomRadius !== undefined ? gameSettings.bloomRadius : 0.50;
     bloomPass.enabled = gameSettings.enableBloom;
 
     rtxPass = new THREE.ShaderPass( RTXUberShader );
 
-    composer = new THREE.EffectComposer( renderer ); 
+    const isHalfFloat = renderer.capabilities.isWebGL2 || (renderer.extensions && renderer.extensions.has('OES_texture_half_float'));
+    const composerTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        type: isHalfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType
+    });
+    composer = new THREE.EffectComposer( renderer, composerTarget ); 
     composer.addPass( renderScene ); 
     composer.addPass( bloomPass );
     composer.addPass( rtxPass );
@@ -7018,9 +7247,237 @@ function createNeonGridTexture(hexColor, glowColor) {
     return tex;
 }
 
-function buildMap(mode) {
+// ============================================================================
+// WATER, MIRROR & POST-PROCESSING RT SHOWCASE HELPERS
+// ============================================================================
+
+function createWaterRippleTexture(accent = '#00f3ff') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Deep water cyber foundation
+    ctx.fillStyle = '#061626';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Caustic and wave light lines
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 16; i++) {
+        ctx.beginPath();
+        ctx.strokeStyle = (i % 2 === 0) ? accent : '#0077ff';
+        ctx.globalAlpha = 0.18 + (i % 3) * 0.08;
+        const cy = i * 16;
+        ctx.moveTo(0, cy);
+        ctx.bezierCurveTo(64, cy + 14, 192, cy - 14, 256, cy);
+        ctx.stroke();
+    }
+    
+    // Specular glints for SSR
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#ffffff';
+    for (let j = 0; j < 25; j++) {
+        const gx = Math.random() * 256;
+        const gy = Math.random() * 256;
+        ctx.beginPath();
+        ctx.arc(gx, gy, Math.random() * 2.0 + 0.8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+function createWaterSplash(x, y, z) {
+    const splashGeo = new THREE.RingGeometry(0.3, 1.2, 16);
+    splashGeo.rotateX(-Math.PI / 2);
+    const splashMat = new THREE.MeshBasicMaterial({
+        color: 0x00f3ff,
+        transparent: true,
+        opacity: 0.75,
+        side: THREE.DoubleSide
+    });
+    const ring = new THREE.Mesh(splashGeo, splashMat);
+    ring.position.set(x, y + 0.08, z);
+    scene.add(ring);
+    
+    let life = 0;
+    const anim = {
+        update(t) {
+            life += 1 / 60;
+            const s = 1.0 + life * 5.0;
+            ring.scale.set(s, s, s);
+            splashMat.opacity = Math.max(0, 0.75 * (1.0 - life / 0.40));
+            if (life >= 0.40) {
+                scene.remove(ring);
+                const idx = animatedMapObjects.indexOf(anim);
+                if (idx !== -1) animatedMapObjects.splice(idx, 1);
+            }
+        }
+    };
+    animatedMapObjects.push(anim);
+}
+
+function addWater(w, d, x, y, z, options = {}) {
+    const segsX = Math.min(32, Math.max(8, Math.round(w / 8)));
+    const segsZ = Math.min(32, Math.max(8, Math.round(d / 8)));
+    const geo = new THREE.PlaneGeometry(w, d, segsX, segsZ);
+    geo.rotateX(-Math.PI / 2);
+    
+    const pos = geo.attributes.position;
+    const origY = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+        origY[i] = pos.getY(i);
+    }
+    
+    const waterColor = options.color !== undefined ? options.color : 0x052338;
+    const waterGlow = options.emissive !== undefined ? options.emissive : 0x003344;
+    const opacity = options.opacity !== undefined ? options.opacity : 0.82;
+    const rippleColor = options.glowColor || '#00f3ff';
+    
+    const tex = createWaterRippleTexture(rippleColor);
+    tex.repeat.set(Math.max(1, w / 16), Math.max(1, d / 16));
+    
+    const mat = new THREE.MeshStandardMaterial({
+        color: waterColor,
+        emissive: waterGlow,
+        emissiveIntensity: 0.35,
+        map: tex,
+        roughness: 0.08,
+        metalness: 0.92,
+        transparent: true,
+        opacity: opacity,
+        depthWrite: false
+    });
+    
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    mapMeshes.push(mesh);
+    
+    const waterObj = {
+        mesh,
+        w, d, x, y, z,
+        update(time) {
+            tex.offset.x = (time * 0.035) % 1;
+            tex.offset.y = (time * 0.025) % 1;
+            const p = geo.attributes.position;
+            const cnt = p.count;
+            const waveSpeed = 2.2;
+            for (let i = 0; i < cnt; i++) {
+                const vx = p.getX(i);
+                const vz = p.getZ(i);
+                const wave = Math.sin(vx * 0.12 + time * waveSpeed) * 0.35 + 
+                             Math.cos(vz * 0.14 + time * (waveSpeed * 0.8)) * 0.28 +
+                             Math.sin((vx + vz) * 0.08 + time * 1.5) * 0.2;
+                p.setY(i, origY[i] + wave);
+            }
+            p.needsUpdate = true;
+            geo.computeVertexNormals();
+        }
+    };
+    animatedMapObjects.push(waterObj);
+    activeWaterPlanes.push(waterObj);
+    return mesh;
+}
+
+function addMirrorBox(w, h, d, x, y, z, color = 0x111624, glow = '#00f3ff', metalness = 0.96, roughness = 0.04) {
+    const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)); 
+    const body = new CANNON.Body({ mass: 0, material: physicsMaterial }); 
+    body.addShape(shape); 
+    body.position.set(x, y, z); 
+    world.addBody(body);
+
+    const geo = new THREE.BoxGeometry(w, h, d); 
+    const tex = createNeonGridTexture(color, glow); 
+    tex.repeat.set(Math.max(1, w/12), Math.max(1, h/12));
+    const mat = new THREE.MeshStandardMaterial({ 
+        color: color,
+        map: tex, 
+        emissiveMap: tex, 
+        emissive: color, 
+        emissiveIntensity: 0.25,
+        roughness: roughness,
+        metalness: metalness
+    }); 
+    const mesh = new THREE.Mesh(geo, mat); 
+    mesh.position.set(x, y, z); 
+    mesh.castShadow = true; 
+    mesh.receiveShadow = true; 
+    scene.add(mesh); 
+    mapMeshes.push(mesh); 
+    mapBodies.push(body);
+    return mesh;
+}
+
+function addGlassBox(w, h, d, x, y, z, color = 0x00f3ff, glow = '#00f3ff', opacity = 0.45) {
+    const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)); 
+    const body = new CANNON.Body({ mass: 0, material: physicsMaterial }); 
+    body.addShape(shape); 
+    body.position.set(x, y, z); 
+    world.addBody(body);
+
+    const geo = new THREE.BoxGeometry(w, h, d); 
+    const tex = createNeonGridTexture(0x0a1e30, glow); 
+    tex.repeat.set(Math.max(1, w/8), Math.max(1, d/8));
+    const mat = new THREE.MeshStandardMaterial({ 
+        color: color,
+        map: tex, 
+        emissive: color, 
+        emissiveIntensity: 0.35,
+        roughness: 0.05,
+        metalness: 0.85,
+        transparent: true,
+        opacity: opacity,
+        depthWrite: false
+    }); 
+    const mesh = new THREE.Mesh(geo, mat); 
+    mesh.position.set(x, y, z); 
+    mesh.castShadow = false; 
+    mesh.receiveShadow = true; 
+    scene.add(mesh); 
+    mapMeshes.push(mesh); 
+    mapBodies.push(body);
+    return mesh;
+}
+
+function addJumpPad(x, z, y = 0.3, power = 38) {
+    const padBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.2, 4.8, 0.6, 24),
+        new THREE.MeshStandardMaterial({ color: 0x0d1424, metalness: 0.9, roughness: 0.2 })
+    );
+    padBase.position.set(x, y, z);
+    scene.add(padBase);
+    mapMeshes.push(padBase);
+
+    const padRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.8, 3.6, 32),
+        new THREE.MeshBasicMaterial({ color: 0x00f3ff, side: THREE.DoubleSide })
+    );
+    padRing.rotateX(-Math.PI / 2);
+    padRing.position.set(x, y + 0.32, z);
+    scene.add(padRing);
+    mapDecorations.push(padRing);
+
+    const padCore = new THREE.Mesh(
+        new THREE.CircleGeometry(1.2, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide })
+    );
+    padCore.rotateX(-Math.PI / 2);
+    padCore.position.set(x, y + 0.33, z);
+    scene.add(padCore);
+    mapDecorations.push(padCore);
+
+    activeJumpPads.push({ x, z, y, power });
+}
+
+function buildMap(mode, mapId = null) {
+    const mId = mapId || gameState.map || 'ffa_neon_spire';
     let size = 300;
-    if (mode === 'TDM' || mode === 'CTF') size = 1200;
+    if (mode === 'TDM' || mode === 'CTF' || mId.startsWith('tdm_') || mId.startsWith('ctf_')) size = 1200;
 
     const floorShape = new CANNON.Plane(); 
     const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
@@ -7045,22 +7502,56 @@ function buildMap(mode) {
     addBox(5, 250, size, -size/2, 125, 0, 0x050510, '#444444'); 
     addBox(5, 250, size, size/2, 125, 0, 0x050510, '#444444');
 
-    if (mode === 'FFA') buildMapFFA();
-    else if (mode === 'TDM') buildMapTDM();
-    else if (mode === 'CTF') buildMapCTF();
-    else if (mode === 'KOTH') buildMapKOTH();
-    else if (mode === 'Gun Game' || mode === 'GUN_GAME') buildMapGunGame();
-    else if (mode === 'Zombies' || mode === 'ZOMBIES') buildMapZombies();
-    else buildMapFFA();
+    switch(mId) {
+        // Free For All (FFA)
+        case 'ffa_neon_spire': buildMap_FFA_NeonSpire(); break;
+        case 'ffa_cyber_atlantis': buildMap_FFA_CyberAtlantis(); break;
+        case 'ffa_mirrored_canyon': buildMap_FFA_MirroredCanyon(); break;
+
+        // Team Deathmatch (TDM)
+        case 'tdm_twin_canals': buildMap_TDM_TwinCanals(); break;
+        case 'tdm_hydro_reservoir': buildMap_TDM_HydroReservoir(); break;
+        case 'tdm_cyber_haven': buildMap_TDM_CyberHaven(); break;
+
+        // Capture The Flag (CTF)
+        case 'ctf_lagoon_outpost': buildMap_CTF_LagoonOutpost(); break;
+        case 'ctf_mirror_archipelago': buildMap_CTF_MirrorArchipelago(); break;
+        case 'ctf_canal_bastion': buildMap_CTF_CanalBastion(); break;
+
+        // King of the Hill (KOTH)
+        case 'koth_sunken_citadel': buildMap_KOTH_SunkenCitadel(); break;
+        case 'koth_mirrored_oasis': buildMap_KOTH_MirroredOasis(); break;
+        case 'koth_aqua_spire': buildMap_KOTH_AquaSpire(); break;
+
+        // Gun Game
+        case 'gungame_hydro_docks': buildMap_GunGame_HydroDocks(); break;
+        case 'gungame_glass_matrix': buildMap_GunGame_GlassMatrix(); break;
+        case 'gungame_neon_marina': buildMap_GunGame_NeonMarina(); break;
+
+        // Infection / Zombies
+        case 'zombies_toxic_swamp': buildMap_Zombies_ToxicSwamp(); break;
+        case 'zombies_flooded_facility': buildMap_Zombies_FloodedFacility(); break;
+        case 'zombies_drowned_temple': buildMap_Zombies_DrownedTemple(); break;
+
+        default:
+            if (mode === 'TDM') buildMap_TDM_TwinCanals();
+            else if (mode === 'CTF') buildMap_CTF_LagoonOutpost();
+            else if (mode === 'KOTH') buildMap_KOTH_SunkenCitadel();
+            else if (mode === 'Gun Game' || mode === 'GUN_GAME') buildMap_GunGame_HydroDocks();
+            else if (mode === 'Zombies' || mode === 'ZOMBIES') buildMap_Zombies_ToxicSwamp();
+            else buildMap_FFA_NeonSpire();
+            break;
+    }
 }
 
-function buildMapFFA() {
-    // --- CENTRAL TITAN CYBER SPIRE ---
-    // Ground Tier Foundation
+// --- FFA MAP 1: NEON SPIRE BASIN ---
+function buildMap_FFA_NeonSpire() {
+    // Shimmering Moat encircling central foundation
+    addWater(180, 180, 0, 0.4, 0, { color: 0x07263c, emissive: 0x003344 });
+
+    // Central Titan Cyber Spire
     addBox(46, 26, 46, 0, 13, 0, 0x111624, '#00f3ff'); 
-    // Mid Tier Spire
     addBox(28, 36, 28, 0, 44, 0, 0x141b2e, '#ff0055');
-    // High Pinnacle Observation Tier
     addBox(14, 28, 14, 0, 76, 0, 0x0f1526, '#00f3ff');
     
     // Spiral Ascending Combat Platforms
@@ -7073,15 +7564,32 @@ function buildMapFFA() {
         addBox(12, 2, 12, x, y, z, 0x1a2236, '#00ffaa');
     }
 
+    // Translucent Glass Cross-Bridges Spanning the Water Moat
+    addGlassBox(180, 2, 12, 0, 3, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(12, 2, 180, 0, 3, 0, 0x00f3ff, '#00f3ff', 0.5);
+
+    // 4 High-Gloss Mirror Monoliths Reflecting the Skyline & Water
+    const s = 65;
+    addMirrorBox(12, 65, 12, -s, 32.5, -s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
+    addMirrorBox(12, 65, 12, s, 32.5, -s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
+    addMirrorBox(12, 65, 12, -s, 32.5, s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
+    addMirrorBox(12, 65, 12, s, 32.5, s, 0x0d1424, '#00f3ff', 0.98, 0.03);
+
+    // High-Poly Concentric Jump Pads
+    addJumpPad(0, 75);
+    addJumpPad(0, -75);
+    addJumpPad(75, 0);
+    addJumpPad(-75, 0);
+
+    // Elevated Ramps and Cross-Walkways
+    addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
+    addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00');
+
     // Floating Holographic Torus Ring around Central Spire
     const ringGeo = new THREE.TorusGeometry(26, 0.75, 16, 64);
-    const ringMat = new THREE.MeshStandardMaterial({
-        color: 0x00f3ff,
-        emissive: 0x00f3ff,
-        emissiveIntensity: 1.8,
-        roughness: 0.15,
-        metalness: 0.85
-    });
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x00f3ff, emissiveIntensity: 1.8, roughness: 0.15, metalness: 0.85 });
     const holoRing = new THREE.Mesh(ringGeo, ringMat);
     holoRing.position.set(0, 78, 0);
     holoRing.rotation.x = Math.PI / 4;
@@ -7090,13 +7598,7 @@ function buildMapFFA() {
 
     // Floating Pulsating Cyber Power Core
     const coreGeo = new THREE.OctahedronGeometry(5.5, 2);
-    const coreMat = new THREE.MeshStandardMaterial({
-        color: 0xff0055,
-        emissive: 0xff0055,
-        emissiveIntensity: 2.4,
-        roughness: 0.1,
-        metalness: 0.95
-    });
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 2.4, roughness: 0.1, metalness: 0.95 });
     const powerCore = new THREE.Mesh(coreGeo, coreMat);
     powerCore.position.set(0, 88, 0);
     scene.add(powerCore);
@@ -7118,161 +7620,230 @@ function buildMapFFA() {
             coreLight.position.y = cy;
         }
     });
-
-    // --- 4 CORNER CYBER DEFENSE TOWERS & PYLONS ---
-    const s = 70; 
-    addBox(22, 60, 22, -s, 30, -s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, s, 30, -s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, -s, 30, s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, s, 30, s, 0x111624, '#00f3ff');
-
-    const pylonData = [
-        { x: -s, z: -s, color: 0x00f3ff },
-        { x: s, z: -s, color: 0xff0088 },
-        { x: -s, z: s, color: 0xffaa00 },
-        { x: s, z: s, color: 0x00ff88 }
-    ];
-    pylonData.forEach(p => {
-        // High-poly cylindrical pylon mast
-        const pylonMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.2, 2.0, 75, 16),
-            new THREE.MeshStandardMaterial({ color: 0x111624, metalness: 0.85, roughness: 0.25 })
-        );
-        pylonMesh.position.set(p.x, 37.5, p.z);
-        pylonMesh.castShadow = true;
-        scene.add(pylonMesh);
-        mapMeshes.push(pylonMesh);
-
-        // Glowing torus emitter crown
-        const crownMesh = new THREE.Mesh(
-            new THREE.TorusGeometry(3.0, 0.45, 12, 32),
-            new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 2.2 })
-        );
-        crownMesh.rotation.x = Math.PI / 2;
-        crownMesh.position.set(p.x, 75, p.z);
-        scene.add(crownMesh);
-        mapDecorations.push(crownMesh);
-
-        // Real-time Cyber Point Light
-        const pLight = new THREE.PointLight(p.color, 2.4, 90);
-        pLight.position.set(p.x, 77, p.z);
-        scene.add(pLight);
-        mapDecorations.push(pLight);
-    });
-
-    // High-Poly Concentric Jump Pads
-    const jumpPadCoords = [{ x: 0, z: 55 }, { x: 0, z: -55 }, { x: 55, z: 0 }, { x: -55, z: 0 }];
-    jumpPadCoords.forEach(j => {
-        const padBase = new THREE.Mesh(
-            new THREE.CylinderGeometry(4.2, 4.8, 0.6, 24),
-            new THREE.MeshStandardMaterial({ color: 0x0d1424, metalness: 0.9, roughness: 0.2 })
-        );
-        padBase.position.set(j.x, 0.3, j.z);
-        scene.add(padBase);
-        mapMeshes.push(padBase);
-
-        const padRing = new THREE.Mesh(
-            new THREE.RingGeometry(1.8, 3.6, 32),
-            new THREE.MeshBasicMaterial({ color: 0x00f3ff, side: THREE.DoubleSide })
-        );
-        padRing.rotateX(-Math.PI / 2);
-        padRing.position.set(j.x, 0.62, j.z);
-        scene.add(padRing);
-        mapDecorations.push(padRing);
-
-        const padCore = new THREE.Mesh(
-            new THREE.CircleGeometry(1.2, 24),
-            new THREE.MeshBasicMaterial({ color: 0xff00ff, side: THREE.DoubleSide })
-        );
-        padCore.rotateX(-Math.PI / 2);
-        padCore.position.set(j.x, 0.63, j.z);
-        scene.add(padCore);
-        mapDecorations.push(padCore);
-    });
-
-    // Elevated Ramps and Cross-Walkways
-    addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-
-    addBox(40, 2, 10, s, 40, 0, 0x1a2438, '#00ffaa'); 
-    addBox(40, 2, 10, -s, 40, 0, 0x1a2438, '#00ffaa'); 
-    addBox(10, 2, 40, 0, 40, s, 0x1a2438, '#00ffaa'); 
-    addBox(10, 2, 40, 0, 40, -s, 0x1a2438, '#00ffaa');
-
-    // Strategic High-Fidelity Tactical Cover Nodes
-    const coverColors = ['#ff00ff', '#00f3ff', '#ffff00', '#ff8800'];
-    for(let i=0; i<18; i++) {
-        const x = (Math.random() - 0.5) * 240; 
-        const z = (Math.random() - 0.5) * 240;
-        if (Math.abs(x) < 45 && Math.abs(z) < 45) continue;
-        const w = 10 + Math.random() * 15; 
-        const h = 5 + Math.random() * 15;
-        addBox(w, h, w, x, h/2, z, 0x141a29, coverColors[i % coverColors.length]);
-    }
 }
 
-function buildMapTDM() {
-    // Red Fortress
+// --- FFA MAP 2: CYBER ATLANTIS ---
+function buildMap_FFA_CyberAtlantis() {
+    // Vast flooded urban basin with reflective water
+    addWater(280, 280, 0, 0.45, 0, { color: 0x042030, emissive: 0x002233 });
+
+    // Sunken high-tech forum at center
+    addBox(60, 6, 60, 0, 3, 0, 0x111c2e, '#00f3ff');
+    addBox(40, 12, 40, 0, 9, 0, 0x16243a, '#00ffaa');
+    addMirrorBox(20, 26, 20, 0, 20, 0, 0x0a1420, '#00f3ff', 0.98, 0.02);
+
+    // 8 Sunken Skyscraper Ruin Blocks protruding from the water
+    const ruins = [
+        { x: -75, z: -75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
+        { x: 75, z: -75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
+        { x: -75, z: 75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
+        { x: 75, z: 75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
+        { x: 0, z: -90, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
+        { x: 0, z: 90, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
+        { x: -90, z: 0, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
+        { x: 90, z: 0, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' }
+    ];
+    ruins.forEach(r => {
+        addBox(r.w, r.h, r.w, r.x, r.h/2, r.z, r.col, r.glow);
+        addMirrorBox(6, 32, 6, r.x, r.h + 16, r.z, 0x0a121e, r.glow, 0.98, 0.02);
+    });
+
+    // Elevated Translucent Glass Walkway Grid above the flooded city
+    addGlassBox(200, 2, 14, 0, 14, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(14, 2, 200, 0, 14, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(120, 2, 10, 0, 14, 60, 0x00ffaa, '#00ffaa', 0.45);
+    addGlassBox(120, 2, 10, 0, 14, -60, 0x00ffaa, '#00ffaa', 0.45);
+
+    // Jump pads on floating pontoons
+    addJumpPad(-75, -75, 22.3, 35);
+    addJumpPad(75, -75, 22.3, 35);
+    addJumpPad(-75, 75, 22.3, 35);
+    addJumpPad(75, 75, 22.3, 35);
+}
+
+// --- FFA MAP 3: MIRRORED CANYON ---
+function buildMap_FFA_MirroredCanyon() {
+    // Sinuous River through the canyon bed
+    addWater(110, 280, 0, 0.4, 0, { color: 0x082b40, emissive: 0x003348 });
+
+    // East & West Chrome & Mirror Canyon Cliffs
+    addMirrorBox(50, 45, 270, -115, 22.5, 0, 0x121a2c, '#00ffaa', 0.96, 0.04);
+    addMirrorBox(50, 45, 270, 115, 22.5, 0, 0x121a2c, '#00ffaa', 0.96, 0.04);
+    addMirrorBox(30, 65, 250, -135, 32.5, 0, 0x0d1525, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(30, 65, 250, 135, 32.5, 0, 0x0d1525, '#00f3ff', 0.98, 0.02);
+
+    // 3 Grand Glass Suspension Bridges High Over the Canyon
+    addGlassBox(180, 2, 18, 0, 24, -70, 0x00f3ff, '#00f3ff', 0.55);
+    addGlassBox(180, 2, 22, 0, 24, 0, 0xff00ff, '#ff00ff', 0.55);
+    addGlassBox(180, 2, 18, 0, 24, 70, 0x00ffaa, '#00ffaa', 0.55);
+
+    // Riverbed Stepping Pontoons and Cover
+    for(let z=-110; z<=110; z+=45) {
+        addBox(18, 4, 18, 0, 2, z, 0x142030, '#00f3ff');
+        addMirrorBox(6, 18, 6, (z % 90 === 0 ? 25 : -25), 9, z, 0x0d1420, '#ffff00', 0.96, 0.03);
+    }
+
+    // Canyon Bed Launch Pads to High Glass Platforms
+    addJumpPad(0, -90, 4.3, 40);
+    addJumpPad(0, 90, 4.3, 40);
+}
+
+// --- TDM MAP 1: TWIN CANALS (1200x1200) ---
+function buildMap_TDM_TwinCanals() {
+    // Grand 260m Wide Reflective River Dividing Red and Blue Arenas
+    addWater(260, 1100, 0, 0.5, 0, { color: 0x072538, emissive: 0x002d44 });
+
+    // Red Fortress (East, x = 450)
     addBox(240, 60, 240, 450, 30, 0, 0x331111, '#ff0000'); 
-    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');  
+    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');
+    addMirrorBox(40, 80, 40, 450, 70, 140, 0x220505, '#ff0055', 0.97, 0.03);
+    addMirrorBox(40, 80, 40, 450, 70, -140, 0x220505, '#ff0055', 0.97, 0.03);
     addRamp(40, 2, 100, 310, 30, 60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
     addRamp(40, 2, 100, 310, 30, -60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
-    
-    addBox(200, 40, 30, 220, 20, 160, 0x220000, '#ff0000'); 
-    addBox(200, 40, 30, 220, 20, -160, 0x220000, '#ff0000'); 
-    addBox(40, 40, 30, 220, 20, 0, 0x220000, '#ff0000'); 
-    addBox(120, 10, 30, 220, 45, 0, 0x220000, '#ff0000'); 
-    
-    addBox(180, 2, 30, 220, 41, 160, 0x222222, '#00ffaa'); 
-    addBox(180, 2, 30, 220, 41, -160, 0x222222, '#00ffaa'); 
-    addBox(60, 80, 60, 220, 40, 280, 0x330000, '#ff0000'); 
-    addBox(60, 80, 60, 220, 40, -280, 0x330000, '#ff0000'); 
-    
-    addRamp(20, 2, 80, 250, 20, 160, 0, -Math.PI/5, 0x111111, '#ff5500');
-    addRamp(20, 2, 80, 250, 20, -160, 0, -Math.PI/5, 0x111111, '#ff5500');
-    
-    addBox(60, 25, 60, 300, 12.5, 180, 0x111111, '#ff00ff');
-    addBox(60, 25, 60, 300, 12.5, -180, 0x111111, '#ff00ff');
 
-    // Blue Fortress
+    // Blue Fortress (West, x = -450)
     addBox(240, 60, 240, -450, 30, 0, 0x111133, '#0000ff'); 
-    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');  
+    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');
+    addMirrorBox(40, 80, 40, -450, 70, 140, 0x050522, '#0055ff', 0.97, 0.03);
+    addMirrorBox(40, 80, 40, -450, 70, -140, 0x050522, '#0055ff', 0.97, 0.03);
     addRamp(40, 2, 100, -310, 30, 60, 0, Math.PI/6, 0x222222, '#0000ff'); 
     addRamp(40, 2, 100, -310, 30, -60, 0, Math.PI/6, 0x222222, '#0000ff'); 
-    
-    addBox(200, 40, 30, -220, 20, 160, 0x000022, '#0000ff'); 
-    addBox(200, 40, 30, -220, 20, -160, 0x000022, '#0000ff'); 
-    addBox(40, 40, 30, -220, 20, 0, 0x000022, '#0000ff'); 
-    addBox(120, 10, 30, -220, 45, 0, 0x000022, '#0000ff'); 
-    
-    addBox(180, 2, 30, -220, 41, 160, 0x222222, '#00ffaa'); 
-    addBox(180, 2, 30, -220, 41, -160, 0x222222, '#00ffaa'); 
-    addBox(60, 80, 60, -220, 40, 280, 0x000033, '#0000ff'); 
-    addBox(60, 80, 60, -220, 40, -280, 0x000033, '#0000ff'); 
-    
-    addRamp(20, 2, 80, -250, 20, 160, 0, Math.PI/5, 0x111111, '#0055ff');
-    addRamp(20, 2, 80, -250, 20, -160, 0, Math.PI/5, 0x111111, '#0055ff');
 
-    addBox(60, 25, 60, -300, 12.5, 180, 0x111111, '#ff00ff');
-    addBox(60, 25, 60, -300, 12.5, -180, 0x111111, '#ff00ff');
+    // 3 Majestic Translucent Glass Bridges Spanning Over the River
+    addGlassBox(280, 2, 45, 0, 9, 0, 0x00f3ff, '#00f3ff', 0.55); // Central Grand Choke
+    addGlassBox(280, 2, 30, 0, 9, 320, 0xff00ff, '#ff00ff', 0.5); // North Glass Way
+    addGlassBox(280, 2, 30, 0, 9, -320, 0x00ffaa, '#00ffaa', 0.5); // South Glass Way
 
-    // Central Spire
-    addBox(140, 80, 140, 0, 40, 0, 0x111111, '#ffffff'); 
-    addRamp(60, 2, 160, 110, 40, 0, 0, -Math.PI/6, 0x222222, '#ffff00'); 
-    addRamp(60, 2, 160, -110, 40, 0, 0, Math.PI/6, 0x222222, '#ffff00'); 
-    addRamp(60, 2, 160, 0, 40, 110, -Math.PI/6, 0, 0x222222, '#ffff00');  
-    addRamp(60, 2, 160, 0, 40, -110, Math.PI/6, 0, 0x222222, '#ffff00');   
-    
-    addBox(120, 15, 120, 0, 7.5, 250, 0x222222, '#ffff00'); 
-    addBox(120, 15, 120, 0, 7.5, -250, 0x222222, '#ffff00'); 
-    addBox(60, 40, 60, 0, 20, 250, 0x1a1a1a, '#ffffff');
-    addBox(60, 40, 60, 0, 20, -250, 0x1a1a1a, '#ffffff');
+    // Riverbank Jump Pads
+    addJumpPad(150, 0, 0.3, 42);
+    addJumpPad(-150, 0, 0.3, 42);
+    addJumpPad(150, 320, 0.3, 40);
+    addJumpPad(-150, 320, 0.3, 40);
+    addJumpPad(150, -320, 0.3, 40);
+    addJumpPad(-150, -320, 0.3, 40);
 }
 
-function buildMapCTF() {
-    buildMapTDM();
+// --- TDM MAP 2: HYDRO RESERVOIR (1200x1200) ---
+function buildMap_TDM_HydroReservoir() {
+    // Vast Hydro Reservoir Basin
+    addWater(1100, 480, 0, 0.4, 300, { color: 0x052840, emissive: 0x002235 });
+
+    // Titan Dam Wall at z = 0
+    addBox(1100, 50, 60, 0, 25, 0, 0x182233, '#00f3ff');
+
+    // Red Station (East End of Dam)
+    addBox(180, 70, 180, 450, 35, -180, 0x331111, '#ff0000');
+    addMirrorBox(30, 90, 30, 450, 80, -180, 0x220505, '#ff0055', 0.98, 0.02);
+    addRamp(40, 2, 120, 450, 25, -60, Math.PI/6, 0, 0x222222, '#ff0000');
+
+    // Blue Station (West End of Dam)
+    addBox(180, 70, 180, -450, 35, -180, 0x111133, '#0000ff');
+    addMirrorBox(30, 90, 30, -450, 80, -180, 0x050522, '#0055ff', 0.98, 0.02);
+    addRamp(40, 2, 120, -450, 25, -60, Math.PI/6, 0, 0x222222, '#0000ff');
+
+    // Glass Catwalk over the water spillway
+    addGlassBox(600, 2, 25, 0, 51, 0, 0x00f3ff, '#00f3ff', 0.55);
+    addGlassBox(25, 2, 350, 0, 25, 200, 0x00ffaa, '#00ffaa', 0.5);
+
+    // Mirror Intake Turbines
+    addMirrorBox(60, 60, 60, 200, 30, 260, 0x121b2b, '#00f3ff', 0.96, 0.03);
+    addMirrorBox(60, 60, 60, -200, 30, 260, 0x121b2b, '#00f3ff', 0.96, 0.03);
+
+    addJumpPad(0, 0, 50.3, 38);
+    addJumpPad(200, 260, 60.3, 42);
+    addJumpPad(-200, 260, 60.3, 42);
+}
+
+// --- TDM MAP 3: CYBER HAVEN (1200x1200) ---
+function buildMap_TDM_CyberHaven() {
+    // Dual Reflective Ocean Harbors
+    addWater(480, 1100, 340, 0.4, 0, { color: 0x062438, emissive: 0x001d2c });
+    addWater(480, 1100, -340, 0.4, 0, { color: 0x062438, emissive: 0x001d2c });
+
+    // Central Pier Promenade
+    addBox(160, 12, 1100, 0, 6, 0, 0x141a28, '#00ffaa');
+
+    // Red Cargo Dock (North Pier)
+    addBox(220, 40, 220, 0, 20, 450, 0x331111, '#ff0000');
+    addMirrorBox(25, 80, 25, 0, 60, 520, 0x220505, '#ff0000', 0.98, 0.02);
+
+    // Blue Cargo Dock (South Pier)
+    addBox(220, 40, 220, 0, 20, -450, 0x111133, '#0000ff');
+    addMirrorBox(25, 80, 25, 0, 60, -520, 0x050522, '#0000ff', 0.98, 0.02);
+
+    // Mirror Shipping Containers Scattered for Cover
+    for(let i=-300; i<=300; i+=80) {
+        addMirrorBox(35, 18, 16, (i % 160 === 0 ? 40 : -40), 15, i, 0x101826, (i > 0 ? '#ff5500' : '#00aaff'), 0.95, 0.05);
+    }
+
+    // Glass Walkways over the water slips
+    addGlassBox(18, 2, 350, 100, 15, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(18, 2, 350, -100, 15, 0, 0x00f3ff, '#00f3ff', 0.5);
+
+    addJumpPad(0, 150, 12.3, 38);
+    addJumpPad(0, -150, 12.3, 38);
+}
+
+// --- CTF MAP 1: LAGOON OUTPOST (1200x1200) ---
+function buildMap_CTF_LagoonOutpost() {
+    buildMap_TDM_TwinCanals();
+    setupCTFFlags();
+}
+
+// --- CTF MAP 2: MIRROR ARCHIPELAGO (1200x1200) ---
+function buildMap_CTF_MirrorArchipelago() {
+    // Vast Ocean Arena
+    addWater(1150, 1150, 0, 0.4, 0, { color: 0x062238, emissive: 0x001a2c });
+
+    // Red Island (East)
+    addBox(220, 16, 220, 420, 8, 0, 0x2a1414, '#ff0000');
+    addMirrorBox(30, 70, 30, 480, 43, 0, 0x220505, '#ff0055', 0.97, 0.03);
+
+    // Blue Island (West)
+    addBox(220, 16, 220, -420, 8, 0, 0x14142a, '#0000ff');
+    addMirrorBox(30, 70, 30, -480, 43, 0, 0x050522, '#0055ff', 0.97, 0.03);
+
+    // Center Neutral Island
+    addBox(180, 18, 180, 0, 9, 0, 0x162030, '#00ffaa');
+    addMirrorBox(25, 60, 25, 0, 39, 0, 0x0d1424, '#00f3ff', 0.98, 0.02);
+
+    // Glass Arch Bridges Connecting Archipelago
+    addGlassBox(250, 2, 20, 210, 18, 0, 0x00f3ff, '#00f3ff', 0.55);
+    addGlassBox(250, 2, 20, -210, 18, 0, 0x00f3ff, '#00f3ff', 0.55);
+
+    addJumpPad(0, 0, 18.3, 45);
+    addJumpPad(350, 0, 16.3, 40);
+    addJumpPad(-350, 0, 16.3, 40);
+
+    setupCTFFlags();
+}
+
+// --- CTF MAP 3: CANAL BASTION (1200x1200) ---
+function buildMap_CTF_CanalBastion() {
+    // Cross-Shaped Canals
+    addWater(140, 1100, 0, 0.4, 0, { color: 0x07263c });
+    addWater(1100, 140, 0, 0.4, 0, { color: 0x07263c });
+
+    // 4 Quadrant Bastions
+    const qPos = [
+        { x: 260, z: 260, col: 0x221616, glow: '#ff5500' },
+        { x: -260, z: 260, col: 0x161622, glow: '#0055ff' },
+        { x: 260, z: -260, col: 0x221616, glow: '#ff5500' },
+        { x: -260, z: -260, col: 0x161622, glow: '#0055ff' }
+    ];
+    qPos.forEach(q => {
+        addBox(200, 25, 200, q.x, 12.5, q.z, q.col, q.glow);
+        addMirrorBox(20, 50, 20, q.x, 37.5, q.z, 0x0d1420, q.glow, 0.96, 0.04);
+    });
+
+    // Central Glass Crossroads
+    addGlassBox(180, 2, 180, 0, 15, 0, 0x00f3ff, '#00f3ff', 0.55);
+
+    addJumpPad(0, 0, 15.3, 42);
+    setupCTFFlags();
+}
+
+function setupCTFFlags() {
     const flagGeo = new THREE.CylinderGeometry(2, 2, 8, 16);
     const flagMatRed = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 1 });
     const flagMatBlue = new THREE.MeshStandardMaterial({ color: 0x0000ff, emissive: 0x0000ff, emissiveIntensity: 1 });
@@ -7288,43 +7859,206 @@ function buildMapCTF() {
     mapMeshes.push(flagMeshBlue);
 }
 
-function buildMapKOTH() {
-    addBox(80, 20, 80, 0, 10, 0, 0x222211, '#ffff00');
-    addRamp(30, 2, 40, 0, 10, 60, -Math.PI/6, 0, 0x222222, '#ffff00');
-    addRamp(30, 2, 40, 0, 10, -60, Math.PI/6, 0, 0x222222, '#ffff00');
-    addRamp(30, 2, 40, 60, 10, 0, 0, -Math.PI/6, 0x222222, '#ffff00');
-    addRamp(30, 2, 40, -60, 10, 0, 0, Math.PI/6, 0x222222, '#ffff00');
-    
-    const s = 100;
-    addBox(20, 10, 20, s, 5, s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, -s, 5, s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, s, 5, -s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, -s, 5, -s, 0x111111, '#00ffff');
+// --- KOTH MAP 1: SUNKEN CITADEL ---
+function buildMap_KOTH_SunkenCitadel() {
+    // Reflective Lake covering the entire arena
+    addWater(280, 280, 0, 0.45, 0, { color: 0x07283e, emissive: 0x002c42 });
+
+    // The Hill: Elevated Octagonal Dais at Center
+    addMirrorBox(70, 14, 70, 0, 7, 0, 0x162234, '#ffff00', 0.96, 0.04);
+
+    // 4 Symmetrical Mirror Obelisks Surrounding the Hill
+    const o = 65;
+    addMirrorBox(10, 55, 10, -o, 27.5, -o, 0x0c1420, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(10, 55, 10, o, 27.5, -o, 0x0c1420, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(10, 55, 10, -o, 27.5, o, 0x0c1420, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(10, 55, 10, o, 27.5, o, 0x0c1420, '#00f3ff', 0.98, 0.02);
+
+    // 4 Ramps leading up from the water to the capture zone
+    addRamp(24, 2, 45, 0, 7, 50, -Math.PI/7, 0, 0x1a2638, '#ffff00');
+    addRamp(24, 2, 45, 0, 7, -50, Math.PI/7, 0, 0x1a2638, '#ffff00');
+    addRamp(24, 2, 45, 50, 7, 0, 0, -Math.PI/7, 0x1a2638, '#ffff00');
+    addRamp(24, 2, 45, -50, 7, 0, 0, Math.PI/7, 0x1a2638, '#ffff00');
+
+    // Perimeter Jump Pads launching straight into the Hill
+    addJumpPad(0, 95, 0.3, 38);
+    addJumpPad(0, -95, 0.3, 38);
+    addJumpPad(95, 0, 0.3, 38);
+    addJumpPad(-95, 0, 0.3, 38);
 }
 
-function buildMapGunGame() {
-    for(let i=0; i<30; i++) {
-        const x = (Math.random() - 0.5) * 200; 
-        const z = (Math.random() - 0.5) * 200;
-        const w = 5 + Math.random() * 20; 
-        const h = 20 + Math.random() * 20;
-        addBox(w, h, 5, x, h/2, z, 0x111111, '#ff00ff');
-    }
-    addBox(200, 2, 10, 0, 30, 0, 0x111111, '#00f3ff');
-    addBox(10, 2, 200, 0, 30, 0, 0x111111, '#00f3ff');
+// --- KOTH MAP 2: MIRRORED OASIS ---
+function buildMap_KOTH_MirroredOasis() {
+    // Cascading Water Terraces
+    addWater(270, 270, 0, 0.4, 0, { color: 0x052236 });
+    addWater(100, 100, 0, 7.4, 0, { color: 0x09304a });
+
+    // Step Pyramid Capture Hill
+    addMirrorBox(80, 8, 80, 0, 4, 0, 0x162030, '#ffff00', 0.95, 0.05);
+    addMirrorBox(50, 8, 50, 0, 12, 0, 0x1a2638, '#ffff00', 0.98, 0.02);
+
+    // Glass Bridges Radiating from Hill
+    addGlassBox(120, 2, 14, 0, 16, 0, 0x00f3ff, '#00f3ff', 0.55);
+    addGlassBox(14, 2, 120, 0, 16, 0, 0x00f3ff, '#00f3ff', 0.55);
+
+    addJumpPad(-80, -80, 0.3, 36);
+    addJumpPad(80, -80, 0.3, 36);
+    addJumpPad(-80, 80, 0.3, 36);
+    addJumpPad(80, 80, 0.3, 36);
 }
 
-function buildMapZombies() {
-    addBox(60, 40, 60, 0, 20, 0, 0x050505, '#00ff00');
-    addRamp(20, 2, 60, 0, 20, 60, -Math.PI/5, 0, 0x111111, '#555555');
-    addRamp(20, 2, 60, 0, 20, -60, Math.PI/5, 0, 0x111111, '#555555');
-    
-    for(let i=0; i<40; i++) {
-        const x = (Math.random() - 0.5) * 250; 
-        const z = (Math.random() - 0.5) * 250;
-        if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
-        addBox(10, 10, 10, x, 5, z, 0x1a1a1a, '#115511');
+// --- KOTH MAP 3: AQUA SPIRE ---
+function buildMap_KOTH_AquaSpire() {
+    // Deep Moat
+    addWater(270, 270, 0, 0.5, 0, { color: 0x06253c });
+
+    // Center Spire Base
+    addBox(35, 20, 35, 0, 10, 0, 0x121b2a, '#00f3ff');
+
+    // The Capture Zone: Open Glass Pavilion 21 units above the deep water
+    addGlassBox(60, 2, 60, 0, 21, 0, 0xffff00, '#ffff00', 0.6);
+
+    // 4 Outer Jump Pillar Towers
+    const p = 75;
+    addMirrorBox(18, 20, 18, -p, 10, -p, 0x101826, '#00ffaa', 0.96, 0.04);
+    addMirrorBox(18, 20, 18, p, 10, -p, 0x101826, '#00ffaa', 0.96, 0.04);
+    addMirrorBox(18, 20, 18, -p, 10, p, 0x101826, '#00ffaa', 0.96, 0.04);
+    addMirrorBox(18, 20, 18, p, 10, p, 0x101826, '#00ffaa', 0.96, 0.04);
+
+    // Jump pads on all 4 towers launching onto the glass capture pavilion
+    addJumpPad(-p, -p, 20.3, 35);
+    addJumpPad(p, -p, 20.3, 35);
+    addJumpPad(-p, p, 20.3, 35);
+    addJumpPad(p, p, 20.3, 35);
+}
+
+// --- GUN GAME MAP 1: HYDRO DOCKS ---
+function buildMap_GunGame_HydroDocks() {
+    // Intersecting Water Slips
+    addWater(260, 60, 0, 0.45, 0, { color: 0x062438 });
+    addWater(60, 260, 0, 0.45, 0, { color: 0x062438 });
+
+    // 4 Quadrant Docks
+    const docks = [
+        { x: 75, z: 75 }, { x: -75, z: 75 }, { x: 75, z: -75 }, { x: -75, z: -75 }
+    ];
+    docks.forEach(d => {
+        addBox(90, 8, 90, d.x, 4, d.z, 0x141e2e, '#00ffaa');
+        addMirrorBox(18, 22, 18, d.x, 19, d.z, 0x0e1622, '#ff0055', 0.97, 0.03);
+    });
+
+    // Glass Ramps across the slips
+    addGlassBox(60, 2, 20, 0, 12, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(20, 2, 60, 0, 12, 0, 0x00f3ff, '#00f3ff', 0.5);
+
+    addJumpPad(75, 75, 8.3, 34);
+    addJumpPad(-75, 75, 8.3, 34);
+    addJumpPad(75, -75, 8.3, 34);
+    addJumpPad(-75, -75, 8.3, 34);
+}
+
+// --- GUN GAME MAP 2: GLASS MATRIX ---
+function buildMap_GunGame_GlassMatrix() {
+    // Endless glowing ocean beneath
+    addWater(280, 280, 0, 0.45, 0, { color: 0x041c2c, emissive: 0x001d2c });
+
+    // 3 Vertically Stacked Glass Arenas
+    addGlassBox(160, 2, 160, 0, 10, 0, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(110, 2, 110, 0, 22, 0, 0xff00ff, '#ff00ff', 0.5);
+    addGlassBox(60, 2, 60, 0, 34, 0, 0x00ffaa, '#00ffaa', 0.55);
+
+    // Mirror Pylons at the corners
+    const c = 55;
+    addMirrorBox(8, 48, 8, -c, 24, -c, 0x0a121d, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(8, 48, 8, c, 24, -c, 0x0a121d, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(8, 48, 8, -c, 24, c, 0x0a121d, '#00f3ff', 0.98, 0.02);
+    addMirrorBox(8, 48, 8, c, 24, c, 0x0a121d, '#00f3ff', 0.98, 0.02);
+
+    addJumpPad(0, 0, 10.3, 36);
+    addJumpPad(40, 40, 10.3, 34);
+    addJumpPad(-40, -40, 10.3, 34);
+}
+
+// --- GUN GAME MAP 3: NEON MARINA ---
+function buildMap_GunGame_NeonMarina() {
+    addWater(270, 170, 0, 0.45, 45, { color: 0x062337 });
+
+    // North Promenade
+    addBox(270, 10, 100, 0, 5, -90, 0x141c2a, '#00ffaa');
+
+    // 4 Finger Jetties jutting out into the water
+    for(let x=-100; x<=100; x+=65) {
+        addMirrorBox(18, 8, 120, x, 4, 30, 0x0d1522, '#00f3ff', 0.96, 0.04);
+        addGlassBox(18, 2, 30, x, 8, 95, 0xff00ff, '#ff00ff', 0.5);
     }
+
+    addJumpPad(-100, 80, 4.3, 35);
+    addJumpPad(100, 80, 4.3, 35);
+}
+
+// --- ZOMBIES MAP 1: TOXIC SWAMP ---
+function buildMap_Zombies_ToxicSwamp() {
+    // Biohazard Emerald Swamp Water
+    addWater(280, 280, 0, 0.45, 0, { color: 0x062810, emissive: 0x012e09, glowColor: '#00ff44' });
+
+    // Sunken Survivor Outpost Cabins
+    addBox(55, 30, 55, 0, 15, 0, 0x0d1810, '#00ff55');
+    addRamp(18, 2, 50, 0, 15, 45, -Math.PI/6, 0, 0x162216, '#00ff55');
+
+    // 4 Mirror Obelisks with emerald reflections
+    const s = 70;
+    addMirrorBox(12, 45, 12, -s, 22.5, -s, 0x09140c, '#00ff44', 0.97, 0.03);
+    addMirrorBox(12, 45, 12, s, 22.5, -s, 0x09140c, '#00ff44', 0.97, 0.03);
+    addMirrorBox(12, 45, 12, -s, 22.5, s, 0x09140c, '#00ff44', 0.97, 0.03);
+    addMirrorBox(12, 45, 12, s, 22.5, s, 0x09140c, '#00ff44', 0.97, 0.03);
+
+    // Narrow Glass Walkways over the toxic sludge
+    addGlassBox(160, 2, 10, 0, 12, 0, 0x00ff55, '#00ff55', 0.5);
+    addGlassBox(10, 2, 160, 0, 12, 0, 0x00ff55, '#00ff55', 0.5);
+
+    addJumpPad(0, 0, 30.3, 36);
+}
+
+// --- ZOMBIES MAP 2: FLOODED FACILITY ---
+function buildMap_Zombies_FloodedFacility() {
+    // Knee-Deep Laboratory Flood Water
+    addWater(280, 280, 0, 0.5, 0, { color: 0x061e2a, emissive: 0x180303, glowColor: '#ff2244' });
+
+    // Laboratory Partition Corridors
+    for(let i=0; i<8; i++) {
+        const x = (i % 2 === 0 ? 55 : -55);
+        const z = -90 + (i * 26);
+        addBox(60, 16, 8, x, 8, z, 0x121722, '#ff0033');
+    }
+
+    // Elevated Survivor Gantry Catwalks
+    addGlassBox(200, 2, 14, 0, 18, 0, 0xff0055, '#ff0055', 0.55);
+    addMirrorBox(25, 45, 25, 0, 22.5, 75, 0x0a1018, '#ff0033', 0.98, 0.02);
+
+    addJumpPad(0, 0, 0.3, 35);
+    addJumpPad(0, 75, 0.3, 38);
+}
+
+// --- ZOMBIES MAP 3: DROWNED TEMPLE ---
+function buildMap_Zombies_DrownedTemple() {
+    // Ancient flooded sanctuary
+    addWater(270, 270, 0, 0.45, 0, { color: 0x081c2e, emissive: 0x001d2d });
+
+    // Central Altar Platform (Holdout Spot)
+    addMirrorBox(55, 14, 55, 0, 7, 0, 0x141f2e, '#00f3ff', 0.96, 0.04);
+
+    // 8 Mirror Pillars forming a sacred ring
+    for(let i=0; i<8; i++) {
+        const rad = 60;
+        const a = (i / 8) * Math.PI * 2;
+        addMirrorBox(8, 42, 8, Math.cos(a) * rad, 21, Math.sin(a) * rad, 0x0c1522, '#00ffaa', 0.97, 0.03);
+    }
+
+    // Elevated Perimeter Glass Walkway
+    addGlassBox(180, 2, 12, 0, 16, -65, 0x00f3ff, '#00f3ff', 0.5);
+    addGlassBox(180, 2, 12, 0, 16, 65, 0x00f3ff, '#00f3ff', 0.5);
+
+    addJumpPad(0, 0, 14.3, 38);
 }
 
 function addBox(w, h, d, x, y, z, color, glow) {
@@ -7536,6 +8270,42 @@ function animate() {
         if (abilityCooldownTimer > 0) {
             abilityCooldownTimer = Math.max(0, abilityCooldownTimer - 1/60);
             updateAbilityHUD();
+        }
+
+        // Check Interactive Jump Pad triggers
+        for (let i = 0; i < activeJumpPads.length; i++) {
+            const jp = activeJumpPads[i];
+            const dist = Math.hypot(playerBody.position.x - jp.x, playerBody.position.z - jp.z);
+            if (dist < 4.2 && Math.abs(playerBody.position.y - jp.y) < 2.5) {
+                if (playerBody.velocity.y < jp.power * 0.75) {
+                    playerBody.velocity.y = jp.power;
+                    jumpAntiGravityTimer = 0.35;
+                    myJumpsLeft = myJumps;
+                    playTone(520, 'sine', 0.18, 0.3);
+                    setTimeout(() => playTone(880, 'sine', 0.25, 0.35), 60);
+                }
+            }
+        }
+
+        // Check Water Wading Drag & Dynamic Splash
+        let inWater = false;
+        let waterSurfaceY = 0;
+        for (let i = 0; i < activeWaterPlanes.length; i++) {
+            const wp = activeWaterPlanes[i];
+            if (Math.abs(playerBody.position.x - wp.x) <= wp.w / 2 &&
+                Math.abs(playerBody.position.z - wp.z) <= wp.d / 2 &&
+                playerBody.position.y <= wp.y + 1.6 && playerBody.position.y >= wp.y - 4.5) {
+                inWater = true;
+                waterSurfaceY = wp.y;
+                break;
+            }
+        }
+        if (inWater) {
+            playerBody.velocity.x *= 0.94;
+            playerBody.velocity.z *= 0.94;
+            if (Math.random() < 0.20 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2)) {
+                createWaterSplash(playerBody.position.x, waterSurfaceY, playerBody.position.z);
+            }
         }
 
         const mapSize = (gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300;
