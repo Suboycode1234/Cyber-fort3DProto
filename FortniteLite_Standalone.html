@@ -1015,9 +1015,9 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
 
     <div id="exit-panel" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,20,0.85); z-index:9999; flex-direction:column; align-items:center; justify-content:center; backdrop-filter:blur(10px);">
         <h1 class="neon-title" style="color:#ff0055; text-shadow:0 0 15px #ff0055; font-size:4rem; margin-bottom:10px;">SYSTEM PAUSED</h1>
-        <p style="color:#aaa; letter-spacing:2px; margin-bottom:40px;">SIMULATION TEMPORARILY SUSPENDED</p>
+        <p style="color:#aaa; letter-spacing:2px; margin-bottom:40px;">PRESS ESC OR RESUME TO RETURN TO COMBAT</p>
         <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center;">
-            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:20px; padding:12px 35px;">RESUME GAME</button>
+            <button id="btn-resume-match" class="deploy-btn" style="background:rgba(0,255,170,0.2); border-color:#00ffaa; color:#00ffaa; font-size:20px; padding:12px 35px;">RESUME GAME [ESC]</button>
             <button id="btn-pause-settings" class="deploy-btn" style="background:rgba(0,243,255,0.2); border-color:#00f3ff; color:#00f3ff; font-size:20px; padding:12px 35px;">⚙️ SETTINGS</button>
             <button id="btn-exit-match" class="deploy-btn" style="background:rgba(255,0,0,0.2); border-color:#ff0000; color:#ff0000; font-size:20px; padding:12px 35px;">ABORT TO LOBBY</button>
         </div>
@@ -1318,8 +1318,8 @@ const WEAPON_STATS = {
     'katana': { name: 'Katana', type: 'melee', fireRate: 14, damage: 90, range: 7.0, color: 0xffffff },
     'medkit': { name: 'Medkit', type: 'support', fireRate: 45, heal: 100, consume: true, color: 0x00ff00 },
     // Exclusive KOTH (King of the Hill) Weapons
-    'knockback_rifle': { name: 'Knockback Rifle', type: 'gun', fireRate: 8, damage: 0, color: 0x00f3ff, spread: 0, knockback: 85, lift: 18 },
-    'knock_stick': { name: 'Knock Stick', type: 'melee', fireRate: 13, damage: 0, range: 8.5, color: 0xffd700, knockback: 260, lift: 140 }
+    'knockback_rifle': { name: 'Knockback Rifle', type: 'gun', fireRate: 8, damage: 0, color: 0x00f3ff, spread: 0, knockback: 16, lift: 8 },
+    'knock_stick': { name: 'Knock Stick', type: 'melee', fireRate: 14, damage: 0, range: 8.5, color: 0xffd700, knockback: 320, lift: 160 }
 };
 
 let myInventory = ['default', null, null, null, null];
@@ -2668,6 +2668,25 @@ function playSmiteDetonationSound() {
     } catch(e) {}
 }
 
+function playKnockSound(isSuperLaunch = false) {
+    const ctx = getSmiteAudio();
+    if (!ctx) return;
+    try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = isSuperLaunch ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(isSuperLaunch ? 320 : 180, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + (isSuperLaunch ? 0.35 : 0.15));
+        gain.gain.setValueAtTime(isSuperLaunch ? 0.45 : 0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (isSuperLaunch ? 0.35 : 0.15));
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + (isSuperLaunch ? 0.35 : 0.15));
+    } catch(e) {}
+}
+
 function startContinuousSmiteLightning(targetPos, targetRef, targetType, targetId, durationSec = 5.5, onFinished = null) {
     stopContinuousSmiteLightning(false);
 
@@ -3463,19 +3482,30 @@ function spawnBots(count, difficulty, split, gamemode) {
     }
 }
 
-function getTerrainHeightAt(x, z) {
+function getGroundHeightBelow(x, currentY, z) {
     if (!mapMeshes || mapMeshes.length === 0) return 0;
+    const startY = (currentY !== null && typeof currentY === 'number') ? currentY + 1.2 : 60;
     const ray = new THREE.Raycaster(
-        new THREE.Vector3(x, 150, z),
+        new THREE.Vector3(x, startY, z),
         new THREE.Vector3(0, -1, 0),
         0,
-        250
+        50
     );
-    const hits = ray.intersectObjects(mapMeshes, false);
+    const hits = ray.intersectObjects(mapMeshes, true);
     if (hits.length > 0) {
+        for (let i = 0; i < hits.length; i++) {
+            const h = hits[i];
+            if (h.face && h.face.normal.y > 0.35) {
+                return h.point.y;
+            }
+        }
         return hits[0].point.y;
     }
     return 0;
+}
+
+function getTerrainHeightAt(x, z) {
+    return getGroundHeightBelow(x, 15, z);
 }
 
 function getBotSpawnPoint(team, gamemode) {
@@ -3500,7 +3530,7 @@ function getBotSpawnPoint(team, gamemode) {
         x = (Math.random() - 0.5) * 100;
         z = (Math.random() - 0.5) * 100;
     }
-    y = getTerrainHeightAt(x, z);
+    y = getGroundHeightBelow(x, 15, z);
     return new THREE.Vector3(x, y + 0.5, z);
 }
 
@@ -3523,6 +3553,9 @@ function updateBots(dt) {
                 bot.mesh.visible = true;
                 const sp = getBotSpawnPoint(bot.team, currentGamemode);
                 bot.pos.copy(sp);
+                bot.velX = 0;
+                bot.velZ = 0;
+                bot.velocityY = 0;
                 bot.mesh.position.copy(sp);
                 if (bot.nametag) {
                     bot.mesh.remove(bot.nametag);
@@ -3584,34 +3617,71 @@ function updateBots(dt) {
                 bot.moveDir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
             }
 
+            let moveX = 0, moveZ = 0;
             if (dist > 18) {
-                bot.pos.addScaledVector(toTarget, speed * dt);
+                moveX = toTarget.x * speed * dt;
+                moveZ = toTarget.z * speed * dt;
                 moving = true;
             } else if (dist < 8) {
-                bot.pos.addScaledVector(toTarget, -speed * 0.7 * dt);
+                moveX = -toTarget.x * speed * 0.7 * dt;
+                moveZ = -toTarget.z * speed * 0.7 * dt;
                 moving = true;
             } else {
-                bot.pos.addScaledVector(bot.moveDir, speed * 0.5 * dt);
+                moveX = bot.moveDir.x * speed * 0.5 * dt;
+                moveZ = bot.moveDir.z * speed * 0.5 * dt;
                 moving = true;
             }
 
-            // Real-Time Physics: Gravity & Terrain Surface Tracking
-            bot.velocityY = (bot.velocityY || 0) - 55 * dt;
+            // Step height check: prevent climbing vertical walls or teleporting onto roofs
+            const targetX = bot.pos.x + moveX;
+            const targetZ = bot.pos.z + moveZ;
+            const targetFloor = getGroundHeightBelow(targetX, bot.pos.y, targetZ);
+            const stepDiff = targetFloor - bot.pos.y;
+
+            if (stepDiff <= 1.25) {
+                bot.pos.x = targetX;
+                bot.pos.z = targetZ;
+            } else {
+                const tryXFloor = getGroundHeightBelow(targetX, bot.pos.y, bot.pos.z);
+                if (tryXFloor - bot.pos.y <= 1.25) {
+                    bot.pos.x = targetX;
+                } else {
+                    const tryZFloor = getGroundHeightBelow(bot.pos.x, bot.pos.y, targetZ);
+                    if (tryZFloor - bot.pos.y <= 1.25) {
+                        bot.pos.z = targetZ;
+                    } else {
+                        bot.moveDir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+                    }
+                }
+            }
+
+            // Smooth physics momentum (knockback velocity)
+            if (bot.velX || bot.velZ) {
+                bot.pos.x += (bot.velX || 0) * dt;
+                bot.pos.z += (bot.velZ || 0) * dt;
+                bot.velX *= 0.88;
+                bot.velZ *= 0.88;
+                if (Math.abs(bot.velX) < 0.1) bot.velX = 0;
+                if (Math.abs(bot.velZ) < 0.1) bot.velZ = 0;
+            }
+
+            // Gravity & Ground Snapping
+            bot.velocityY = (bot.velocityY || 0) - 50 * dt;
             bot.pos.y += bot.velocityY * dt;
 
-            const floorY = getTerrainHeightAt(bot.pos.x, bot.pos.z);
+            const floorY = getGroundHeightBelow(bot.pos.x, bot.pos.y, bot.pos.z);
             if (bot.pos.y <= floorY) {
                 bot.pos.y = floorY;
                 bot.velocityY = 0;
             }
 
-            // Void fall elimination
-            if (bot.pos.y < -30) {
+            // Void fall elimination (fell off map or KOTH hill into abyss)
+            if (bot.pos.y < -25) {
                 bot.hp = 0;
                 bot.deaths = (bot.deaths || 0) + 1;
-                bot.respawnTimer = 2.5;
+                bot.respawnTimer = 3.0;
                 bot.mesh.visible = false;
-                adminLog(`${bot.name} fell into the abyss.`);
+                adminLog(`${bot.name} was knocked into the abyss!`);
             }
 
             bot.mesh.position.copy(bot.pos);
@@ -3664,12 +3734,20 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
         speed: 35
     });
 
+    const isKoth = (currentGamemode === 'KOTH' || gameState.mode === 'KOTH');
+
     if (isTargetPlayer && myHp > 0) {
         const toPlayer = new THREE.Vector3().subVectors(playerBody.position, startPos);
         const dot = toPlayer.normalize().dot(aimVec);
         if (dot > 0.985) {
-            const dmg = bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 15 : 10);
-            if (!myShield && !isSmiteInvincible) {
+            if (isKoth && playerBody) {
+                // In KOTH, rifle applies gentle shove knockback to player, zero damage!
+                playerBody.velocity.x += aimVec.x * 16;
+                playerBody.velocity.y = Math.max(playerBody.velocity.y, 8);
+                playerBody.velocity.z += aimVec.z * 16;
+            }
+            const dmg = isKoth ? 0 : (bot.difficulty === 'hard' ? 22 : (bot.difficulty === 'medium' ? 15 : 10));
+            if (dmg > 0 && !myShield && !isSmiteInvincible) {
                 myHp -= dmg;
                 lastHitBy = bot.id;
                 updateUI();
@@ -3682,8 +3760,15 @@ function botShoot(bot, isTargetPlayer, targetPos, targetBot) {
         const toBot = new THREE.Vector3().subVectors(targetBot.pos, startPos);
         const dot = toBot.normalize().dot(aimVec);
         if (dot > 0.985) {
-            const dmg = bot.difficulty === 'hard' ? 24 : 16;
-            damageBot(targetBot.id, dmg, false);
+            if (isKoth) {
+                // In KOTH, rifle shoves target bot gently, zero damage!
+                targetBot.velX = (targetBot.velX || 0) + aimVec.x * 16;
+                targetBot.velZ = (targetBot.velZ || 0) + aimVec.z * 16;
+                targetBot.velocityY = Math.max(targetBot.velocityY || 0, 8);
+            } else {
+                const dmg = bot.difficulty === 'hard' ? 24 : 16;
+                damageBot(targetBot.id, dmg, false);
+            }
             createHitSpark(targetBot.pos, bColor);
         }
     }
@@ -4583,10 +4668,21 @@ function handleIncomingPacket(senderId, data) {
         }
     }
 
+    if (data.type === 'knockback') {
+        if (playerBody) {
+            playerBody.velocity.x += data.forceX || 0;
+            playerBody.velocity.y = Math.max(playerBody.velocity.y, data.forceY || 12);
+            playerBody.velocity.z += data.forceZ || 0;
+        }
+    }
+
     if (data.type === 'hit') {
         if (data.target === myPeerId) {
             if (myShield || isSmiteInvincible) return;
-            myHp -= data.damage || 25;
+            if (gameState.mode === 'KOTH' || currentGamemode === 'KOTH') {
+                data.damage = 0; // Zero damage in KOTH!
+            }
+            myHp -= data.damage || 0;
             lastHitBy = senderId;
             updateUI();
             updateMyNametag();
@@ -4685,6 +4781,9 @@ function respawn() {
         spawnX = (Math.random() < 0.5 ? 100 : -100); 
         spawnY = 20; 
         spawnZ = (Math.random() < 0.5 ? 100 : -100);
+        myInventory = ['knockback_rifle', 'knock_stick', null, null, null];
+        myOwnedWeapons = ['knockback_rifle', 'knock_stick'];
+        updateHotbarUI();
     } else {
         spawnX = (Math.random() - 0.5) * 100; spawnY = 80; spawnZ = (Math.random() - 0.5) * 100;
     }
@@ -4989,24 +5088,30 @@ function initGamemode(mode, isNewGame = true) {
     document.getElementById('match-hud').style.display = 'flex';
     document.getElementById('match-mode-text').innerText = mode;
     gameState.mode = mode;
+    currentGamemode = mode;
     
     if (isNewGame) {
         gameState.started = true;
         gameState.timer = 5 * 60;
         gameState.scoreRed = 0;
         gameState.scoreBlue = 0;
-        
-        if (mode === 'Gun Game' || mode === 'GUN_GAME') {
-            myInventory = ['default', null, null, null, null];
-            currentSlot = 0;
-            if (typeof window.equipSlot === 'function') window.equipSlot(0);
-        } else if (mode === 'KOTH') {
-            // KOTH Exclusive: Only Knockback Rifle & Knock Stick are allowed
-            myInventory = ['knockback_rifle', 'knock_stick', null, null, null];
-            myOwnedWeapons = ['knockback_rifle', 'knock_stick'];
-            currentSlot = 0;
-            if (typeof window.equipSlot === 'function') window.equipSlot(0);
-        }
+    }
+    
+    if (mode === 'Gun Game' || mode === 'GUN_GAME') {
+        myInventory = ['default', null, null, null, null];
+        currentSlot = 0;
+        updateHotbarUI();
+        if (typeof window.equipSlot === 'function') window.equipSlot(0);
+    } else if (mode === 'KOTH') {
+        // KOTH Exclusive: Only Knockback Rifle & Knock Stick are allowed
+        myInventory = ['knockback_rifle', 'knock_stick', null, null, null];
+        myOwnedWeapons = ['knockback_rifle', 'knock_stick'];
+        currentSlot = 0;
+        updateHotbarUI();
+        if (typeof window.equipSlot === 'function') window.equipSlot(0);
+    } else {
+        updateHotbarUI();
+        if (typeof window.equipSlot === 'function') window.equipSlot(currentSlot || 0);
     }
     
     for (const ob of mapMeshes) scene.remove(ob);
@@ -5233,11 +5338,36 @@ function init() {
         }
     });
 
+function resumeGame() {
+    const exitPanel = document.getElementById('exit-panel');
+    if (exitPanel) {
+        exitPanel.classList.add('hidden');
+        exitPanel.style.display = 'none';
+    }
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) settingsModal.classList.add('hidden');
+    const shopModal = document.getElementById('shop-modal');
+    if (shopModal) shopModal.classList.add('hidden');
+    const vipModal = document.getElementById('vip-modal');
+    if (vipModal) vipModal.classList.add('hidden');
+    const adminModal = document.getElementById('admin-modal');
+    if (adminModal) adminModal.classList.add('hidden');
+
+    const hotbar = document.getElementById('hotbar');
+    if (hotbar) hotbar.style.display = 'flex';
+
+    if (!isMobileDeploy && myHp > 0 && controls && !controls.isLocked) {
+        try {
+            controls.lock();
+        } catch(e) {
+            console.warn("Could not lock controls:", e);
+        }
+    }
+}
+
     // Exit Panel Actions
     document.getElementById('btn-resume-match').addEventListener('click', () => {
-        document.getElementById('exit-panel').classList.add('hidden');
-        document.getElementById('exit-panel').style.display = 'none';
-        if (!isMobileDeploy && myHp > 0) controls.lock();
+        resumeGame();
     });
     
     document.getElementById('btn-exit-match').addEventListener('click', () => {
@@ -5916,6 +6046,28 @@ function onKeyDown(e) {
         }
         return;
     }
+    if (e.code === 'Escape') {
+        const exitPanel = document.getElementById('exit-panel');
+        const isExitOpen = exitPanel && exitPanel.style.display === 'flex' && !exitPanel.classList.contains('hidden');
+        const settingsModal = document.getElementById('settings-modal');
+        const isSettingsOpen = settingsModal && !settingsModal.classList.contains('hidden');
+        const shopModal = document.getElementById('shop-modal');
+        const isShopOpen = shopModal && !shopModal.classList.contains('hidden');
+        const vipModal = document.getElementById('vip-modal');
+        const isVipOpen = vipModal && !vipModal.classList.contains('hidden');
+        const adminModal = document.getElementById('admin-modal');
+        const isAdminOpen = adminModal && !adminModal.classList.contains('hidden');
+
+        if (isExitOpen || isSettingsOpen || isShopOpen || isVipOpen || isAdminOpen) {
+            e.preventDefault();
+            resumeGame();
+            return;
+        } else if (gameState.started && controls && controls.isLocked) {
+            e.preventDefault();
+            controls.unlock();
+            return;
+        }
+    }
     if (e.code === 'KeyR') isWallRunning = true;
     if (e.code === 'KeyF') {
         isHoldingGrapple = true;
@@ -6020,30 +6172,70 @@ function shoot() {
 function fireMelee(range, damage) {
     const raycaster = new THREE.Raycaster(); 
     raycaster.setFromCamera(new THREE.Vector2(0,0), camera); 
-    const targets = Object.values(remotePlayers).map(r => r.mesh); 
+    const targets = [];
+    Object.values(remotePlayers).forEach(r => { if (r?.mesh) targets.push(r.mesh); });
+    activeBots.forEach(b => { if (b?.mesh && b.hp > 0) targets.push(b.mesh); });
+
     const intersects = raycaster.intersectObjects(targets, true);
 
     if (intersects.length > 0 && intersects[0].distance <= range) {
+        const hitPoint = intersects[0].point;
         let hitId = null; 
+        let isBotHit = false;
         let cur = intersects[0].object;
         while(cur && !hitId) { 
-            if (cur.userData && cur.userData.peerId) hitId = cur.userData.peerId; 
+            if (cur.userData && cur.userData.botId) { hitId = cur.userData.botId; isBotHit = true; break; }
+            if (cur.userData && cur.userData.peerId) { hitId = cur.userData.peerId; isBotHit = false; break; }
             cur = cur.parent; 
         }
-        if (hitId && remotePlayers[hitId]) {
-            netSendTo(hitId, { type: 'hit', target: hitId, damage: damage });
-            if (myLifesteal) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
+
+        const isKoth = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH');
+        const finalDamage = isKoth ? 0 : damage;
+
+        const wStats = WEAPON_STATS[myGun];
+        if (wStats && wStats.knockback) {
+            const kDir = new THREE.Vector3();
+            camera.getWorldDirection(kDir);
+            kDir.y = 0.42; // Upward super-launch trajectory
+            kDir.normalize();
+
+            if (isBotHit) {
+                const b = activeBots.find(x => x.id === hitId);
+                if (b) {
+                    b.velX = (b.velX || 0) + kDir.x * wStats.knockback;
+                    b.velZ = (b.velZ || 0) + kDir.z * wStats.knockback;
+                    b.velocityY = Math.max(b.velocityY || 0, wStats.lift || 160);
+                }
+            } else if (remotePlayers[hitId]) {
+                netSendTo(hitId, {
+                    type: 'knockback',
+                    forceX: kDir.x * wStats.knockback,
+                    forceY: wStats.lift || 160,
+                    forceZ: kDir.z * wStats.knockback
+                });
+            }
+        }
+
+        if (isBotHit) {
+            if (finalDamage > 0) damageBot(hitId, finalDamage, false);
+            createHitSpark(hitPoint, 0xffd700);
+        } else if (hitId && remotePlayers[hitId]) {
+            netSendTo(hitId, { type: 'hit', target: hitId, damage: finalDamage });
+            if (myLifesteal && finalDamage > 0) { myHp = Math.min(myMaxHp, myHp + 20); updateUI(); }
             if (myCoinSteal) myCoins += 50; else myCoins += 20; 
             updateUI(); 
             saveLocalProfile();
+            createHitSpark(hitPoint, 0xffd700);
         }
+
+        playKnockSound(wStats?.knockback > 100);
     }
     if (myAvatar && myAvatar.rArm) { 
         myAvatar.rArm.rotation.x -= Math.PI/2; 
-        setTimeout(() => { myAvatar.rArm.rotation.x += Math.PI/2; }, 150); 
+        setTimeout(() => { if (myAvatar && myAvatar.rArm) myAvatar.rArm.rotation.x += Math.PI/2; }, 150); 
     }
     meleeAnimTimer = 0.25;
-    fireCooldown = 25;
+    fireCooldown = (WEAPON_STATS[myGun]?.fireRate || 14);
 }
 
 function createHitSpark(pos, colorHex) {
@@ -6124,6 +6316,7 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
 
             let finalDamage = damage;
             const dist = camera.position.distanceTo(hitPoint);
+            const isKoth = (gameState.mode === 'KOTH' || currentGamemode === 'KOTH');
 
             const wStats = WEAPON_STATS[myGun];
             if (wStats && wStats.knockback) {
@@ -6133,20 +6326,23 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
                 if (isBotHit) {
                     const b = activeBots.find(x => x.id === hitId);
                     if (b) {
-                        b.pos.addScaledVector(kDir, wStats.knockback * 0.15);
-                        b.velocityY = wStats.lift || 15;
+                        b.velX = (b.velX || 0) + kDir.x * wStats.knockback;
+                        b.velZ = (b.velZ || 0) + kDir.z * wStats.knockback;
+                        b.velocityY = Math.max(b.velocityY || 0, wStats.lift || 8);
                     }
                 } else if (remotePlayers[hitId]) {
                     netSendTo(hitId, { 
                         type: 'knockback', 
                         forceX: kDir.x * wStats.knockback, 
-                        forceY: wStats.lift || 15, 
+                        forceY: wStats.lift || 8, 
                         forceZ: kDir.z * wStats.knockback 
                     });
                 }
             }
 
-            if (myGun === 'sniper') {
+            if (isKoth) {
+                finalDamage = 0; // KOTH guns deal zero damage!
+            } else if (myGun === 'sniper') {
                 if (isHeadshot) {
                     finalDamage = targetMaxHp;
                 } else {
@@ -6171,7 +6367,7 @@ function fireRay(offsetX, offsetY, damage, colorHex) {
             }
 
             if (isBotHit) {
-                damageBot(hitId, finalDamage, isHeadshot);
+                if (finalDamage > 0) damageBot(hitId, finalDamage, isHeadshot);
             } else if (remotePlayers[hitId]) {
                 netSendTo(hitId, { type: 'hit', target: hitId, damage: finalDamage, isHeadshot: isHeadshot });
             }
@@ -6339,6 +6535,37 @@ function createGunMesh(type) {
         const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.15), accentMat); 
         drum.rotation.z = Math.PI/2; drum.position.y = -0.2; 
         group.add(body, barrel, drum);
+    } else if (type === 'knockback_rifle') {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.26, 0.9), gunMat);
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.4), gunMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.z = -0.9;
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x00f3ff, emissiveIntensity: 2.0 });
+        const coil1 = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 16), coilMat);
+        coil1.position.z = -0.6;
+        const coil2 = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 16), coilMat);
+        coil2.position.z = -0.9;
+        const coil3 = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 16), coilMat);
+        coil3.position.z = -1.2;
+        const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.5), accentMat);
+        stock.position.z = 0.55;
+        group.add(body, barrel, coil1, coil2, coil3, stock);
+    } else if (type === 'knock_stick') {
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6), accentMat);
+        handle.rotation.x = Math.PI / 2;
+        handle.position.z = 0.15;
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.6), gunMat);
+        shaft.rotation.x = Math.PI / 2;
+        shaft.position.z = -0.8;
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 2.2, metalness: 0.9 });
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.07, 0.5), headMat);
+        head.rotation.x = Math.PI / 2;
+        head.position.z = -1.75;
+        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 8, 16), headMat);
+        ring1.position.z = -1.6;
+        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 8, 16), headMat);
+        ring2.position.z = -1.85;
+        group.add(handle, shaft, head, ring1, ring2);
     } else if (type === 'katana') {
         const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.25), accentMat); 
         handle.rotation.x = Math.PI/2;
@@ -7092,10 +7319,18 @@ function animate() {
     }
 
     const isControlLocked = (controls && controls.isLocked === true) || isMobileDeploy;
-    const isSimActive = isControlLocked || isSmiteCinematicActive;
+    const isPaused = !isControlLocked && !isSmiteCinematicActive;
 
-    if ( isSimActive && myHp > 0 ) {
-        if (isSmiteCinematicActive) {
+    // Simulation physics & bots ALWAYS run while match is active so pressing ESC never freezes the engine
+    if (gameState.started) {
+        world.step(1/60);
+        if (isBotMatch && activeBots.length > 0) {
+            updateBots(1/60);
+        }
+    }
+
+    if ( myHp > 0 ) {
+        if (isPaused || isSmiteCinematicActive) {
             playerBody.velocity.x = 0;
             playerBody.velocity.z = 0;
             if (playerBody.velocity.y > 0) playerBody.velocity.y = 0;
@@ -7106,12 +7341,12 @@ function animate() {
             isShooting = false;
         }
 
-        if (jumpAntiGravityTimer > 0 && !isSmiteCinematicActive) { 
+        if (jumpAntiGravityTimer > 0 && !isPaused && !isSmiteCinematicActive) { 
             jumpAntiGravityTimer -= 1/60; 
             playerBody.force.y += playerBody.mass * 55; 
         }
-        world.step(1/60); 
-        if (!isSmiteCinematicActive) {
+
+        if (!isPaused && !isSmiteCinematicActive) {
             updateGamepads();
         }
         
@@ -7194,11 +7429,6 @@ function animate() {
         if (abilityCooldownTimer > 0) {
             abilityCooldownTimer = Math.max(0, abilityCooldownTimer - 1/60);
             updateAbilityHUD();
-        }
-
-        // Offline Bots Update
-        if (isBotMatch && activeBots.length > 0) {
-            updateBots(1/60);
         }
 
         if (playerBody.position.y < -10) {
@@ -7322,7 +7552,7 @@ function animate() {
                 let bobY = (movingAmt > 0 && isGrounded) ? Math.abs(Math.sin(walkTime)) * 0.05 : 0;
                 let bobX = (movingAmt > 0 && isGrounded) ? Math.sin(walkTime * 0.5) * 0.03 : 0;
                 viewModelContainer.position.set(0.4 + bobX, -0.3 + bobY, -0.6);
-                if (myGun === 'katana') {
+                if (myGun === 'katana' || myGun === 'knock_stick') {
                     viewModelContainer.rotation.set(0, 0.4, 0.4);
                 } else {
                     viewModelContainer.rotation.set(0, 0, 0);
