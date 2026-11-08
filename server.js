@@ -40,18 +40,18 @@ app.get('/api/lobbies', (req, res) => {
 
 // Host registers or heartbeats a public lobby
 app.post('/api/lobbies', (req, res) => {
-    const { roomCode, hostPeerId, hostName, gamemode, players } = req.body;
+    const { roomCode, hostPeerId, hostName, gamemode, players, maxPlayers } = req.body;
     if (!roomCode || !hostPeerId) {
         return res.status(400).json({ error: 'Missing roomCode or hostPeerId' });
     }
-    const cleanCode = roomCode.toUpperCase();
+    const cleanCode = String(roomCode).replace(/^cf3d-rm-/i, '').toUpperCase();
     activeLobbies.set(cleanCode, {
         roomCode: cleanCode,
         hostPeerId,
         hostName: (hostName || 'Host').substring(0, 14),
         gamemode: gamemode || 'FFA',
         players: Math.min(8, Math.max(1, parseInt(players) || 1)),
-        maxPlayers: 8,
+        maxPlayers: maxPlayers || 8,
         lastPing: Date.now()
     });
     res.json({ success: true, activeCount: activeLobbies.size });
@@ -59,7 +59,7 @@ app.post('/api/lobbies', (req, res) => {
 
 // Remove a lobby (when host closes match or leaves)
 app.delete('/api/lobbies/:roomCode', (req, res) => {
-    const code = req.params.roomCode.toUpperCase();
+    const code = String(req.params.roomCode).replace(/^cf3d-rm-/i, '').toUpperCase();
     activeLobbies.delete(code);
     res.json({ success: true });
 });

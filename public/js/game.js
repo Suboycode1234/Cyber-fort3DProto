@@ -2945,6 +2945,7 @@ let lastNetTime = 0;
 let lastHeartbeatTime = {};
 let reconnectRetryCounts = {};
 let isConnecting = false;
+let heartbeatTimer = null;
 
 // STUN ICE Servers for NAT traversal & network redundancy
 const PEER_CONFIG = {
@@ -2962,55 +2963,202 @@ const PEER_CONFIG = {
 
 let isPublicRoom = true;
 let lobbyPingTimer = null;
+let isFetchingLobbies = false;
 
 function escapeHtml(str) {
     if (!str) return 'Player';
     return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
 }
 
-function fetchLobbies() {
+async function fetchLobbies() {
     const sl = document.getElementById('server-list');
-    if (!sl) return;
-    
-    fetch('/api/lobbies')
-        .then(r => r.json())
-        .then(list => {
-            sl.innerHTML = '';
-            if (!Array.isArray(list) || list.length === 0) {
-                sl.innerHTML = '<p style="color:#aaa; font-size:12px; text-align:center; margin:auto;">No public servers online.</p>';
-                return;
-            }
-            list.forEach(l => {
-                const div = document.createElement('div');
-                div.className = 'server-item';
-                div.innerHTML = `<span><strong>[${l.gamemode}]</strong> ${escapeHtml(l.hostName)}</span><span style="color:#00ffaa; font-weight:bold;">${l.players}/${l.maxPlayers || 8}</span>`;
-                div.onclick = (e) => {
-                    e.stopPropagation();
-                    if (!ensureCustomNametag()) return;
-                    joinMatch(l.roomCode || l.hostPeerId);
-                };
-                sl.appendChild(div);
+    if (!sl || isFetchingLobbies) return;
+    isFetchingLobbies = true;
+
+    const lobbiesMap = new Map();
+    let hasOnlineSource = false;
+
+    function mergeLobby(l) {
+        if (!l || !l.roomCode) return;
+        const code = String(l.roomCode).replace(/^cf3d-rm-/i, '').toUpperCase();
+        if (code.length < 3) return;
+        
+        // Don't show our own hosted room in our own browser
+        if (isHost && currentRoomCode && formatRoomCode(currentRoomCode) === code) return;
+
+        let pingTime = l.lastPing || (l.time ? l.time : Date.now());
+        if (pingTime < 1e11) pingTime *= 1000; // Convert seconds to ms if needed
+        // Ignore dead / stale lobbies older than 30 seconds
+        if (Math.abs(Date.now() - pingTime) > 30000) return;
+
+        const existing = lobbiesMap.get(code);
+        if (!existing || pingTime > (existing.lastPing || 0)) {
+            lobbiesMap.set(code, {
+                roomCode: code,
+                hostPeerId: l.hostPeerId || (ROOM_PREFIX + code.toLowerCase()),
+                hostName: (l.hostName || 'Host').substring(0, 14),
+                gamemode: l.gamemode || 'FFA',
+                players: Math.min(8, Math.max(1, parseInt(l.players) || 1)),
+                maxPlayers: l.maxPlayers || 8,
+                lastPing: pingTime
             });
-        })
-        .catch(() => {
-            if (sl.children.length === 0 || sl.innerText.includes('Fetching')) {
-                sl.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:auto;">Server browser offline.</p>';
-            }
-        });
+        }
+    }
+
+    const fetchPromises = [];
+
+    // Source 1: Local HTTP API (if running via http: or https:)
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        fetchPromises.push(
+            fetch('/api/lobbies', { signal: AbortSignal.timeout(3000) })
+                .then(r => r.ok ? r.json() : [])
+                .then(list => {
+                    if (Array.isArray(list)) {
+                        hasOnlineSource = true;
+                        list.forEach(mergeLobby);
+                    }
+                })
+                .catch(() => {})
+        );
+    }
+
+    // Source 2: Global Vercel Cloud Server (if not already on Vercel)
+    if (!window.location.hostname.includes('vercel.app')) {
+        fetchPromises.push(
+            fetch('https://cyber-fort3-d-proto.vercel.app/api/lobbies', { signal: AbortSignal.timeout(4500) })
+                .then(r => r.ok ? r.json() : [])
+                .then(list => {
+                    if (Array.isArray(list)) {
+                        hasOnlineSource = true;
+                        list.forEach(mergeLobby);
+                    }
+                })
+                .catch(() => {})
+        );
+    }
+
+    // Source 3: Universal Public Pub-Sub Relay (ntfy.sh) - works 100% on file:///, Vercel, localhost
+    fetchPromises.push(
+        fetch('https://ntfy.sh/cyberfort_p2p_lobbies_v1/json?poll=1&since=25s', { signal: AbortSignal.timeout(4500) })
+            .then(r => r.ok ? r.text() : '')
+            .then(text => {
+                if (!text) return;
+                hasOnlineSource = true;
+                const lines = text.trim().split('\n');
+                for (const line of lines) {
+                    if (!line) continue;
+                    try {
+                        const evt = JSON.parse(line);
+                        if (evt.event === 'message' && evt.message) {
+                            const payload = JSON.parse(evt.message);
+                            mergeLobby(payload);
+                        }
+                    } catch(e) {}
+                }
+            })
+            .catch(() => {})
+    );
+
+    try {
+        await Promise.all(fetchPromises);
+    } catch(e) {}
+
+    isFetchingLobbies = false;
+
+    // Render list
+    const lobbies = Array.from(lobbiesMap.values());
+    if (lobbies.length === 0) {
+        if (!hasOnlineSource) {
+            sl.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:auto;">Server browser offline.</p>';
+        } else {
+            sl.innerHTML = '<p style="color:#aaa; font-size:12px; text-align:center; margin:auto;">No public servers online.</p>';
+        }
+        return;
+    }
+
+    sl.innerHTML = '';
+    lobbies.forEach(l => {
+        const div = document.createElement('div');
+        div.className = 'server-item';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        div.style.padding = '6px 10px';
+        div.style.marginBottom = '4px';
+        div.style.background = 'rgba(0, 243, 255, 0.08)';
+        div.style.border = '1px solid rgba(0, 243, 255, 0.4)';
+        div.style.borderRadius = '4px';
+        div.style.cursor = 'pointer';
+        div.style.transition = 'all 0.15s ease';
+
+        div.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:2px;">
+                <span style="font-size:12px; color:#fff;"><strong style="color:#00f3ff;">[${escapeHtml(l.gamemode)}]</strong> ${escapeHtml(l.hostName)}</span>
+                <span style="font-size:10px; color:#888; font-family:monospace;">CODE: ${escapeHtml(l.roomCode)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#00ffaa; font-weight:bold; font-size:11px;">${l.players}/${l.maxPlayers || 8}</span>
+                <span style="background:rgba(0,243,255,0.2); border:1px solid #00f3ff; color:#00f3ff; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:bold;">JOIN</span>
+            </div>
+        `;
+
+        div.onmouseenter = () => {
+            div.style.background = 'rgba(0, 243, 255, 0.25)';
+            div.style.borderColor = '#00f3ff';
+            div.style.boxShadow = '0 0 8px rgba(0, 243, 255, 0.4)';
+        };
+        div.onmouseleave = () => {
+            div.style.background = 'rgba(0, 243, 255, 0.08)';
+            div.style.borderColor = 'rgba(0, 243, 255, 0.4)';
+            div.style.boxShadow = 'none';
+        };
+
+        div.onclick = (e) => {
+            e.stopPropagation();
+            if (!ensureCustomNametag()) return;
+            joinMatch(l.roomCode || l.hostPeerId);
+        };
+        sl.appendChild(div);
+    });
 }
 
 function registerPublicLobby() {
     if (!isPublicRoom || !isHost || !currentRoomCode) return;
-    fetch('/api/lobbies', {
+    const cleanCode = formatRoomCode(currentRoomCode);
+    const hostId = myPeerId || (ROOM_PREFIX + cleanCode.toLowerCase());
+    const payload = {
+        roomCode: cleanCode,
+        hostPeerId: hostId,
+        hostName: myUsername || 'Host',
+        gamemode: currentGamemode || (document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA'),
+        players: (roomPeerIds && roomPeerIds.length) ? roomPeerIds.length : 1,
+        maxPlayers: 8,
+        lastPing: Date.now()
+    };
+
+    // 1. Post to local API if running via http: or https:
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        fetch('/api/lobbies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+    }
+
+    // 2. Post to Global Vercel Cloud Server (if not already browsing on Vercel)
+    if (!window.location.hostname.includes('vercel.app')) {
+        fetch('https://cyber-fort3-d-proto.vercel.app/api/lobbies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+    }
+
+    // 3. Post to Universal Pub-Sub Relay (ntfy.sh) - works 100% on file:///, Vercel, localhost
+    fetch('https://ntfy.sh/cyberfort_p2p_lobbies_v1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            roomCode: currentRoomCode,
-            hostPeerId: myPeerId,
-            hostName: myUsername,
-            gamemode: currentGamemode,
-            players: roomPeerIds.length || 1
-        })
+        headers: { 'Title': 'lobby', 'Tags': 'lobby' },
+        body: JSON.stringify(payload)
     }).catch(() => {});
 }
 
@@ -3029,8 +3177,14 @@ function startPublicLobbyPings() {
 
 function unregisterPublicLobby() {
     if (lobbyPingTimer) clearInterval(lobbyPingTimer);
-    if (currentRoomCode) {
-        fetch(`/api/lobbies/${currentRoomCode}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+    if (!currentRoomCode) return;
+    const cleanCode = formatRoomCode(currentRoomCode);
+
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        fetch(`/api/lobbies/${cleanCode}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+    }
+    if (!window.location.hostname.includes('vercel.app')) {
+        fetch(`https://cyber-fort3-d-proto.vercel.app/api/lobbies/${cleanCode}`, { method: 'DELETE', keepalive: true }).catch(() => {});
     }
 }
 
@@ -3073,8 +3227,14 @@ function setConnectionStatus(msg, isSuccess = false, isError = false) {
 
 function initPeer(customId = null, onReady = null) {
     if (peer && !peer.destroyed) {
-        if (onReady) onReady(myPeerId);
-        return;
+        if (customId && peer.id !== customId) {
+            console.log(`[PeerJS] Switching identity from ${peer.id} to ${customId}...`);
+            peer.destroy();
+            peer = null;
+        } else {
+            if (onReady) onReady(myPeerId || peer.id);
+            return;
+        }
     }
 
     setConnectionStatus("Initializing P2P Signaling...");
@@ -4303,7 +4463,11 @@ function init() {
     if (refBtn) {
         refBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            fetchLobbies();
+            const originalText = refBtn.innerText;
+            refBtn.innerText = '↻ ...';
+            fetchLobbies().finally(() => {
+                setTimeout(() => { refBtn.innerText = originalText; }, 500);
+            });
         });
     }
 
