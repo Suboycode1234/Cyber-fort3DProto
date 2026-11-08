@@ -2947,7 +2947,7 @@ let reconnectRetryCounts = {};
 let isConnecting = false;
 let heartbeatTimer = null;
 
-// STUN ICE Servers for NAT traversal & network redundancy
+// STUN & OpenRelay TURN ICE Servers for robust NAT/firewall traversal & P2P mesh
 const PEER_CONFIG = {
     debug: 1,
     config: {
@@ -2956,8 +2956,25 @@ const PEER_CONFIG = {
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun.services.mozilla.com' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+            { urls: 'stun:global.stun.twilio.com:3478' },
+            { urls: 'stun:openrelay.metered.ca:80' },
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
+        ],
+        iceCandidatePoolSize: 10
     }
 };
 
@@ -3192,8 +3209,15 @@ window.addEventListener('beforeunload', () => {
     if (isHost && isPublicRoom) unregisterPublicLobby();
 });
 
+function normalizePeerId(input) {
+    if (!input) return '';
+    const clean = String(input).trim().toLowerCase().replace(/^cf3d-rm-/i, '').replace(/\s+/g, '');
+    return ROOM_PREFIX + clean;
+}
+
 function formatRoomCode(code) {
-    return code.replace(ROOM_PREFIX, '').toUpperCase();
+    if (!code) return '';
+    return String(code).trim().replace(/^cf3d-rm-/i, '').replace(/\s+/g, '').toUpperCase();
 }
 
 function generateRandomRoomCode() {
@@ -3225,15 +3249,64 @@ function setConnectionStatus(msg, isSuccess = false, isError = false) {
     el.style.color = isError ? '#ff0055' : (isSuccess ? '#00ffaa' : '#00f3ff');
 }
 
+let peerPendingCallbacks = [];
+
 function initPeer(customId = null, onReady = null) {
-    if (peer && !peer.destroyed) {
-        if (customId && peer.id !== customId) {
-            console.log(`[PeerJS] Switching identity from ${peer.id} to ${customId}...`);
-            peer.destroy();
-            peer = null;
+    if (onReady) peerPendingCallbacks.push(onReady);
+
+    const flushCallbacks = (id) => {
+        const cbs = [...peerPendingCallbacks];
+        peerPendingCallbacks = [];
+        cbs.forEach(cb => {
+            try { cb(id); } catch(e) { console.error('[PeerJS] Callback error:', e); }
+        });
+    };
+
+    let needsRecreation = false;
+    if (peer) {
+        if (peer.destroyed) {
+            needsRecreation = true;
+        } else if (customId) {
+            // Hosting: must match customId exactly
+            if (peer.id !== customId) {
+                console.log(`[PeerJS] Switching identity from ${peer.id} to host ID ${customId}...`);
+                needsRecreation = true;
+            }
         } else {
-            if (onReady) onReady(myPeerId || peer.id);
+            // Joining or client: if peer currently has a room host ID, reset to clean client peer
+            if (peer.id && peer.id.startsWith(ROOM_PREFIX)) {
+                console.log(`[PeerJS] Resetting host identity ${peer.id} to client peer...`);
+                needsRecreation = true;
+            }
+        }
+    }
+
+    if (needsRecreation && peer) {
+        try { peer.destroy(); } catch(e) {}
+        peer = null;
+        myPeerId = null;
+    }
+
+    // If peer is already open and ready, fire callbacks immediately
+    if (peer && !peer.destroyed && peer.open && peer.id) {
+        myPeerId = peer.id;
+        flushCallbacks(peer.id);
+        return;
+    }
+
+    // If peer exists and is still connecting, let the 'open' handler fire the callbacks
+    if (peer && !peer.destroyed && !peer.disconnected) {
+        return;
+    }
+
+    // If peer is disconnected from signaling server, attempt reconnect
+    if (peer && !peer.destroyed && peer.disconnected) {
+        try {
+            peer.reconnect();
             return;
+        } catch(e) {
+            try { peer.destroy(); } catch(err) {}
+            peer = null;
         }
     }
 
@@ -3243,9 +3316,12 @@ function initPeer(customId = null, onReady = null) {
     peer.on('open', (id) => {
         myPeerId = id;
         console.log('[PeerJS] Connected to signaling server with ID:', id);
-        document.getElementById('my-id-display').innerText = id.startsWith(ROOM_PREFIX) ? formatRoomCode(id) : id.substring(0, 10) + '...';
+        const disp = document.getElementById('my-id-display');
+        if (disp) {
+            disp.innerText = id.startsWith(ROOM_PREFIX) ? formatRoomCode(id) : id.substring(0, 10) + '...';
+        }
         setConnectionStatus("P2P Signaling Online", true);
-        if (onReady) onReady(id);
+        flushCallbacks(id);
     });
 
     peer.on('connection', (conn) => {
@@ -3272,6 +3348,7 @@ function initPeer(customId = null, onReady = null) {
                 hostMatch(generateRandomRoomCode());
             }, 500);
         } else if (err.type === 'peer-unavailable') {
+            isConnecting = false;
             setConnectionStatus("Target room not found or host offline.", false, true);
         } else {
             setConnectionStatus(`P2P Notice: ${err.type || 'Connection alert'}`, false);
@@ -3282,7 +3359,7 @@ function initPeer(customId = null, onReady = null) {
 function setupDataConnection(conn) {
     const remoteId = conn.peer;
 
-    conn.on('open', () => {
+    const onChannelOpen = () => {
         console.log(`[P2P Mesh] Direct data channel open with peer: ${remoteId}`);
         peerConnections[remoteId] = conn;
         reconnectRetryCounts[remoteId] = 0;
@@ -3291,7 +3368,7 @@ function setupDataConnection(conn) {
         if (!roomPeerIds.includes(remoteId)) {
             // Check 8-player cap
             if (roomPeerIds.length >= MAX_PLAYERS) {
-                conn.send({ type: 'room_full', message: 'Room has reached the maximum of 8 players.' });
+                try { conn.send({ type: 'room_full', message: 'Room has reached the maximum of 8 players.' }); } catch(e) {}
                 setTimeout(() => conn.close(), 500);
                 return;
             }
@@ -3302,21 +3379,25 @@ function setupDataConnection(conn) {
 
         // If we are Host, introduce new peer to everyone and sync state
         if (isHost) {
-            conn.send({
-                type: 'welcome',
-                roomCode: currentRoomCode,
-                hostId: myPeerId,
-                peers: roomPeerIds,
-                mode: currentGamemode,
-                map: gameState.map,
-                timer: gameState.timer,
-                timeLimit: gameState.timeLimit,
-                scoreLimit: gameState.scoreLimit,
-                scoreRed: gameState.scoreRed,
-                scoreBlue: gameState.scoreBlue,
-                flagRed: gameState.flagRed,
-                flagBlue: gameState.flagBlue
-            });
+            try {
+                conn.send({
+                    type: 'welcome',
+                    roomCode: currentRoomCode,
+                    hostId: myPeerId,
+                    peers: roomPeerIds,
+                    mode: currentGamemode,
+                    map: gameState.map,
+                    timer: gameState.timer,
+                    timeLimit: gameState.timeLimit,
+                    scoreLimit: gameState.scoreLimit,
+                    scoreRed: gameState.scoreRed,
+                    scoreBlue: gameState.scoreBlue,
+                    flagRed: gameState.flagRed,
+                    flagBlue: gameState.flagBlue
+                });
+            } catch(e) {
+                console.warn('[P2P Mesh] Failed to send welcome packet:', e);
+            }
 
             // Tell all existing peers about this new peer
             netBroadcast({
@@ -3327,14 +3408,22 @@ function setupDataConnection(conn) {
         }
 
         // Send our identity info
-        conn.send({
-            type: 'init',
-            username: myUsername,
-            teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto'
-        });
+        try {
+            conn.send({
+                type: 'init',
+                username: myUsername,
+                teamPref: document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto'
+            });
+        } catch(e) {}
 
         adminLog(`P2P channel established: ${remoteId.substring(0, 8)}...`);
-    });
+    };
+
+    if (conn.open) {
+        onChannelOpen();
+    } else {
+        conn.on('open', onChannelOpen);
+    }
 
     conn.on('data', (data) => {
         handleIncomingPacket(remoteId, data);
@@ -3532,15 +3621,22 @@ function hostMatch(customRoomCode = null) {
             gameState.myTeam = 'none';
         }
 
-        applyClass(document.getElementById('player-class').value);
+        applyClass(document.getElementById('player-class') ? document.getElementById('player-class').value : 'assault');
+
+        const blockerEl = document.getElementById('blocker');
+        if (blockerEl) blockerEl.style.display = 'none';
+        const hotbarEl = document.getElementById('hotbar');
+        if (hotbarEl) hotbarEl.style.display = 'flex';
 
         if (isMobile) {
             isMobileDeploy = true;
-            document.getElementById('blocker').style.display = 'none';
-            document.getElementById('hotbar').style.display = 'flex';
             showMobileControls();
         } else {
-            if (!controls.isLocked) controls.lock();
+            try {
+                if (controls && !controls.isLocked) controls.lock();
+            } catch(e) {
+                console.warn("Pointer lock requires user gesture:", e);
+            }
         }
 
         initGamemode(currentGamemode, true, gameState.map);
@@ -3558,28 +3654,42 @@ function hostMatch(customRoomCode = null) {
 
 // Join Match Function
 function joinMatch(targetInput) {
-    if (!targetInput || isConnecting) return;
+    if (!targetInput) return;
+    if (isConnecting) {
+        console.warn("Join already in progress...");
+        return;
+    }
     isConnecting = true;
 
-    let targetId = targetInput.trim();
-    if (!targetId.startsWith(ROOM_PREFIX)) {
-        targetId = ROOM_PREFIX + targetId.toLowerCase();
-    }
+    const targetId = normalizePeerId(targetInput);
     const cleanCode = formatRoomCode(targetId);
 
     setConnectionStatus(`Connecting to room [${cleanCode}]...`);
 
-    initPeer(null, (id) => {
+    let joinTimeoutTimer = null;
+
+    initPeer(null, (myId) => {
         isHost = false;
         hostPeerId = targetId;
         currentRoomCode = targetId;
+        roomPeerIds = [myId];
+
+        console.log(`[P2P Join] Connecting to host: ${targetId} as client: ${myId}`);
+
+        // Close any stale connections before connecting
+        Object.keys(peerConnections).forEach(pid => {
+            try { peerConnections[pid].close(); } catch(e) {}
+            delete peerConnections[pid];
+        });
 
         const conn = peer.connect(targetId, { reliable: true });
         setupDataConnection(conn);
 
-        conn.on('open', () => {
+        const onConnected = () => {
+            if (joinTimeoutTimer) clearTimeout(joinTimeoutTimer);
+            joinTimeoutTimer = null;
             isConnecting = false;
-            applyClass(document.getElementById('player-class').value);
+            applyClass(document.getElementById('player-class') ? document.getElementById('player-class').value : 'assault');
 
             const hudRoomEl = document.getElementById('ingame-room-hud');
             const hudCodeEl = document.getElementById('hud-room-code');
@@ -3588,25 +3698,64 @@ function joinMatch(targetInput) {
                 hudCodeEl.innerText = cleanCode;
             }
 
+            const blockerEl = document.getElementById('blocker');
+            if (blockerEl) blockerEl.style.display = 'none';
+            const hotbarEl = document.getElementById('hotbar');
+            if (hotbarEl) hotbarEl.style.display = 'flex';
+
             if (isMobile) {
                 isMobileDeploy = true;
-                document.getElementById('blocker').style.display = 'none';
-                document.getElementById('hotbar').style.display = 'flex';
                 showMobileControls();
             } else {
-                if (!controls.isLocked) controls.lock();
+                try {
+                    if (controls && !controls.isLocked) controls.lock();
+                } catch(e) {
+                    console.warn("Pointer lock requires user gesture:", e);
+                }
             }
 
             startHeartbeat();
             setConnectionStatus(`Connected to room [${cleanCode}]`, true);
+
+            // Redundant state sync request if welcome packet was delayed
+            setTimeout(() => {
+                if (!gameState.started && conn && conn.open) {
+                    try { conn.send({ type: 'request_sync' }); } catch(e) {}
+                }
+            }, 1200);
+        };
+
+        if (conn.open) {
+            onConnected();
+        } else {
+            conn.on('open', onConnected);
+        }
+
+        conn.on('error', (err) => {
+            console.error(`[P2P Join] Error connecting to host ${targetId}:`, err);
+            if (joinTimeoutTimer) clearTimeout(joinTimeoutTimer);
+            joinTimeoutTimer = null;
+            isConnecting = false;
+            setConnectionStatus(`Connection failed: ${err?.type || err?.message || 'Error'}`, false, true);
         });
 
-        setTimeout(() => {
+        conn.on('close', () => {
+            if (isConnecting) {
+                if (joinTimeoutTimer) clearTimeout(joinTimeoutTimer);
+                joinTimeoutTimer = null;
+                isConnecting = false;
+                setConnectionStatus("Connection closed by host.", false, true);
+            }
+        });
+
+        // 15 seconds connection timeout (for WebRTC ICE candidates + OpenRelay TURN)
+        joinTimeoutTimer = setTimeout(() => {
             if (isConnecting) {
                 isConnecting = false;
-                setConnectionStatus("Connection timed out. Check Room Code.", false, true);
+                setConnectionStatus("Connection timed out. Host may be offline or unreachable.", false, true);
+                try { conn.close(); } catch(e) {}
             }
-        }, 8000);
+        }, 15000);
     });
 }
 
@@ -3624,6 +3773,32 @@ function handleIncomingPacket(senderId, data) {
 
     if (data.type === 'heartbeat') {
         return;
+    }
+
+    // Host responds to sync requests and peer init with authoritative game state
+    if (isHost && (data.type === 'request_sync' || data.type === 'init')) {
+        const conn = peerConnections[senderId];
+        if (conn && conn.open) {
+            try {
+                conn.send({
+                    type: 'welcome',
+                    roomCode: currentRoomCode,
+                    hostId: myPeerId,
+                    peers: roomPeerIds,
+                    mode: currentGamemode,
+                    map: gameState.map,
+                    timer: gameState.timer,
+                    timeLimit: gameState.timeLimit,
+                    scoreLimit: gameState.scoreLimit,
+                    scoreRed: gameState.scoreRed,
+                    scoreBlue: gameState.scoreBlue,
+                    flagRed: gameState.flagRed,
+                    flagBlue: gameState.flagBlue
+                });
+            } catch(e) {
+                console.warn('[P2P Mesh] Failed to reply with welcome packet:', e);
+            }
+        }
     }
 
     if (data.type === 'room_full') {
@@ -4507,16 +4682,28 @@ function init() {
     });
 
     // Join Button Click
-    document.getElementById('btn-join').addEventListener('click', (e) => { 
-        e.stopPropagation(); 
-        const targetId = document.getElementById('join-id').value.trim(); 
-        if (!targetId) {
-            alert("Please enter a Room Code or Host Peer ID.");
-            return;
-        }
-        if (!ensureCustomNametag()) return;
-        joinMatch(targetId);
-    });
+    const btnJoinEl = document.getElementById('btn-join');
+    const joinInputEl = document.getElementById('join-id');
+    if (btnJoinEl) {
+        btnJoinEl.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            const targetId = joinInputEl ? joinInputEl.value.trim() : ''; 
+            if (!targetId) {
+                alert("Please enter a Room Code or Host Peer ID.");
+                return;
+            }
+            if (!ensureCustomNametag()) return;
+            joinMatch(targetId);
+        });
+    }
+    if (joinInputEl) {
+        joinInputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (btnJoinEl) btnJoinEl.click();
+            }
+        });
+    }
 
     // Solo Deploy Button Click
     document.getElementById('btn-solo').addEventListener('click', (e) => {
