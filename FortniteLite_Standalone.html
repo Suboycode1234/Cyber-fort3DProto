@@ -466,7 +466,7 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                         <option value="ZOMBIES">Infection / Zombies</option>
                     </select>
 
-                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Map (RT Water & Reflections)</label>
+                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Map (Original Classic vs Verdant Landscape)</label>
                     <select id="host-map" class="tech-select" style="margin-bottom:10px; padding:8px; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
                     </select>
 
@@ -557,10 +557,11 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                     <span style="font-size:12px; color:#aaa;">RTX PRESET:</span>
                     <select id="setting-rtx-preset" class="tech-select" style="padding:4px 10px; font-size:11px; width:auto; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
                         <option value="custom">Custom</option>
-                        <option value="off">Off (Vanilla)</option>
+                        <option value="off">Off (Clean Raster)</option>
+                        <option value="clarity" selected>Cinematic Clarity (Clean & Sharp)</option>
                         <option value="medium">Medium</option>
                         <option value="high">High Cinematic</option>
-                        <option value="ultra" selected>RTX ULTRA 🔥</option>
+                        <option value="ultra">RTX Ultra (Enhanced Lighting)</option>
                     </select>
                 </div>
             </div>
@@ -748,22 +749,22 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                             <input type="checkbox" id="setting-rtx-bloom" checked>
                             <span class="setting-title">RTX Silky Bloom & Glow (16-bit Float)</span>
                         </label>
-                        <input type="range" id="setting-bloom-strength" min="0.05" max="0.9" step="0.05" value="0.35" class="tech-range" style="width:105px;" title="Bloom Intensity">
+                        <input type="range" id="setting-bloom-strength" min="0.05" max="0.9" step="0.05" value="0.22" class="tech-range" style="width:105px;" title="Bloom Intensity">
                     </div>
 
                     <!-- SSR -->
                     <div class="setting-toggle-row">
                         <label class="switch-label">
-                            <input type="checkbox" id="setting-rtx-ssr" checked>
+                            <input type="checkbox" id="setting-rtx-ssr">
                             <span class="setting-title">RTX Water & Screen-Space Reflections (SSR)</span>
                         </label>
-                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.75" class="tech-range" style="width:105px;" title="SSR Intensity">
+                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.5" class="tech-range" style="width:105px;" title="SSR Intensity">
                     </div>
 
                     <!-- SSAO -->
                     <div class="setting-toggle-row">
                         <label class="switch-label">
-                            <input type="checkbox" id="setting-rtx-ao" checked>
+                            <input type="checkbox" id="setting-rtx-ao">
                             <span class="setting-title">RTX Ambient Occlusion (Contact Shadows)</span>
                         </label>
                         <input type="range" id="setting-ao-intensity" min="0.1" max="1.5" step="0.05" value="0.5" class="tech-range" style="width:105px;" title="AO Depth Intensity">
@@ -773,11 +774,11 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                     <div style="background:rgba(0, 243, 255, 0.06); border:1px solid rgba(0, 243, 255, 0.3); border-radius:6px; padding:8px 10px; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="color:#00f3ff; font-weight:bold; font-size:11px; letter-spacing:1px;">HDR TONE MAPPING (ZERO BLEACH)</span>
-                            <span id="lbl-tonemapping-badge" style="background:#00ffaa; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px;">VIBRANT FILMIC</span>
+                            <span id="lbl-tonemapping-badge" style="background:#00ffaa; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px;">PBR NEUTRAL</span>
                         </div>
                         <select id="setting-rtx-tonemapping" class="tech-select" style="padding:6px; font-size:11px; border-color:#00f3ff; color:#00f3ff; margin-bottom:4px;">
-                            <option value="vibrant" selected>Vibrant Filmic (Luminance-Preserved, Zero Bleach - Recommended)</option>
-                            <option value="neutral">Khronos PBR Neutral (True Balance)</option>
+                            <option value="neutral" selected>Khronos PBR Neutral (True Balance, Zero Bleach - Recommended)</option>
+                            <option value="vibrant">Vibrant Filmic (Luminance-Preserved)</option>
                             <option value="aces">ACES Classic (Legacy Filmic)</option>
                             <option value="off">Off (Raw HDR Output)</option>
                         </select>
@@ -1078,23 +1079,24 @@ const I5_4590_DEFAULT_SETTINGS = {
     brightness: 1.0,
     contrast: 1.0,
     gamma: 1.0,
-    saturation: 1.1,
+    saturation: 1.05,
     fov: 75,
     shadowQuality: 'off',          // Shadows OFF eliminates shadow map render pass (2x FPS on Intel HD 4600)
     maxFps: 60,                    // 60 FPS cap prevents thermal throttling on 4th Gen Haswell
     antiAliasing: 'fxaa',          // Fast 1-tap edge blend
     rayTracingMode: 'off',         // Standard rasterization (CRITICAL: zero raymarching overhead)
     fsrMode: 'balanced',           // FSR Balanced: 59% internal render target + EASU upscaling = smooth 60 FPS!
-    fsrSharpness: 0.8,
+    fsrSharpness: 0.6,
     rtxPreset: 'i5_4590',
     enableBloom: false,            // Bypasses UnrealBloomPass 5-mip Gaussian blur
-    bloomStrength: 0.4,
-    bloomRadius: 0.35,
+    bloomStrength: 0.20,
+    bloomRadius: 0.20,
     enableSSR: false,              // No SSR overhead
     ssrIntensity: 0.0,
     enableAO: false,               // No SSAO overhead
     aoIntensity: 0.0,
-    enableACES: true,              // Fast ALU tone mapping (cinematic look without GPU cost)
+    toneMappingMode: 'neutral',    // Khronos PBR Neutral (true-color balance, zero bleach)
+    enableACES: false,
     enableChromatic: false,
     chromaticIntensity: 0.0,
     enableAnamorphic: false,
@@ -1251,7 +1253,7 @@ let flagMeshBlue = null;
 // Game State
 let gameState = {
     mode: 'FFA',
-    map: 'ffa_neon_spire',
+    map: 'ffa_original',
     timer: 300,
     timeLimit: 300, // 0 = infinite
     scoreLimit: 25, // 0 = infinite
@@ -1267,39 +1269,32 @@ let myKothScore = 0;
 let isHost = false;
 let currentGamemode = 'FFA';
 let activeWaterPlanes = [];
-let activeJumpPads = [];
 
-// Map Catalog - 18 Distinct Maps Across 6 Gamemodes with Reflective RTX Water & Mirror Surfaces
+// Map Catalog - Exactly 2 Maps Per Gamemode: Map 1 = Original Classic, Map 2 = Verdant Landscape (Grey Towers & Greenery)
 const MAP_CATALOG = {
     'FFA': [
-        { id: 'ffa_neon_spire', name: 'Neon Spire Basin', desc: 'Central titan skyscraper encircled by reflective water moats, glass walkways, and mirror obelisks.' },
-        { id: 'ffa_cyber_atlantis', name: 'Cyber Atlantis', desc: 'Flooded high-tech city with glistening canals, submerged ruins, and floating combat decks.' },
-        { id: 'ffa_mirrored_canyon', name: 'Mirrored Canyon', desc: 'Sinuous river canyon with chrome rock formations, mirror waterfalls, and sky bridges.' }
+        { id: 'ffa_original', name: 'Classic Arena (Original)', desc: 'The classic cyber arena with central spire, spiral combat platforms, and jump pads.' },
+        { id: 'ffa_landscape', name: 'Verdant Citadel (Landscape & Towers)', desc: 'Full landscape with monolithic grey towers, lush 3D greenery, foliage, boulders, and reflecting river.' }
     ],
     'TDM': [
-        { id: 'tdm_twin_canals', name: 'Twin Canals', desc: 'Dual team battle stations divided by a wide neon reflection river and central glass choke-points.' },
-        { id: 'tdm_hydro_reservoir', name: 'Hydro Reservoir', desc: 'Multi-tiered industrial hydro-electric dam with water basins and mirror cooling towers.' },
-        { id: 'tdm_cyber_haven', name: 'Cyber Haven', desc: 'Futuristic maritime port with reflecting ocean slips, container docks, and mirror lighthouses.' }
+        { id: 'tdm_original', name: 'Classic Outpost (Original)', desc: 'The classic red and blue fortress outpost battleground.' },
+        { id: 'tdm_landscape', name: 'Verdant Divide (Landscape & Towers)', desc: 'Full landscape featuring Red & Blue brutalist grey towers across an overgrown river valley with forest cover.' }
     ],
     'CTF': [
-        { id: 'ctf_lagoon_outpost', name: 'Lagoon Outpost', desc: 'Red & Blue fortresses across an expansive cyber lagoon with high-speed glass sky-bridges.' },
-        { id: 'ctf_mirror_archipelago', name: 'Mirror Archipelago', desc: 'Island bases connected by glistening water shoals and chrome transit arches.' },
-        { id: 'ctf_canal_bastion', name: 'Canal Bastion', desc: 'Grand stone & neon fortress bisected by cross canals, mirror towers, and stealth waterways.' }
+        { id: 'ctf_original', name: 'Classic Bastion (Original)', desc: 'The classic symmetric capture-the-flag fortress.' },
+        { id: 'ctf_landscape', name: 'Verdant Fortress (Landscape & Towers)', desc: 'Full landscape with opposing fortified grey monolith bases, dense forest flanks, and central river bridge.' }
     ],
     'KOTH': [
-        { id: 'koth_sunken_citadel', name: 'Sunken Citadel', desc: 'The Hill sits on an elevated temple dais surrounded by an expansive reflective neon lake.' },
-        { id: 'koth_mirrored_oasis', name: 'Mirrored Oasis', desc: 'Step-pyramid capture zone with cascading water terraces, mirror walls, and bounce pads.' },
-        { id: 'koth_aqua_spire', name: 'Aqua Spire', desc: 'Vertical tower rising out of deep cyber waters, with the capture point on an open glass pavilion.' }
+        { id: 'koth_original', name: 'Classic Hill (Original)', desc: 'The classic raised temple dais King of the Hill platform.' },
+        { id: 'koth_landscape', name: 'Verdant Sanctuary (Landscape & Towers)', desc: 'Full landscape with central hill dais overlooking reflecting lake, shaded by weeping foliage and grey sniper towers.' }
     ],
     'GUN_GAME': [
-        { id: 'gungame_hydro_docks', name: 'Hydro Docks', desc: 'Fast-paced arena with intersecting water channels, reflective shipping crates, and glass ramps.' },
-        { id: 'gungame_glass_matrix', name: 'Glass Matrix', desc: 'Multi-story translucent glass arena suspended directly over a glowing endless ocean.' },
-        { id: 'gungame_neon_marina', name: 'Neon Marina', desc: 'Reflective yacht basin with mirror berths, neon catwalks, and intense close-quarters combat.' }
+        { id: 'gungame_original', name: 'Classic Docks (Original)', desc: 'The classic fast-paced close-quarters neon arena.' },
+        { id: 'gungame_landscape', name: 'Verdant Terraces (Landscape & Towers)', desc: 'Full landscape featuring stepped garden terraces, grey clocktower, hedge mazes, and reflecting stream.' }
     ],
     'ZOMBIES': [
-        { id: 'zombies_toxic_swamp', name: 'Toxic Swamp', desc: 'Atmospheric marsh with glowing toxic bio-water, sunken platforms, and mirror ruins.' },
-        { id: 'zombies_flooded_facility', name: 'Flooded Facility', desc: 'Submerged research lab with knee-deep water corridors, emergency red alarms, and catwalks.' },
-        { id: 'zombies_drowned_temple', name: 'Drowned Temple', desc: 'Ancient high-tech sanctuary drowned in dark reflective water with defensive mirror altars.' }
+        { id: 'zombies_original', name: 'Classic Asylum (Original)', desc: 'The classic infected research arena with defensive ramps.' },
+        { id: 'zombies_landscape', name: 'Overgrown Citadel (Landscape & Towers)', desc: 'Full landscape featuring foggy overgrown forest, abandoned grey defense towers, and elevated survivor catwalks.' }
     ]
 };
 
@@ -1308,7 +1303,7 @@ function getMapName(mapId) {
         const found = MAP_CATALOG[mode].find(m => m.id === mapId);
         if (found) return found.name;
     }
-    return mapId || 'Standard Arena';
+    return mapId && mapId.includes('landscape') ? 'Verdant Landscape (Towers & Greenery)' : 'Classic Arena (Original)';
 }
 
 function updateMapDropdown(selectId, mode) {
@@ -1320,7 +1315,7 @@ function updateMapDropdown(selectId, mode) {
     maps.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m.id;
-        opt.innerText = `${m.name} (RT Water & SSR)`;
+        opt.innerText = m.name;
         opt.title = m.desc;
         sel.appendChild(opt);
     });
@@ -1349,30 +1344,30 @@ let gameSettings = {
     brightness: 1.0,
     contrast: 1.0,
     gamma: 1.0,
-    saturation: 1.1,
+    saturation: 1.05,
     fov: 75,
-    shadowQuality: 'ultra',
+    shadowQuality: 'high',
     maxFps: 0,
     antiAliasing: 'fxaa', // 'off', 'fxaa', 'smaa', 'msaa', 'ssaa'
-    rayTracingMode: 'pathtracing', // 'off', 'performance', 'medium', 'quality', 'pathtracing'
+    rayTracingMode: 'medium', // 'off', 'performance', 'medium', 'quality', 'pathtracing'
     fsrMode: 'off', // 'off', 'ultra_quality', 'quality', 'balanced', 'performance'
-    fsrSharpness: 0.8,
-    rtxPreset: 'ultra',
+    fsrSharpness: 0.5,
+    rtxPreset: 'clarity',
     enableBloom: true,
-    bloomStrength: 0.35,
-    bloomRadius: 0.50,
-    enableSSR: true,
-    ssrIntensity: 0.85,
-    enableAO: true,
-    aoIntensity: 0.7,
-    toneMappingMode: 'vibrant', // 'vibrant' (Luminance Preserved, Zero Bleach), 'neutral', 'aces', 'off'
-    enableACES: true,
+    bloomStrength: 0.22,
+    bloomRadius: 0.20,
+    enableSSR: false,
+    ssrIntensity: 0.0,
+    enableAO: false,
+    aoIntensity: 0.0,
+    toneMappingMode: 'neutral', // 'neutral' (Khronos PBR Neutral: True-Color, Zero Bleaching), 'vibrant', 'aces', 'off'
+    enableACES: false,
     enableChromatic: false,
-    chromaticIntensity: 0.5,
+    chromaticIntensity: 0.0,
     enableAnamorphic: false,
-    anamorphicIntensity: 0.5,
+    anamorphicIntensity: 0.0,
     enableVignette: true,
-    vignetteIntensity: 0.7,
+    vignetteIntensity: 0.35,
     enableFilmGrain: false,
     grainIntensity: 0.0,
     enableMotionBlur: false,
@@ -1493,26 +1488,26 @@ const RTXUberShader = {
         uBrightness: { value: 1.0 },
         uContrast: { value: 1.0 },
         uGamma: { value: 1.0 },
-        uSaturation: { value: 1.1 },
-        uToneMappingMode: { value: 0 }, // 0=Vibrant Filmic (Zero Bleach), 1=PBR Neutral, 2=ACES Classic, 3=Off
-        uEnableACES: { value: true },
-        uRayTracingMode: { value: 4 }, // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=PathTracing
-        uAntiAliasing: { value: 1 },   // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
-        uFSRMode: { value: 0 },        // 0=Off, 1=UltraQuality, 2=Quality, 3=Balanced, 4=Performance
-        uFSRSharpness: { value: 0.8 },
+        uSaturation: { value: 1.05 },
+        uToneMappingMode: { value: 1 }, // 1=Khronos PBR Neutral (True Balance, Zero Bleach), 0=Vibrant Filmic, 2=ACES Classic, 3=Off
+        uEnableACES: { value: false },
+        uRayTracingMode: { value: 2 },   // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=Cinematic
+        uAntiAliasing: { value: 1 },     // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
+        uFSRMode: { value: 0 },          // 0=Off, 1=UltraQuality, 2=Quality, 3=Balanced, 4=Performance
+        uFSRSharpness: { value: 0.5 },
         uFSRScale: { value: 1.0 },
-        uEnableSSR: { value: true },
-        uSSRIntensity: { value: 1.0 },
-        uEnableAO: { value: true },
-        uAOIntensity: { value: 1.0 },
+        uEnableSSR: { value: false },
+        uSSRIntensity: { value: 0.0 },
+        uEnableAO: { value: false },
+        uAOIntensity: { value: 0.0 },
         uEnableChromatic: { value: false },
-        uChromaticIntensity: { value: 0.5 },
+        uChromaticIntensity: { value: 0.0 },
         uEnableVignette: { value: true },
-        uVignetteIntensity: { value: 0.7 },
+        uVignetteIntensity: { value: 0.35 },
         uEnableFilmGrain: { value: false },
         uGrainIntensity: { value: 0.0 },
         uEnableAnamorphic: { value: false },
-        uAnamorphicIntensity: { value: 0.5 },
+        uAnamorphicIntensity: { value: 0.0 },
         uEnableMotionBlur: { value: false },
         uMotionBlurVec: { value: new THREE.Vector2(0, 0) }
     },
@@ -1570,13 +1565,11 @@ const RTXUberShader = {
             float l01 = dot(c01.rgb, vec3(0.2126, 0.7152, 0.0722));
             float l11 = dot(c11.rgb, vec3(0.2126, 0.7152, 0.0722));
 
-            // Directional edge gradient
             vec2 dir;
             dir.x = (l10 + l11) - (l00 + l01);
             dir.y = (l01 + l11) - (l00 + l10);
             float len = length(dir);
 
-            // Anisotropic directional weight along edge
             float wx = f.x;
             float wy = f.y;
             if (len > 0.015) {
@@ -1591,7 +1584,6 @@ const RTXUberShader = {
             vec4 colBot = mix(c01, c11, wx);
             vec4 res = mix(colTop, colBot, wy);
 
-            // Clamp between min and max local bounding box to prevent ringing
             vec4 minC = min(min(c00, c10), min(c01, c11));
             vec4 maxC = max(max(c00, c10), max(c01, c11));
             return clamp(res, minC, maxC);
@@ -1618,7 +1610,6 @@ const RTXUberShader = {
             vec3 minCol = min(min(min(n, s), min(w, e)), c);
             vec3 maxCol = max(max(max(n, s), max(w, e)), c);
 
-            // Contrast attenuation
             float nz = min(minLuma, 1.0 - maxLuma) / max(0.0001, maxLuma);
             float lobe = -sqrt(max(0.0, nz)) * (sharpness * 0.16);
 
@@ -1626,24 +1617,7 @@ const RTXUberShader = {
             return clamp(sharpCol, minCol, maxCol);
         }
 
-        // Luminance-Preserving Vibrant Filmic Tone Mapping (Zero Bleaching, Rich Colors & Deep Inky Blacks)
-        vec3 TonemapVibrant(vec3 col) {
-            float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-            if (luma <= 0.0001) return vec3(0.0);
-            // Smooth filmic compression curve applied purely to scalar luminance
-            float a = 2.45;
-            float b = 0.04;
-            float c = 2.38;
-            float d = 0.58;
-            float e = 0.12;
-            float mappedLuma = (luma * (a * luma + b)) / (luma * (c * luma + d) + e);
-            mappedLuma = clamp(mappedLuma, 0.0, 1.0);
-            // Rescale color by the tone-mapped luminance ratio, strictly preserving color ratios (100% hue & saturation)
-            vec3 mappedCol = col * (mappedLuma / luma);
-            return clamp(mappedCol, 0.0, 1.0);
-        }
-
-        // Khronos PBR Neutral Tone Mapper (Industry Standard True-Color Balance)
+        // Khronos PBR Neutral Tone Mapper (Official Industry Standard: True Color Fidelity, Zero Bleaching)
         vec3 TonemapPBRNeutral(vec3 color) {
             const float startCompression = 0.8 - 0.04;
             const float desaturation = 0.15;
@@ -1659,84 +1633,23 @@ const RTXUberShader = {
             return clamp(mix(color, vec3(newPeak), g), 0.0, 1.0);
         }
 
-        // ACES Filmic Tone Mapping Curve (Legacy Per-Channel)
+        // Luminance-Preserving Vibrant Filmic Tone Mapping
+        vec3 TonemapVibrant(vec3 col) {
+            float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            if (luma <= 0.0001) return vec3(0.0);
+            float a = 2.45, b = 0.04, c = 2.38, d = 0.58, e = 0.12;
+            float mappedLuma = (luma * (a * luma + b)) / (luma * (c * luma + d) + e);
+            mappedLuma = clamp(mappedLuma, 0.0, 1.0);
+            return clamp(col * (mappedLuma / luma), 0.0, 1.0);
+        }
+
+        // ACES Filmic Tone Mapping Curve
         vec3 ACESFilm(vec3 x) {
-            float a = 2.51;
-            float b = 0.03;
-            float c = 2.43;
-            float d = 0.59;
-            float e = 0.14;
+            float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
             return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
         }
 
-        // Screen-Space Raymarcher for Real-Time Reflections with Binary Refinement
-        vec3 traceRaymarch(vec2 origin, vec2 dir, float maxDist, int steps, float jitter, out float hitConfidence) {
-            hitConfidence = 0.0;
-            if (uRayTracingMode == 0 || steps <= 0) return vec3(0.0);
-            vec2 stepVec = (dir * maxDist) / float(steps);
-            vec2 cur = origin + stepVec * (0.35 + jitter * 0.65);
-            vec3 hitColor = vec3(0.0);
-
-            for (int i = 0; i < 20; i++) {
-                if (i >= steps) break;
-                if (cur.x < 0.005 || cur.x > 0.995 || cur.y < 0.005 || cur.y > 0.995) break;
-
-                vec4 sampleCol = texture2D(tDiffuse, cur);
-                float luma = dot(sampleCol.rgb, vec3(0.299, 0.587, 0.114));
-
-                if (luma > 0.20) {
-                    vec2 refined = cur;
-                    if (steps >= 8) {
-                        vec2 bStep = stepVec * 0.5;
-                        for (int b = 0; b < 2; b++) {
-                            vec4 bSamp = texture2D(tDiffuse, refined - bStep);
-                            if (dot(bSamp.rgb, vec3(0.299, 0.587, 0.114)) > 0.20) {
-                                refined -= bStep;
-                            }
-                            bStep *= 0.5;
-                        }
-                    }
-                    hitColor = texture2D(tDiffuse, refined).rgb;
-                    hitConfidence = smoothstep(0.20, 0.85, luma) * (1.0 - float(i) / float(steps));
-                    break;
-                }
-                cur += stepVec;
-            }
-            return hitColor;
-        }
-
-        // Monte-Carlo Path Tracing Simulation (Global Illumination & Emissive Light Bounces)
-        vec3 computePathTracing(vec2 uv, vec2 texel, float time) {
-            if (uRayTracingMode != 4) return vec3(0.0);
-            vec3 giColor = vec3(0.0);
-            float noise = fract(sin(dot(uv * 12.9898 + time * 1.5, vec2(12.9898, 78.233))) * 43758.5453);
-            
-            const int NUM_RAYS = 6;
-            float totalWeight = 0.0;
-            for (int r = 0; r < NUM_RAYS; r++) {
-                float angle = (float(r) / float(NUM_RAYS)) * 6.2831853 + noise * 1.047;
-                vec2 rayDir = vec2(cos(angle), sin(angle));
-                float hitConf = 0.0;
-                vec3 radiance = traceRaymarch(uv, rayDir, 0.35, 12, noise, hitConf);
-                if (hitConf > 0.01) {
-                    giColor += radiance * hitConf * 0.45;
-                    totalWeight += hitConf;
-                }
-            }
-            if (totalWeight > 0.01) {
-                giColor /= max(1.0, totalWeight);
-            }
-
-            float floorFresnel = smoothstep(0.75, 0.05, uv.y) * 0.65;
-            float waterWave = sin(uv.x * 24.0 + time * 2.8) * 0.005;
-            vec2 reflDir = vec2((noise - 0.5) * 0.05 + waterWave, 0.85);
-            float specHit = 0.0;
-            vec3 specRadiance = traceRaymarch(uv, reflDir, 0.55, 16, noise, specHit);
-
-            return giColor * 0.85 + specRadiance * specHit * floorFresnel * 1.45;
-        }
-
-        // Anti-Aliasing (FXAA 3.11 Quality Algorithm)
+        // FXAA 3.11 Quality Algorithm
         vec4 applyFXAA(vec2 uv, vec2 texel) {
             vec3 rgbNW = texture2D(tDiffuse, uv + vec2(-1.0, -1.0) * texel).rgb;
             vec3 rgbNE = texture2D(tDiffuse, uv + vec2(1.0, -1.0) * texel).rgb;
@@ -1778,7 +1691,7 @@ const RTXUberShader = {
             }
         }
 
-        // Subpixel Morphological Anti-Aliasing (SMAA Edge Blend)
+        // SMAA Edge Blend
         vec4 applySMAA(vec2 uv, vec2 texel) {
             vec4 c = texture2D(tDiffuse, uv);
             vec4 cN = texture2D(tDiffuse, uv - vec2(0.0, texel.y));
@@ -1827,7 +1740,7 @@ const RTXUberShader = {
             } else if (uEnableChromatic) {
                 vec2 distFromCenter = uv - 0.5;
                 float distSq = dot(distFromCenter, distFromCenter);
-                vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.008;
+                vec2 offset = distFromCenter * distSq * uChromaticIntensity * 0.005;
                 float r = texture2D(tDiffuse, clamp(uv + offset, 0.0, 1.0)).r;
                 float g = texture2D(tDiffuse, uv).g;
                 float b = texture2D(tDiffuse, clamp(uv - offset, 0.0, 1.0)).b;
@@ -1838,71 +1751,34 @@ const RTXUberShader = {
 
             vec3 col = baseColor.rgb;
 
-            // Screen-Space Reflections & Ray Tracing with Dynamic Water Ripple Distortion
-            float waterWave = sin(uv.x * 24.0 + uTime * 2.8) * 0.004 + cos(uv.y * 28.0 + uTime * 2.2) * 0.003;
-            float fresnel = smoothstep(0.72, 0.0, uv.y) * 0.45;
-
+            // Clean RTX Specular Sheen (Zero Temporal Noise, Zero Muddy Inverted Ghosting)
             if (uRayTracingMode > 0) {
-                float jitter = fract(sin(dot(uv * 12.9898, vec2(12.9898, 78.233))) * 43758.5453) * 0.15;
-                vec2 rayDir = vec2(waterWave * 1.5, 0.85); // Upward reflection trace towards towers & sky
-
-                if (uRayTracingMode == 1) {
-                    float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, rayDir, 0.38, 5, jitter, hitConf);
-                    col += rCol * hitConf * fresnel * 0.75 * uSSRIntensity;
-                } else if (uRayTracingMode == 2) {
-                    float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, rayDir, 0.48, 9, jitter, hitConf);
-                    col += rCol * hitConf * fresnel * 0.95 * uSSRIntensity;
-                } else if (uRayTracingMode == 3) {
-                    float hitConf = 0.0;
-                    vec3 rCol = traceRaymarch(uv, rayDir, 0.60, 16, jitter, hitConf);
-                    col += rCol * hitConf * fresnel * 1.15 * uSSRIntensity;
-                } else if (uRayTracingMode == 4) {
-                    vec3 ptRadiance = computePathTracing(uv, texel, uTime);
-                    col += ptRadiance * (0.75 * uSSRIntensity);
-                }
-            } else if (uEnableSSR) {
-                vec2 refUV = clamp(vec2(uv.x + waterWave, 1.0 - uv.y * 0.88 + waterWave * 0.5), 0.0, 1.0);
-                vec4 refSample = texture2D(tDiffuse, refUV);
-                float luma = dot(refSample.rgb, vec3(0.299, 0.587, 0.114));
-                vec3 ssr = refSample.rgb * fresnel * smoothstep(0.30, 0.90, luma) * uSSRIntensity;
-                col += ssr;
+                float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+                float specBoost = smoothstep(0.72, 1.0, luma) * 0.14 * float(min(3, uRayTracingMode));
+                col += col * specBoost;
             }
 
-            // RTX Ambient Occlusion / Soft Contact Shadows
-            if (uEnableAO) {
-                float c0 = dot(texture2D(tDiffuse, uv).rgb, vec3(0.333));
-                float c1 = dot(texture2D(tDiffuse, clamp(uv + vec2(2.0, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c2 = dot(texture2D(tDiffuse, clamp(uv - vec2(2.0, 0.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c3 = dot(texture2D(tDiffuse, clamp(uv + vec2(0.0, 2.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float c4 = dot(texture2D(tDiffuse, clamp(uv - vec2(0.0, 2.0) * texel, 0.0, 1.0)).rgb, vec3(0.333));
-                float edge = abs(c0 - c1) + abs(c0 - c2) + abs(c0 - c3) + abs(c0 - c4);
-                float ao = 1.0 - clamp(edge * 0.45 * uAOIntensity, 0.0, 0.3);
-                col *= ao;
-            }
-
-            // RTX Anamorphic Cyberpunk Glare Streaks
-            if (uEnableAnamorphic) {
+            // Anamorphic Lens Flare (Only on ultra-bright emissives)
+            if (uEnableAnamorphic && uAnamorphicIntensity > 0.01) {
                 vec3 streak = vec3(0.0);
-                for (int i = 1; i <= 5; i++) {
+                for (int i = 1; i <= 4; i++) {
                     float fi = float(i);
-                    vec4 sL = texture2D(tDiffuse, clamp(uv - vec2(fi * 6.0 * texel.x, 0.0), 0.0, 1.0));
-                    vec4 sR = texture2D(tDiffuse, clamp(uv + vec2(fi * 6.0 * texel.x, 0.0), 0.0, 1.0));
+                    vec4 sL = texture2D(tDiffuse, clamp(uv - vec2(fi * 5.0 * texel.x, 0.0), 0.0, 1.0));
+                    vec4 sR = texture2D(tDiffuse, clamp(uv + vec2(fi * 5.0 * texel.x, 0.0), 0.0, 1.0));
                     float lL = dot(sL.rgb, vec3(0.299, 0.587, 0.114));
                     float lR = dot(sR.rgb, vec3(0.299, 0.587, 0.114));
-                    streak += (smoothstep(0.88, 1.0, lL) * sL.rgb + smoothstep(0.88, 1.0, lR) * sR.rgb) * (0.035 / fi);
+                    streak += (smoothstep(0.92, 1.0, lL) * sL.rgb + smoothstep(0.92, 1.0, lR) * sR.rgb) * (0.02 / fi);
                 }
                 col += streak * uAnamorphicIntensity * vec3(0.2, 0.7, 1.0);
             }
 
-            // High-Fidelity HDR Tone Mapping (Zero Bleaching: Preserves Hue, Saturation & Inky Contrast)
-            if (uToneMappingMode == 0) {
-                col = TonemapVibrant(col); // Zero bleaching, preserved color ratios
-            } else if (uToneMappingMode == 1) {
-                col = TonemapPBRNeutral(col); // Khronos PBR Neutral
+            // High-Fidelity HDR Tone Mapping (Khronos PBR Neutral Default: True Colors, Zero Bleaching)
+            if (uToneMappingMode == 1) {
+                col = TonemapPBRNeutral(col);
+            } else if (uToneMappingMode == 0) {
+                col = TonemapVibrant(col);
             } else if (uToneMappingMode == 2 || uEnableACES) {
-                col = ACESFilm(col); // Legacy per-channel ACES
+                col = ACESFilm(col);
             }
 
             // Display Calibration: Brightness, Contrast, Saturation, Gamma
@@ -1917,22 +1793,22 @@ const RTXUberShader = {
             }
 
             // AMD FidelityFX Robust Contrast-Adaptive Sharpening (RCAS)
-            if (uFSRMode > 0) {
+            if (uFSRSharpness > 0.01) {
                 col = applyFSR_RCAS(col, uv, texel, uFSRSharpness);
             }
 
-            // Gentle Vignette
-            if (uEnableVignette) {
+            // Gentle Cinematic Vignette
+            if (uEnableVignette && uVignetteIntensity > 0.01) {
                 vec2 vigCoord = uv * (1.0 - uv.yx);
                 float vig = vigCoord.x * vigCoord.y * 15.0;
-                vig = clamp(pow(vig, 0.12 * uVignetteIntensity), 0.0, 1.0);
+                vig = clamp(pow(vig, 0.10 * uVignetteIntensity), 0.0, 1.0);
                 col *= vig;
             }
 
-            // Film Grain (Clean and disabled by default)
+            // Film Grain (Clean and strictly disabled by default)
             if (uEnableFilmGrain && uGrainIntensity > 0.01) {
                 float grain = (fract(sin(dot(uv * 12.9898 + uTime * 2.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 2.0;
-                col += grain * 0.008 * uGrainIntensity;
+                col += grain * 0.006 * uGrainIntensity;
             }
 
             gl_FragColor = vec4(col, baseColor.a);
@@ -1950,39 +1826,49 @@ function loadSettings() {
             Object.assign(gameSettings, parsed);
             
             // Auto-Migration for i5-4590 / Intel HD 4600 / iGPU:
-            // If running on an integrated/4th gen GPU and settings were left on heavy Path Tracing from previous tests,
-            // migrate to the optimized i5-4590 configuration so the user gets smooth 60 FPS immediately!
             if ((!gpu.isDedicated || gpu.isIntelOld) && gameSettings.rayTracingMode === 'pathtracing') {
                 console.log('Intel HD 4600 / iGPU detected with heavy RTX profile. Auto-migrating to i5-4590 60 FPS profile...');
                 Object.assign(gameSettings, I5_4590_DEFAULT_SETTINGS);
                 saveSettings();
             }
 
-            // Auto-Migration for Silky Bloom & Zero-Bleach HDR Tone Mapping:
-            if (gameSettings.bloomStrength > 0.8) {
-                gameSettings.bloomStrength = 0.35;
+            // Auto-Migration for Pristine Clarity, Non-Bleached Colors & Subtle Emissive Bloom:
+            if (gameSettings.bloomStrength > 0.35) {
+                gameSettings.bloomStrength = 0.22;
             }
-            if (gameSettings.bloomRadius > 0.6) {
-                gameSettings.bloomRadius = 0.50;
+            if (gameSettings.bloomRadius > 0.35) {
+                gameSettings.bloomRadius = 0.20;
             }
-            if (gameSettings.toneMappingMode === undefined) {
-                gameSettings.toneMappingMode = 'vibrant';
+            if (gameSettings.toneMappingMode === undefined || gameSettings.toneMappingMode === 'aces') {
+                gameSettings.toneMappingMode = 'neutral';
             }
-            if (gameSettings.enableFilmGrain === undefined) {
-                gameSettings.enableFilmGrain = false;
-                gameSettings.grainIntensity = 0.0;
+            if (gameSettings.rayTracingMode === 'pathtracing') {
+                gameSettings.rayTracingMode = 'medium';
+            }
+            if (gameSettings.enableAO) {
+                gameSettings.enableAO = false;
+            }
+            if (gameSettings.enableSSR) {
+                gameSettings.enableSSR = false;
+            }
+            if (gameSettings.rtxPreset === 'ultra' || gameSettings.rtxPreset === undefined) {
+                gameSettings.rtxPreset = 'clarity';
             }
         } else {
-            // First time load: Default configuration based on hardware!
+            // First time load: Default configuration based on hardware
             if (gpu.isDedicated) {
-                gameSettings.fsrMode = 'quality';
-                gameSettings.rayTracingMode = 'quality';
+                gameSettings.fsrMode = 'off';
+                gameSettings.fsrSharpness = 0.5;
+                gameSettings.rayTracingMode = 'medium';
                 gameSettings.shadowQuality = 'high';
                 gameSettings.enableBloom = true;
-                gameSettings.enableSSR = true;
-                gameSettings.enableAO = true;
-                gameSettings.enableACES = true;
-                gameSettings.rtxPreset = 'high';
+                gameSettings.bloomStrength = 0.22;
+                gameSettings.bloomRadius = 0.20;
+                gameSettings.enableSSR = false;
+                gameSettings.enableAO = false;
+                gameSettings.enableACES = false;
+                gameSettings.toneMappingMode = 'neutral';
+                gameSettings.rtxPreset = 'clarity';
             } else {
                 console.log('Detected i5-4590 / Integrated GPU: Loading default i5-4590 configuration.');
                 Object.assign(gameSettings, I5_4590_DEFAULT_SETTINGS);
@@ -2056,7 +1942,7 @@ function applySettings() {
 
     if (bloomPass) {
         bloomPass.setSize(window.innerWidth * dpr, window.innerHeight * dpr);
-        bloomPass.threshold = 0.70; // Silky smooth threshold - soft, natural glow without graininess
+        bloomPass.threshold = 0.92; // High threshold: strictly high-intensity lasers & emissive lights bloom
         bloomPass.enabled = gameSettings.enableBloom;
         bloomPass.strength = gameSettings.bloomStrength;
         bloomPass.radius = gameSettings.bloomRadius;
@@ -2069,9 +1955,9 @@ function applySettings() {
         rtxPass.uniforms.uGamma.value = gameSettings.gamma;
         rtxPass.uniforms.uSaturation.value = gameSettings.saturation;
         
-        const tmMap = { 'vibrant': 0, 'neutral': 1, 'aces': 2, 'off': 3 };
-        rtxPass.uniforms.uToneMappingMode.value = tmMap[gameSettings.toneMappingMode] !== undefined ? tmMap[gameSettings.toneMappingMode] : 0;
-        rtxPass.uniforms.uEnableACES.value = (gameSettings.toneMappingMode === 'aces' || gameSettings.enableACES);
+        const tmMap = { 'neutral': 1, 'vibrant': 0, 'aces': 2, 'off': 3 };
+        rtxPass.uniforms.uToneMappingMode.value = tmMap[gameSettings.toneMappingMode] !== undefined ? tmMap[gameSettings.toneMappingMode] : 1;
+        rtxPass.uniforms.uEnableACES.value = (gameSettings.toneMappingMode === 'aces');
         
         const rtMap = { 'off': 0, 'performance': 1, 'medium': 2, 'quality': 3, 'pathtracing': 4 };
         rtxPass.uniforms.uRayTracingMode.value = rtMap[gameSettings.rayTracingMode] !== undefined ? rtMap[gameSettings.rayTracingMode] : 4;
@@ -2453,52 +2339,55 @@ function setupSettingsUI() {
             gameSettings.enableFilmGrain = false;
             gameSettings.enableMotionBlur = false;
             gameSettings.shadowQuality = 'off';
-        } else if (preset === 'medium') {
-            // Clean E-Sports Clarity: subtle smooth glow, rich contrast, zero distractions
+            gameSettings.rayTracingMode = 'off';
+        } else if (preset === 'clarity') {
+            // Cinematic Clarity (Clean, sharp, pristine, zero bleaching, subtle emissive glow)
             gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 0.35;
-            gameSettings.bloomRadius = 0.35;
+            gameSettings.bloomStrength = 0.22;
+            gameSettings.bloomRadius = 0.20;
+            gameSettings.toneMappingMode = 'neutral';
             gameSettings.enableSSR = false;
             gameSettings.enableAO = false;
-            gameSettings.enableACES = true;
+            gameSettings.enableACES = false;
             gameSettings.enableChromatic = false;
             gameSettings.enableAnamorphic = false;
-            gameSettings.enableVignette = false;
-            gameSettings.enableFilmGrain = false;
-            gameSettings.enableMotionBlur = false;
-            gameSettings.shadowQuality = 'low';
-        } else if (preset === 'high') {
-            // High Cinematic: pristine soft glow, smooth contact shadows, clean vision
-            gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 0.45;
-            gameSettings.bloomRadius = 0.4;
-            gameSettings.enableSSR = true;
-            gameSettings.ssrIntensity = 0.5;
-            gameSettings.enableAO = true;
-            gameSettings.aoIntensity = 0.5;
-            gameSettings.enableACES = true;
-            gameSettings.enableChromatic = false;
-            gameSettings.enableAnamorphic = false;
-            gameSettings.enableVignette = false;
+            gameSettings.enableVignette = true;
+            gameSettings.vignetteIntensity = 0.35;
             gameSettings.enableFilmGrain = false;
             gameSettings.enableMotionBlur = false;
             gameSettings.shadowQuality = 'high';
-        } else if (preset === 'ultra') {
-            // Ultra Quality: high-fidelity raymarching, silky glow, zero dirty grain
+            gameSettings.rayTracingMode = 'medium';
+            gameSettings.fsrSharpness = 0.5;
+        } else if (preset === 'medium') {
             gameSettings.enableBloom = true;
-            gameSettings.bloomStrength = 0.55;
-            gameSettings.bloomRadius = 0.45;
-            gameSettings.enableSSR = true;
-            gameSettings.ssrIntensity = 0.7;
-            gameSettings.enableAO = true;
-            gameSettings.aoIntensity = 0.7;
-            gameSettings.enableACES = true;
-            gameSettings.enableChromatic = false;
-            gameSettings.enableAnamorphic = false;
-            gameSettings.enableVignette = false;
-            gameSettings.enableFilmGrain = false;
-            gameSettings.enableMotionBlur = false;
+            gameSettings.bloomStrength = 0.20;
+            gameSettings.bloomRadius = 0.20;
+            gameSettings.toneMappingMode = 'neutral';
+            gameSettings.enableSSR = false;
+            gameSettings.enableAO = false;
+            gameSettings.enableACES = false;
+            gameSettings.shadowQuality = 'medium';
+            gameSettings.rayTracingMode = 'performance';
+        } else if (preset === 'high') {
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 0.24;
+            gameSettings.bloomRadius = 0.22;
+            gameSettings.toneMappingMode = 'neutral';
+            gameSettings.enableSSR = false;
+            gameSettings.enableAO = false;
+            gameSettings.enableACES = false;
+            gameSettings.shadowQuality = 'high';
+            gameSettings.rayTracingMode = 'medium';
+        } else if (preset === 'ultra') {
+            gameSettings.enableBloom = true;
+            gameSettings.bloomStrength = 0.28;
+            gameSettings.bloomRadius = 0.24;
+            gameSettings.toneMappingMode = 'neutral';
+            gameSettings.enableSSR = false;
+            gameSettings.enableAO = false;
+            gameSettings.enableACES = false;
             gameSettings.shadowQuality = 'ultra';
+            gameSettings.rayTracingMode = 'quality';
         }
         applySettings();
         saveSettings();
@@ -3566,7 +3455,7 @@ function startBotMatch() {
     currentGamemode = botModeEl ? botModeEl.value : (document.getElementById('host-gamemode') ? document.getElementById('host-gamemode').value : 'FFA');
     
     const botMapEl = document.getElementById('bot-map');
-    const selectedMap = botMapEl && botMapEl.value ? botMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_neon_spire');
+    const selectedMap = botMapEl && botMapEl.value ? botMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_original');
     gameState.map = selectedMap;
     
     const tlEl = document.getElementById('host-timelimit');
@@ -4515,7 +4404,7 @@ function hostMatch(customRoomCode = null) {
         roomPeerIds = [myPeerId];
         currentGamemode = document.getElementById('host-gamemode').value;
         const hostMapEl = document.getElementById('host-map');
-        const selectedMap = hostMapEl && hostMapEl.value ? hostMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_neon_spire');
+        const selectedMap = hostMapEl && hostMapEl.value ? hostMapEl.value : (MAP_CATALOG[currentGamemode] ? MAP_CATALOG[currentGamemode][0].id : 'ffa_original');
         gameState.map = selectedMap;
 
         let pref = document.getElementById('team-select') ? document.getElementById('team-select').value : 'auto';
@@ -5367,7 +5256,7 @@ function initGamemode(mode, isNewGame = true, mapId = null) {
     if (mapId) gameState.map = mapId;
     if (!gameState.map) {
         const key = (mode === 'Gun Game') ? 'GUN_GAME' : ((mode === 'Zombies') ? 'ZOMBIES' : mode);
-        gameState.map = MAP_CATALOG[key] ? MAP_CATALOG[key][0].id : 'ffa_neon_spire';
+        gameState.map = MAP_CATALOG[key] ? MAP_CATALOG[key][0].id : 'ffa_original';
     }
     console.log("[Gamemode Init]:", mode, "Map:", gameState.map);
     document.getElementById('match-hud').style.display = 'flex';
@@ -5700,10 +5589,10 @@ function resumeGame() {
 
     const renderScene = new THREE.RenderPass( scene, camera );
     // Clean, silky smooth Gaussian bloom (16-bit Half-Float Target: eliminates 8-bit banding & graininess)
-    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.35, 0.50, 0.70 ); 
-    bloomPass.threshold = 0.70; 
-    bloomPass.strength = gameSettings.bloomStrength !== undefined ? gameSettings.bloomStrength : 0.35; 
-    bloomPass.radius = gameSettings.bloomRadius !== undefined ? gameSettings.bloomRadius : 0.50;
+    bloomPass = new THREE.UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 0.22, 0.20, 0.92 ); 
+    bloomPass.threshold = 0.92; 
+    bloomPass.strength = gameSettings.bloomStrength !== undefined ? gameSettings.bloomStrength : 0.22; 
+    bloomPass.radius = gameSettings.bloomRadius !== undefined ? gameSettings.bloomRadius : 0.20;
     bloomPass.enabled = gameSettings.enableBloom;
 
     rtxPass = new THREE.ShaderPass( RTXUberShader );
@@ -7474,84 +7363,338 @@ function addJumpPad(x, z, y = 0.3, power = 38) {
     activeJumpPads.push({ x, z, y, power });
 }
 
-function buildMap(mode, mapId = null) {
-    const mId = mapId || gameState.map || 'ffa_neon_spire';
-    let size = 300;
-    if (mode === 'TDM' || mode === 'CTF' || mId.startsWith('tdm_') || mId.startsWith('ctf_')) size = 1200;
+// ============================================================================
+// PROCEDURAL HIGH-POLY LANDSCAPE ASSETS, GREY TOWERS, AND VEGETATION
+// ============================================================================
 
-    const floorShape = new CANNON.Plane(); 
-    const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
-    floorBody.addShape(floorShape); 
-    floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2); 
-    world.addBody(floorBody); 
-    mapBodies.push(floorBody);
+function createVerdantTerrainTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    // Rich natural base turf
+    ctx.fillStyle = '#1e4722';
+    ctx.fillRect(0, 0, 512, 512);
+    
+    // Procedural grass blade flecks and moss patterns
+    for (let i = 0; i < 5000; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        const r = Math.random();
+        if (r < 0.42) {
+            ctx.fillStyle = '#2d6a33'; // Vibrant grass fleck
+        } else if (r < 0.72) {
+            ctx.fillStyle = '#143818'; // Deep moss shadow
+        } else if (r < 0.90) {
+            ctx.fillStyle = '#3e8846'; // Sunlit emerald blade
+        } else {
+            ctx.fillStyle = '#3c4432'; // Dry earth blend
+        }
+        ctx.fillRect(x, y, 2 + Math.random() * 3, 2 + Math.random() * 3);
+    }
+    
+    // Soft subtle tactical perimeter grid accent
+    ctx.strokeStyle = 'rgba(0, 255, 170, 0.06)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, 512, 512);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+}
 
-    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1); 
-    floorGeo.rotateX(-Math.PI/2);
-    const fTex = createNeonGridTexture(0x111111, '#00ffaa'); 
-    fTex.repeat.set(size/5, size/5); 
-    const floorMat = new THREE.MeshStandardMaterial({ map: fTex, emissiveMap: fTex, emissive: 0x00ffaa, emissiveIntensity: 0.3, roughness: 0.2 });
-    const floorMesh = new THREE.Mesh(floorGeo, floorMat); 
-    floorMesh.receiveShadow = true; 
-    scene.add(floorMesh); 
-    mapMeshes.push(floorMesh);
-
-    // Outer Walls
-    addBox(size, 250, 5, 0, 125, -size/2, 0x050510, '#444444'); 
-    addBox(size, 250, 5, 0, 125, size/2, 0x050510, '#444444'); 
-    addBox(5, 250, size, -size/2, 125, 0, 0x050510, '#444444'); 
-    addBox(5, 250, size, size/2, 125, 0, 0x050510, '#444444');
-
-    switch(mId) {
-        // Free For All (FFA)
-        case 'ffa_neon_spire': buildMap_FFA_NeonSpire(); break;
-        case 'ffa_cyber_atlantis': buildMap_FFA_CyberAtlantis(); break;
-        case 'ffa_mirrored_canyon': buildMap_FFA_MirroredCanyon(); break;
-
-        // Team Deathmatch (TDM)
-        case 'tdm_twin_canals': buildMap_TDM_TwinCanals(); break;
-        case 'tdm_hydro_reservoir': buildMap_TDM_HydroReservoir(); break;
-        case 'tdm_cyber_haven': buildMap_TDM_CyberHaven(); break;
-
-        // Capture The Flag (CTF)
-        case 'ctf_lagoon_outpost': buildMap_CTF_LagoonOutpost(); break;
-        case 'ctf_mirror_archipelago': buildMap_CTF_MirrorArchipelago(); break;
-        case 'ctf_canal_bastion': buildMap_CTF_CanalBastion(); break;
-
-        // King of the Hill (KOTH)
-        case 'koth_sunken_citadel': buildMap_KOTH_SunkenCitadel(); break;
-        case 'koth_mirrored_oasis': buildMap_KOTH_MirroredOasis(); break;
-        case 'koth_aqua_spire': buildMap_KOTH_AquaSpire(); break;
-
-        // Gun Game
-        case 'gungame_hydro_docks': buildMap_GunGame_HydroDocks(); break;
-        case 'gungame_glass_matrix': buildMap_GunGame_GlassMatrix(); break;
-        case 'gungame_neon_marina': buildMap_GunGame_NeonMarina(); break;
-
-        // Infection / Zombies
-        case 'zombies_toxic_swamp': buildMap_Zombies_ToxicSwamp(); break;
-        case 'zombies_flooded_facility': buildMap_Zombies_FloodedFacility(); break;
-        case 'zombies_drowned_temple': buildMap_Zombies_DrownedTemple(); break;
-
-        default:
-            if (mode === 'TDM') buildMap_TDM_TwinCanals();
-            else if (mode === 'CTF') buildMap_CTF_LagoonOutpost();
-            else if (mode === 'KOTH') buildMap_KOTH_SunkenCitadel();
-            else if (mode === 'Gun Game' || mode === 'GUN_GAME') buildMap_GunGame_HydroDocks();
-            else if (mode === 'Zombies' || mode === 'ZOMBIES') buildMap_Zombies_ToxicSwamp();
-            else buildMap_FFA_NeonSpire();
-            break;
+// Procedural High-Poly 3D Tree Generator (Deciduous, Pine, Willow)
+function addTree(x, z, scale = 1.0, type = 'deciduous') {
+    const isPine = (type === 'pine');
+    const isWillow = (type === 'willow');
+    const trunkH = (isPine ? 22 : (isWillow ? 18 : 16)) * scale;
+    const trunkRTop = (isPine ? 0.6 : 0.8) * scale;
+    const trunkRBot = (isPine ? 1.2 : 1.4) * scale;
+    
+    // 1. High-poly bark cylinder trunk
+    const trunkGeo = new THREE.CylinderGeometry(trunkRTop, trunkRBot, trunkH, 12, 3);
+    const trunkMat = new THREE.MeshStandardMaterial({
+        color: 0x3d271d,
+        roughness: 0.92,
+        metalness: 0.08
+    });
+    const trunkMesh = new THREE.Mesh(trunkGeo, trunkMat);
+    trunkMesh.position.set(x, trunkH / 2, z);
+    trunkMesh.castShadow = true;
+    trunkMesh.receiveShadow = true;
+    scene.add(trunkMesh);
+    mapMeshes.push(trunkMesh);
+    
+    // Cannon.js solid physics body for tactical combat cover
+    const trunkShape = new CANNON.Box(new CANNON.Vec3(trunkRBot * 0.9, trunkH / 2, trunkRBot * 0.9));
+    const trunkBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+    trunkBody.addShape(trunkShape);
+    trunkBody.position.set(x, trunkH / 2, z);
+    world.addBody(trunkBody);
+    mapBodies.push(trunkBody);
+    
+    // Root flares spreading into the soil
+    for (let r = 0; r < 4; r++) {
+        const angle = (r * Math.PI) / 2 + 0.35;
+        const rootMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.7 * scale, 1.2 * scale, 1.8 * scale),
+            trunkMat
+        );
+        rootMesh.position.set(
+            x + Math.cos(angle) * (trunkRBot * 0.9),
+            0.6 * scale,
+            z + Math.sin(angle) * (trunkRBot * 0.9)
+        );
+        rootMesh.rotation.y = angle;
+        rootMesh.castShadow = true;
+        scene.add(rootMesh);
+        mapMeshes.push(rootMesh);
+    }
+    
+    // 2. Multi-Cluster High-Poly Foliage Canopy
+    if (isPine) {
+        // Layered alpine conifer skirts tapering upward
+        const tiers = [
+            { r: 7.2 * scale, h: 6.2 * scale, y: 9.0 * scale, color: 0x1b4332 },
+            { r: 5.8 * scale, h: 5.6 * scale, y: 13.0 * scale, color: 0x22573f },
+            { r: 4.4 * scale, h: 5.2 * scale, y: 17.0 * scale, color: 0x2d6a4f },
+            { r: 2.8 * scale, h: 4.6 * scale, y: 20.8 * scale, color: 0x40916c }
+        ];
+        tiers.forEach(t => {
+            const coneGeo = new THREE.ConeGeometry(t.r, t.h, 14, 2);
+            const coneMat = new THREE.MeshStandardMaterial({
+                color: t.color,
+                roughness: 0.78,
+                metalness: 0.05
+            });
+            const coneMesh = new THREE.Mesh(coneGeo, coneMat);
+            coneMesh.position.set(x, t.y, z);
+            coneMesh.castShadow = true;
+            coneMesh.receiveShadow = true;
+            scene.add(coneMesh);
+            mapMeshes.push(coneMesh);
+        });
+    } else if (isWillow) {
+        // Drooping weeping willow clusters for lakesides
+        const willowColors = [0x4a7c59, 0x588157, 0x386641];
+        const clusters = [
+            { r: 5.5 * scale, sy: 1.6, ox: 0, oy: 15 * scale, oz: 0 },
+            { r: 4.2 * scale, sy: 1.8, ox: -2.8 * scale, oy: 12.5 * scale, oz: 1.8 * scale },
+            { r: 4.0 * scale, sy: 1.7, ox: 2.8 * scale, oy: 13 * scale, oz: -1.8 * scale },
+            { r: 3.8 * scale, sy: 1.9, ox: 1.5 * scale, oy: 12 * scale, oz: 2.6 * scale },
+            { r: 3.9 * scale, sy: 1.7, ox: -1.6 * scale, oy: 12.8 * scale, oz: -2.5 * scale }
+        ];
+        clusters.forEach((c, idx) => {
+            const geo = new THREE.IcosahedronGeometry(c.r, 2);
+            const mat = new THREE.MeshStandardMaterial({
+                color: willowColors[idx % willowColors.length],
+                roughness: 0.8,
+                metalness: 0.05
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.scale.set(1.0, c.sy, 1.0);
+            mesh.position.set(x + c.ox, c.oy, z + c.oz);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            mapMeshes.push(mesh);
+        });
+    } else {
+        // Broad lush deciduous oak with 6 multi-cluster organic domes
+        const foliageColors = [0x2d6a4f, 0x40916c, 0x1b4332, 0x52b788, 0x38b000];
+        const clusters = [
+            { r: 5.8 * scale, ox: 0, oy: 16.0 * scale, oz: 0 },
+            { r: 4.5 * scale, ox: -2.8 * scale, oy: 14.2 * scale, oz: 1.6 * scale },
+            { r: 4.3 * scale, ox: 3.0 * scale, oy: 14.8 * scale, oz: -1.4 * scale },
+            { r: 4.1 * scale, ox: 0.8 * scale, oy: 13.8 * scale, oz: 3.0 * scale },
+            { r: 4.2 * scale, ox: -1.2 * scale, oy: 14.5 * scale, oz: -2.8 * scale },
+            { r: 3.6 * scale, ox: 0, oy: 19.5 * scale, oz: 0 }
+        ];
+        clusters.forEach((c, idx) => {
+            const geo = new THREE.IcosahedronGeometry(c.r, 2);
+            const mat = new THREE.MeshStandardMaterial({
+                color: foliageColors[idx % foliageColors.length],
+                roughness: 0.76,
+                metalness: 0.05
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x + c.ox, c.oy, z + c.oz);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            mapMeshes.push(mesh);
+        });
     }
 }
 
-// --- FFA MAP 1: NEON SPIRE BASIN ---
-function buildMap_FFA_NeonSpire() {
-    // Shimmering Moat encircling central foundation
-    addWater(180, 180, 0, 0.4, 0, { color: 0x07263c, emissive: 0x003344 });
+// Procedural High-Poly Bush Clumps
+function addBush(x, y, z, scale = 1.0) {
+    const bushColors = [0x2d6a4f, 0x40916c, 0x38b000];
+    const clumps = [
+        { r: 1.8 * scale, ox: 0, oy: 1.2 * scale, oz: 0 },
+        { r: 1.4 * scale, ox: 1.1 * scale, oy: 0.9 * scale, oz: 0.4 * scale },
+        { r: 1.3 * scale, ox: -1.0 * scale, oy: 0.8 * scale, oz: -0.5 * scale }
+    ];
+    clumps.forEach((c, i) => {
+        const geo = new THREE.IcosahedronGeometry(c.r, 2);
+        const mat = new THREE.MeshStandardMaterial({
+            color: bushColors[i % bushColors.length],
+            roughness: 0.82,
+            metalness: 0.04
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x + c.ox, y + c.oy, z + c.oz);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        mapMeshes.push(mesh);
+    });
+}
 
-    // Central Titan Cyber Spire
+// Procedural High-Poly Weathered Granite Rock Outcroppings
+function addRock(x, y, z, sx, sy, sz, rotY = 0) {
+    const geo = new THREE.DodecahedronGeometry(1.0, 1);
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0x4a4f56,
+        roughness: 0.88,
+        metalness: 0.15
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.scale.set(sx, sy, sz);
+    mesh.rotation.y = rotY;
+    mesh.position.set(x, y + sy * 0.7, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    mapMeshes.push(mesh);
+    
+    // Physics collision box
+    const body = new CANNON.Body({ mass: 0, material: physicsMaterial });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(sx * 0.8, sy * 0.7, sz * 0.8)));
+    body.position.set(x, y + sy * 0.7, z);
+    world.addBody(body);
+    mapBodies.push(body);
+}
+
+// Procedural Creeping Ivy Vines
+function addVines(x, y, z, w, h, d) {
+    const vineMat = new THREE.MeshStandardMaterial({
+        color: 0x2d6a4f,
+        roughness: 0.85,
+        metalness: 0.05
+    });
+    const vineGeo = new THREE.BoxGeometry(w, h, d);
+    const vineMesh = new THREE.Mesh(vineGeo, vineMat);
+    vineMesh.position.set(x, y, z);
+    vineMesh.castShadow = true;
+    scene.add(vineMesh);
+    mapMeshes.push(vineMesh);
+}
+
+// Architectural Brutalist / Modern Monolithic Grey Tower
+function addGreyTower(x, z, width, height, depth, options = {}) {
+    const team = options.team || 'neutral';
+    let trimColor = 0xa0b4c8;
+    let trimHex = '#a0b4c8';
+    if (team === 'red') { trimColor = 0xff0044; trimHex = '#ff0044'; }
+    else if (team === 'blue') { trimColor = 0x0077ff; trimHex = '#0077ff'; }
+
+    const steelTrimMat = new THREE.MeshStandardMaterial({
+        color: trimColor,
+        emissive: trimColor,
+        emissiveIntensity: 0.35,
+        roughness: 0.3,
+        metalness: 0.85
+    });
+
+    // Tier 1: Concrete Fortress Base (ground to height * 0.42)
+    const baseH = height * 0.42;
+    addBox(width, baseH, depth, x, baseH / 2, z, 0x282c34, trimHex);
+
+    // Tier 2: Wraparound Sniper Balcony / Observation Deck
+    const balcW = width * 1.25;
+    const balcD = depth * 1.25;
+    const balcY = baseH + 1.0;
+    addBox(balcW, 2.0, balcD, x, balcY, z, 0x3d434e, '#ffffff');
+
+    // Solid tactical railings around observation deck
+    const railH = 3.2;
+    addBox(balcW, railH, 1.2, x, balcY + railH/2, z - balcD/2, 0x4f5765, trimHex);
+    addBox(balcW, railH, 1.2, x, balcY + railH/2, z + balcD/2, 0x4f5765, trimHex);
+    addBox(1.2, railH, balcD, x - balcW/2, balcY + railH/2, z, 0x4f5765, trimHex);
+    addBox(1.2, railH, balcD, x + balcW/2, balcY + railH/2, z, 0x4f5765, trimHex);
+
+    // Access to Balcony: Jump pad or Ramp
+    if (options.hasRamp !== false) {
+        addRamp(14, 2, 45, x, baseH * 0.5, z + depth * 0.75, Math.PI / 8, 0, 0x2a2e37, trimHex);
+    }
+    if (options.hasJumpPad) {
+        addJumpPad(x + width * 0.45, z + depth * 0.45, 0.4, 42);
+    }
+
+    // Tier 3: Upper Monolith Shaft (baseH to height * 0.88)
+    const shaftW = width * 0.78;
+    const shaftD = depth * 0.78;
+    const shaftH = height * 0.46;
+    const shaftY = baseH + shaftH / 2;
+    addBox(shaftW, shaftH, shaftD, x, shaftY, z, 0x1f232b, trimHex);
+
+    // Tier 4: Rooftop Sniper Parapet Deck
+    const roofY = baseH + shaftH;
+    const parapetW = shaftW * 1.1;
+    const parapetD = shaftD * 1.1;
+    addBox(parapetW, 2.0, parapetD, x, roofY, z, 0x3a404c, '#ffffff');
+
+    // Crenellations for sniper cover on roof
+    addBox(parapetW, 3.5, 1.0, x, roofY + 1.75, z - parapetD/2, 0x2d323c, trimHex);
+    addBox(parapetW, 3.5, 1.0, x, roofY + 1.75, z + parapetD/2, 0x2d323c, trimHex);
+    addBox(1.0, 3.5, parapetD, x - parapetW/2, roofY + 1.75, z, 0x2d323c, trimHex);
+    addBox(1.0, 3.5, parapetD, x + parapetW/2, roofY + 1.75, z, 0x2d323c, trimHex);
+
+    // Tier 5: Communications Spire & Warning Beacon
+    const spireH = 18.0;
+    const spireGeo = new THREE.CylinderGeometry(0.4, 0.9, spireH, 8);
+    const spireMesh = new THREE.Mesh(spireGeo, steelTrimMat);
+    spireMesh.position.set(x, roofY + spireH / 2 + 1.0, z);
+    spireMesh.castShadow = true;
+    scene.add(spireMesh);
+    mapMeshes.push(spireMesh);
+
+    // Blinking Warning Beacon Light at Spire Peak
+    const beaconGeo = new THREE.SphereGeometry(1.1, 12, 12);
+    const beaconMat = new THREE.MeshStandardMaterial({
+        color: trimColor,
+        emissive: trimColor,
+        emissiveIntensity: 1.8
+    });
+    const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+    beaconMesh.position.set(x, roofY + spireH + 1.0, z);
+    scene.add(beaconMesh);
+    mapDecorations.push(beaconMesh);
+
+    animatedMapObjects.push({
+        update(time) {
+            beaconMat.emissiveIntensity = 1.0 + Math.sin(time * 4.5) * 0.9;
+        }
+    });
+
+    // Creeping Vines on Tower Corners
+    addVines(x - width * 0.48, baseH * 0.35, z - depth * 0.48, 4.0, baseH * 0.7, 4.0);
+    addVines(x + width * 0.48, baseH * 0.25, z + depth * 0.48, 4.0, baseH * 0.5, 4.0);
+}
+
+// ============================================================================
+// ORIGINAL CLASSIC MAP BUILDERS (MAP 1 FOR EACH GAMEMODE)
+// ============================================================================
+
+function buildMapOriginal_FFA() {
+    // Ground Tier Foundation
     addBox(46, 26, 46, 0, 13, 0, 0x111624, '#00f3ff'); 
+    // Mid Tier Spire
     addBox(28, 36, 28, 0, 44, 0, 0x141b2e, '#ff0055');
+    // High Pinnacle Observation Tier
     addBox(14, 28, 14, 0, 76, 0, 0x0f1526, '#00f3ff');
     
     // Spiral Ascending Combat Platforms
@@ -7564,32 +7707,15 @@ function buildMap_FFA_NeonSpire() {
         addBox(12, 2, 12, x, y, z, 0x1a2236, '#00ffaa');
     }
 
-    // Translucent Glass Cross-Bridges Spanning the Water Moat
-    addGlassBox(180, 2, 12, 0, 3, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(12, 2, 180, 0, 3, 0, 0x00f3ff, '#00f3ff', 0.5);
-
-    // 4 High-Gloss Mirror Monoliths Reflecting the Skyline & Water
-    const s = 65;
-    addMirrorBox(12, 65, 12, -s, 32.5, -s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
-    addMirrorBox(12, 65, 12, s, 32.5, -s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
-    addMirrorBox(12, 65, 12, -s, 32.5, s, 0x0d1424, '#00f3ff', 0.98, 0.03); 
-    addMirrorBox(12, 65, 12, s, 32.5, s, 0x0d1424, '#00f3ff', 0.98, 0.03);
-
-    // High-Poly Concentric Jump Pads
-    addJumpPad(0, 75);
-    addJumpPad(0, -75);
-    addJumpPad(75, 0);
-    addJumpPad(-75, 0);
-
-    // Elevated Ramps and Cross-Walkways
-    addRamp(20, 2, 80, -s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, -s + 40, Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, -s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00'); 
-    addRamp(20, 2, 80, s, 15, s - 40, -Math.PI/5, 0, 0x1f293d, '#ffff00');
-
     // Floating Holographic Torus Ring around Central Spire
     const ringGeo = new THREE.TorusGeometry(26, 0.75, 16, 64);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x00f3ff, emissiveIntensity: 1.8, roughness: 0.15, metalness: 0.85 });
+    const ringMat = new THREE.MeshStandardMaterial({
+        color: 0x00f3ff,
+        emissive: 0x00f3ff,
+        emissiveIntensity: 1.8,
+        roughness: 0.15,
+        metalness: 0.85
+    });
     const holoRing = new THREE.Mesh(ringGeo, ringMat);
     holoRing.position.set(0, 78, 0);
     holoRing.rotation.x = Math.PI / 4;
@@ -7598,7 +7724,13 @@ function buildMap_FFA_NeonSpire() {
 
     // Floating Pulsating Cyber Power Core
     const coreGeo = new THREE.OctahedronGeometry(5.5, 2);
-    const coreMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0055, emissiveIntensity: 2.4, roughness: 0.1, metalness: 0.95 });
+    const coreMat = new THREE.MeshStandardMaterial({
+        color: 0xff0055,
+        emissive: 0xff0055,
+        emissiveIntensity: 2.4,
+        roughness: 0.1,
+        metalness: 0.95
+    });
     const powerCore = new THREE.Mesh(coreGeo, coreMat);
     powerCore.position.set(0, 88, 0);
     scene.add(powerCore);
@@ -7620,230 +7752,112 @@ function buildMap_FFA_NeonSpire() {
             coreLight.position.y = cy;
         }
     });
-}
 
-// --- FFA MAP 2: CYBER ATLANTIS ---
-function buildMap_FFA_CyberAtlantis() {
-    // Vast flooded urban basin with reflective water
-    addWater(280, 280, 0, 0.45, 0, { color: 0x042030, emissive: 0x002233 });
+    // 4 Corner Cyber Defense Towers & Pylons
+    const s = 70; 
+    addBox(22, 60, 22, -s, 30, -s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, s, 30, -s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, -s, 30, s, 0x111624, '#00f3ff'); 
+    addBox(22, 60, 22, s, 30, s, 0x111624, '#00f3ff');
 
-    // Sunken high-tech forum at center
-    addBox(60, 6, 60, 0, 3, 0, 0x111c2e, '#00f3ff');
-    addBox(40, 12, 40, 0, 9, 0, 0x16243a, '#00ffaa');
-    addMirrorBox(20, 26, 20, 0, 20, 0, 0x0a1420, '#00f3ff', 0.98, 0.02);
-
-    // 8 Sunken Skyscraper Ruin Blocks protruding from the water
-    const ruins = [
-        { x: -75, z: -75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
-        { x: 75, z: -75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
-        { x: -75, z: 75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
-        { x: 75, z: 75, w: 26, h: 22, col: 0x162032, glow: '#00f3ff' },
-        { x: 0, z: -90, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
-        { x: 0, z: 90, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
-        { x: -90, z: 0, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' },
-        { x: 90, z: 0, w: 22, h: 18, col: 0x1a263c, glow: '#ff0055' }
+    const pylonData = [
+        { x: -s, z: -s, color: 0x00f3ff },
+        { x: s, z: -s, color: 0xff0088 },
+        { x: -s, z: s, color: 0xffaa00 },
+        { x: s, z: s, color: 0x00ff88 }
     ];
-    ruins.forEach(r => {
-        addBox(r.w, r.h, r.w, r.x, r.h/2, r.z, r.col, r.glow);
-        addMirrorBox(6, 32, 6, r.x, r.h + 16, r.z, 0x0a121e, r.glow, 0.98, 0.02);
+    pylonData.forEach(p => {
+        const pylonMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.2, 2.0, 75, 16),
+            new THREE.MeshStandardMaterial({ color: 0x111624, metalness: 0.85, roughness: 0.25 })
+        );
+        pylonMesh.position.set(p.x, 37.5, p.z);
+        pylonMesh.castShadow = true;
+        scene.add(pylonMesh);
+        mapMeshes.push(pylonMesh);
+
+        const crownMesh = new THREE.Mesh(
+            new THREE.TorusGeometry(3.0, 0.45, 12, 32),
+            new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 2.0 })
+        );
+        crownMesh.position.set(p.x, 75, p.z);
+        crownMesh.rotation.x = Math.PI / 2;
+        scene.add(crownMesh);
+        mapDecorations.push(crownMesh);
+
+        animatedMapObjects.push({
+            update: () => {
+                crownMesh.rotation.z += 0.025;
+            }
+        });
     });
 
-    // Elevated Translucent Glass Walkway Grid above the flooded city
-    addGlassBox(200, 2, 14, 0, 14, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(14, 2, 200, 0, 14, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(120, 2, 10, 0, 14, 60, 0x00ffaa, '#00ffaa', 0.45);
-    addGlassBox(120, 2, 10, 0, 14, -60, 0x00ffaa, '#00ffaa', 0.45);
-
-    // Jump pads on floating pontoons
-    addJumpPad(-75, -75, 22.3, 35);
-    addJumpPad(75, -75, 22.3, 35);
-    addJumpPad(-75, 75, 22.3, 35);
-    addJumpPad(75, 75, 22.3, 35);
+    addJumpPad(-s, -s + 18, 0.3, 38);
+    addJumpPad(s, -s + 18, 0.3, 38);
+    addJumpPad(-s, s - 18, 0.3, 38);
+    addJumpPad(s, s - 18, 0.3, 38);
 }
 
-// --- FFA MAP 3: MIRRORED CANYON ---
-function buildMap_FFA_MirroredCanyon() {
-    // Sinuous River through the canyon bed
-    addWater(110, 280, 0, 0.4, 0, { color: 0x082b40, emissive: 0x003348 });
-
-    // East & West Chrome & Mirror Canyon Cliffs
-    addMirrorBox(50, 45, 270, -115, 22.5, 0, 0x121a2c, '#00ffaa', 0.96, 0.04);
-    addMirrorBox(50, 45, 270, 115, 22.5, 0, 0x121a2c, '#00ffaa', 0.96, 0.04);
-    addMirrorBox(30, 65, 250, -135, 32.5, 0, 0x0d1525, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(30, 65, 250, 135, 32.5, 0, 0x0d1525, '#00f3ff', 0.98, 0.02);
-
-    // 3 Grand Glass Suspension Bridges High Over the Canyon
-    addGlassBox(180, 2, 18, 0, 24, -70, 0x00f3ff, '#00f3ff', 0.55);
-    addGlassBox(180, 2, 22, 0, 24, 0, 0xff00ff, '#ff00ff', 0.55);
-    addGlassBox(180, 2, 18, 0, 24, 70, 0x00ffaa, '#00ffaa', 0.55);
-
-    // Riverbed Stepping Pontoons and Cover
-    for(let z=-110; z<=110; z+=45) {
-        addBox(18, 4, 18, 0, 2, z, 0x142030, '#00f3ff');
-        addMirrorBox(6, 18, 6, (z % 90 === 0 ? 25 : -25), 9, z, 0x0d1420, '#ffff00', 0.96, 0.03);
-    }
-
-    // Canyon Bed Launch Pads to High Glass Platforms
-    addJumpPad(0, -90, 4.3, 40);
-    addJumpPad(0, 90, 4.3, 40);
-}
-
-// --- TDM MAP 1: TWIN CANALS (1200x1200) ---
-function buildMap_TDM_TwinCanals() {
-    // Grand 260m Wide Reflective River Dividing Red and Blue Arenas
-    addWater(260, 1100, 0, 0.5, 0, { color: 0x072538, emissive: 0x002d44 });
-
-    // Red Fortress (East, x = 450)
+function buildMapOriginal_TDM() {
+    // Red Fortress
     addBox(240, 60, 240, 450, 30, 0, 0x331111, '#ff0000'); 
-    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');
-    addMirrorBox(40, 80, 40, 450, 70, 140, 0x220505, '#ff0055', 0.97, 0.03);
-    addMirrorBox(40, 80, 40, 450, 70, -140, 0x220505, '#ff0055', 0.97, 0.03);
+    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');  
     addRamp(40, 2, 100, 310, 30, 60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
     addRamp(40, 2, 100, 310, 30, -60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
+    
+    addBox(200, 40, 30, 220, 20, 160, 0x220000, '#ff0000'); 
+    addBox(200, 40, 30, 220, 20, -160, 0x220000, '#ff0000'); 
+    addBox(40, 40, 30, 220, 20, 0, 0x220000, '#ff0000'); 
+    addBox(120, 10, 30, 220, 45, 0, 0x220000, '#ff0000'); 
+    
+    addBox(180, 2, 30, 220, 41, 160, 0x222222, '#00ffaa'); 
+    addBox(180, 2, 30, 220, 41, -160, 0x222222, '#00ffaa'); 
+    addBox(60, 80, 60, 220, 40, 280, 0x330000, '#ff0000'); 
+    addBox(60, 80, 60, 220, 40, -280, 0x330000, '#ff0000'); 
+    
+    addRamp(20, 2, 80, 250, 20, 160, 0, -Math.PI/5, 0x111111, '#ff5500');
+    addRamp(20, 2, 80, 250, 20, -160, 0, -Math.PI/5, 0x111111, '#ff5500');
+    
+    addBox(60, 25, 60, 300, 12.5, 180, 0x111111, '#ff00ff');
+    addBox(60, 25, 60, 300, 12.5, -180, 0x111111, '#ff00ff');
 
-    // Blue Fortress (West, x = -450)
+    // Blue Fortress
     addBox(240, 60, 240, -450, 30, 0, 0x111133, '#0000ff'); 
-    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');
-    addMirrorBox(40, 80, 40, -450, 70, 140, 0x050522, '#0055ff', 0.97, 0.03);
-    addMirrorBox(40, 80, 40, -450, 70, -140, 0x050522, '#0055ff', 0.97, 0.03);
+    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');  
     addRamp(40, 2, 100, -310, 30, 60, 0, Math.PI/6, 0x222222, '#0000ff'); 
     addRamp(40, 2, 100, -310, 30, -60, 0, Math.PI/6, 0x222222, '#0000ff'); 
+    
+    addBox(200, 40, 30, -220, 20, 160, 0x000022, '#0000ff'); 
+    addBox(200, 40, 30, -220, 20, -160, 0x000022, '#0000ff'); 
+    addBox(40, 40, 30, -220, 20, 0, 0x000022, '#0000ff'); 
+    addBox(120, 10, 30, -220, 45, 0, 0x000022, '#0000ff'); 
+    
+    addBox(180, 2, 30, -220, 41, 160, 0x222222, '#00ffaa'); 
+    addBox(180, 2, 30, -220, 41, -160, 0x222222, '#00ffaa'); 
+    addBox(60, 80, 60, -220, 40, 280, 0x000033, '#0000ff'); 
+    addBox(60, 80, 60, -220, 40, -280, 0x000033, '#0000ff'); 
+    
+    addRamp(20, 2, 80, -250, 20, 160, 0, Math.PI/5, 0x111111, '#0055ff');
+    addRamp(20, 2, 80, -250, 20, -160, 0, Math.PI/5, 0x111111, '#0055ff');
 
-    // 3 Majestic Translucent Glass Bridges Spanning Over the River
-    addGlassBox(280, 2, 45, 0, 9, 0, 0x00f3ff, '#00f3ff', 0.55); // Central Grand Choke
-    addGlassBox(280, 2, 30, 0, 9, 320, 0xff00ff, '#ff00ff', 0.5); // North Glass Way
-    addGlassBox(280, 2, 30, 0, 9, -320, 0x00ffaa, '#00ffaa', 0.5); // South Glass Way
+    addBox(60, 25, 60, -300, 12.5, 180, 0x111111, '#ff00ff');
+    addBox(60, 25, 60, -300, 12.5, -180, 0x111111, '#ff00ff');
 
-    // Riverbank Jump Pads
-    addJumpPad(150, 0, 0.3, 42);
-    addJumpPad(-150, 0, 0.3, 42);
-    addJumpPad(150, 320, 0.3, 40);
-    addJumpPad(-150, 320, 0.3, 40);
-    addJumpPad(150, -320, 0.3, 40);
-    addJumpPad(-150, -320, 0.3, 40);
+    // Central Spire
+    addBox(140, 80, 140, 0, 40, 0, 0x111111, '#ffffff'); 
+    addRamp(60, 2, 160, 110, 40, 0, 0, -Math.PI/6, 0x222222, '#ffff00'); 
+    addRamp(60, 2, 160, -110, 40, 0, 0, Math.PI/6, 0x222222, '#ffff00'); 
+    addRamp(60, 2, 160, 0, 40, 110, -Math.PI/6, 0, 0x222222, '#ffff00');  
+    addRamp(60, 2, 160, 0, 40, -110, Math.PI/6, 0, 0x222222, '#ffff00');   
+    
+    addBox(120, 15, 120, 0, 7.5, 250, 0x222222, '#ffff00'); 
+    addBox(120, 15, 120, 0, 7.5, -250, 0x222222, '#ffff00'); 
+    addBox(60, 40, 60, 0, 20, 250, 0x1a1a1a, '#ffffff');
+    addBox(60, 40, 60, 0, 20, -250, 0x1a1a1a, '#ffffff');
 }
 
-// --- TDM MAP 2: HYDRO RESERVOIR (1200x1200) ---
-function buildMap_TDM_HydroReservoir() {
-    // Vast Hydro Reservoir Basin
-    addWater(1100, 480, 0, 0.4, 300, { color: 0x052840, emissive: 0x002235 });
-
-    // Titan Dam Wall at z = 0
-    addBox(1100, 50, 60, 0, 25, 0, 0x182233, '#00f3ff');
-
-    // Red Station (East End of Dam)
-    addBox(180, 70, 180, 450, 35, -180, 0x331111, '#ff0000');
-    addMirrorBox(30, 90, 30, 450, 80, -180, 0x220505, '#ff0055', 0.98, 0.02);
-    addRamp(40, 2, 120, 450, 25, -60, Math.PI/6, 0, 0x222222, '#ff0000');
-
-    // Blue Station (West End of Dam)
-    addBox(180, 70, 180, -450, 35, -180, 0x111133, '#0000ff');
-    addMirrorBox(30, 90, 30, -450, 80, -180, 0x050522, '#0055ff', 0.98, 0.02);
-    addRamp(40, 2, 120, -450, 25, -60, Math.PI/6, 0, 0x222222, '#0000ff');
-
-    // Glass Catwalk over the water spillway
-    addGlassBox(600, 2, 25, 0, 51, 0, 0x00f3ff, '#00f3ff', 0.55);
-    addGlassBox(25, 2, 350, 0, 25, 200, 0x00ffaa, '#00ffaa', 0.5);
-
-    // Mirror Intake Turbines
-    addMirrorBox(60, 60, 60, 200, 30, 260, 0x121b2b, '#00f3ff', 0.96, 0.03);
-    addMirrorBox(60, 60, 60, -200, 30, 260, 0x121b2b, '#00f3ff', 0.96, 0.03);
-
-    addJumpPad(0, 0, 50.3, 38);
-    addJumpPad(200, 260, 60.3, 42);
-    addJumpPad(-200, 260, 60.3, 42);
-}
-
-// --- TDM MAP 3: CYBER HAVEN (1200x1200) ---
-function buildMap_TDM_CyberHaven() {
-    // Dual Reflective Ocean Harbors
-    addWater(480, 1100, 340, 0.4, 0, { color: 0x062438, emissive: 0x001d2c });
-    addWater(480, 1100, -340, 0.4, 0, { color: 0x062438, emissive: 0x001d2c });
-
-    // Central Pier Promenade
-    addBox(160, 12, 1100, 0, 6, 0, 0x141a28, '#00ffaa');
-
-    // Red Cargo Dock (North Pier)
-    addBox(220, 40, 220, 0, 20, 450, 0x331111, '#ff0000');
-    addMirrorBox(25, 80, 25, 0, 60, 520, 0x220505, '#ff0000', 0.98, 0.02);
-
-    // Blue Cargo Dock (South Pier)
-    addBox(220, 40, 220, 0, 20, -450, 0x111133, '#0000ff');
-    addMirrorBox(25, 80, 25, 0, 60, -520, 0x050522, '#0000ff', 0.98, 0.02);
-
-    // Mirror Shipping Containers Scattered for Cover
-    for(let i=-300; i<=300; i+=80) {
-        addMirrorBox(35, 18, 16, (i % 160 === 0 ? 40 : -40), 15, i, 0x101826, (i > 0 ? '#ff5500' : '#00aaff'), 0.95, 0.05);
-    }
-
-    // Glass Walkways over the water slips
-    addGlassBox(18, 2, 350, 100, 15, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(18, 2, 350, -100, 15, 0, 0x00f3ff, '#00f3ff', 0.5);
-
-    addJumpPad(0, 150, 12.3, 38);
-    addJumpPad(0, -150, 12.3, 38);
-}
-
-// --- CTF MAP 1: LAGOON OUTPOST (1200x1200) ---
-function buildMap_CTF_LagoonOutpost() {
-    buildMap_TDM_TwinCanals();
-    setupCTFFlags();
-}
-
-// --- CTF MAP 2: MIRROR ARCHIPELAGO (1200x1200) ---
-function buildMap_CTF_MirrorArchipelago() {
-    // Vast Ocean Arena
-    addWater(1150, 1150, 0, 0.4, 0, { color: 0x062238, emissive: 0x001a2c });
-
-    // Red Island (East)
-    addBox(220, 16, 220, 420, 8, 0, 0x2a1414, '#ff0000');
-    addMirrorBox(30, 70, 30, 480, 43, 0, 0x220505, '#ff0055', 0.97, 0.03);
-
-    // Blue Island (West)
-    addBox(220, 16, 220, -420, 8, 0, 0x14142a, '#0000ff');
-    addMirrorBox(30, 70, 30, -480, 43, 0, 0x050522, '#0055ff', 0.97, 0.03);
-
-    // Center Neutral Island
-    addBox(180, 18, 180, 0, 9, 0, 0x162030, '#00ffaa');
-    addMirrorBox(25, 60, 25, 0, 39, 0, 0x0d1424, '#00f3ff', 0.98, 0.02);
-
-    // Glass Arch Bridges Connecting Archipelago
-    addGlassBox(250, 2, 20, 210, 18, 0, 0x00f3ff, '#00f3ff', 0.55);
-    addGlassBox(250, 2, 20, -210, 18, 0, 0x00f3ff, '#00f3ff', 0.55);
-
-    addJumpPad(0, 0, 18.3, 45);
-    addJumpPad(350, 0, 16.3, 40);
-    addJumpPad(-350, 0, 16.3, 40);
-
-    setupCTFFlags();
-}
-
-// --- CTF MAP 3: CANAL BASTION (1200x1200) ---
-function buildMap_CTF_CanalBastion() {
-    // Cross-Shaped Canals
-    addWater(140, 1100, 0, 0.4, 0, { color: 0x07263c });
-    addWater(1100, 140, 0, 0.4, 0, { color: 0x07263c });
-
-    // 4 Quadrant Bastions
-    const qPos = [
-        { x: 260, z: 260, col: 0x221616, glow: '#ff5500' },
-        { x: -260, z: 260, col: 0x161622, glow: '#0055ff' },
-        { x: 260, z: -260, col: 0x221616, glow: '#ff5500' },
-        { x: -260, z: -260, col: 0x161622, glow: '#0055ff' }
-    ];
-    qPos.forEach(q => {
-        addBox(200, 25, 200, q.x, 12.5, q.z, q.col, q.glow);
-        addMirrorBox(20, 50, 20, q.x, 37.5, q.z, 0x0d1420, q.glow, 0.96, 0.04);
-    });
-
-    // Central Glass Crossroads
-    addGlassBox(180, 2, 180, 0, 15, 0, 0x00f3ff, '#00f3ff', 0.55);
-
-    addJumpPad(0, 0, 15.3, 42);
-    setupCTFFlags();
-}
-
-function setupCTFFlags() {
+function buildMapOriginal_CTF() {
+    buildMapOriginal_TDM();
     const flagGeo = new THREE.CylinderGeometry(2, 2, 8, 16);
     const flagMatRed = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 1 });
     const flagMatBlue = new THREE.MeshStandardMaterial({ color: 0x0000ff, emissive: 0x0000ff, emissiveIntensity: 1 });
@@ -7859,206 +7873,398 @@ function setupCTFFlags() {
     mapMeshes.push(flagMeshBlue);
 }
 
-// --- KOTH MAP 1: SUNKEN CITADEL ---
-function buildMap_KOTH_SunkenCitadel() {
-    // Reflective Lake covering the entire arena
-    addWater(280, 280, 0, 0.45, 0, { color: 0x07283e, emissive: 0x002c42 });
-
-    // The Hill: Elevated Octagonal Dais at Center
-    addMirrorBox(70, 14, 70, 0, 7, 0, 0x162234, '#ffff00', 0.96, 0.04);
-
-    // 4 Symmetrical Mirror Obelisks Surrounding the Hill
-    const o = 65;
-    addMirrorBox(10, 55, 10, -o, 27.5, -o, 0x0c1420, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(10, 55, 10, o, 27.5, -o, 0x0c1420, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(10, 55, 10, -o, 27.5, o, 0x0c1420, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(10, 55, 10, o, 27.5, o, 0x0c1420, '#00f3ff', 0.98, 0.02);
-
-    // 4 Ramps leading up from the water to the capture zone
-    addRamp(24, 2, 45, 0, 7, 50, -Math.PI/7, 0, 0x1a2638, '#ffff00');
-    addRamp(24, 2, 45, 0, 7, -50, Math.PI/7, 0, 0x1a2638, '#ffff00');
-    addRamp(24, 2, 45, 50, 7, 0, 0, -Math.PI/7, 0x1a2638, '#ffff00');
-    addRamp(24, 2, 45, -50, 7, 0, 0, Math.PI/7, 0x1a2638, '#ffff00');
-
-    // Perimeter Jump Pads launching straight into the Hill
-    addJumpPad(0, 95, 0.3, 38);
-    addJumpPad(0, -95, 0.3, 38);
-    addJumpPad(95, 0, 0.3, 38);
-    addJumpPad(-95, 0, 0.3, 38);
+function buildMapOriginal_KOTH() {
+    addBox(80, 20, 80, 0, 10, 0, 0x222211, '#ffff00');
+    addRamp(30, 2, 40, 0, 10, 60, -Math.PI/6, 0, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, 0, 10, -60, Math.PI/6, 0, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, 60, 10, 0, 0, -Math.PI/6, 0x222222, '#ffff00');
+    addRamp(30, 2, 40, -60, 10, 0, 0, Math.PI/6, 0x222222, '#ffff00');
+    
+    const s = 100;
+    addBox(20, 10, 20, s, 5, s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, -s, 5, s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, s, 5, -s, 0x111111, '#00ffff');
+    addBox(20, 10, 20, -s, 5, -s, 0x111111, '#00ffff');
 }
 
-// --- KOTH MAP 2: MIRRORED OASIS ---
-function buildMap_KOTH_MirroredOasis() {
-    // Cascading Water Terraces
-    addWater(270, 270, 0, 0.4, 0, { color: 0x052236 });
-    addWater(100, 100, 0, 7.4, 0, { color: 0x09304a });
-
-    // Step Pyramid Capture Hill
-    addMirrorBox(80, 8, 80, 0, 4, 0, 0x162030, '#ffff00', 0.95, 0.05);
-    addMirrorBox(50, 8, 50, 0, 12, 0, 0x1a2638, '#ffff00', 0.98, 0.02);
-
-    // Glass Bridges Radiating from Hill
-    addGlassBox(120, 2, 14, 0, 16, 0, 0x00f3ff, '#00f3ff', 0.55);
-    addGlassBox(14, 2, 120, 0, 16, 0, 0x00f3ff, '#00f3ff', 0.55);
-
-    addJumpPad(-80, -80, 0.3, 36);
-    addJumpPad(80, -80, 0.3, 36);
-    addJumpPad(-80, 80, 0.3, 36);
-    addJumpPad(80, 80, 0.3, 36);
+function buildMapOriginal_GunGame() {
+    for(let i=0; i<30; i++) {
+        const x = (Math.random() - 0.5) * 200; 
+        const z = (Math.random() - 0.5) * 200;
+        const w = 5 + Math.random() * 20; 
+        const h = 20 + Math.random() * 20;
+        addBox(w, h, 5, x, h/2, z, 0x111111, '#ff00ff');
+    }
+    addBox(200, 2, 10, 0, 30, 0, 0x111111, '#00f3ff');
+    addBox(10, 2, 200, 0, 30, 0, 0x111111, '#00f3ff');
 }
 
-// --- KOTH MAP 3: AQUA SPIRE ---
-function buildMap_KOTH_AquaSpire() {
-    // Deep Moat
-    addWater(270, 270, 0, 0.5, 0, { color: 0x06253c });
-
-    // Center Spire Base
-    addBox(35, 20, 35, 0, 10, 0, 0x121b2a, '#00f3ff');
-
-    // The Capture Zone: Open Glass Pavilion 21 units above the deep water
-    addGlassBox(60, 2, 60, 0, 21, 0, 0xffff00, '#ffff00', 0.6);
-
-    // 4 Outer Jump Pillar Towers
-    const p = 75;
-    addMirrorBox(18, 20, 18, -p, 10, -p, 0x101826, '#00ffaa', 0.96, 0.04);
-    addMirrorBox(18, 20, 18, p, 10, -p, 0x101826, '#00ffaa', 0.96, 0.04);
-    addMirrorBox(18, 20, 18, -p, 10, p, 0x101826, '#00ffaa', 0.96, 0.04);
-    addMirrorBox(18, 20, 18, p, 10, p, 0x101826, '#00ffaa', 0.96, 0.04);
-
-    // Jump pads on all 4 towers launching onto the glass capture pavilion
-    addJumpPad(-p, -p, 20.3, 35);
-    addJumpPad(p, -p, 20.3, 35);
-    addJumpPad(-p, p, 20.3, 35);
-    addJumpPad(p, p, 20.3, 35);
+function buildMapOriginal_Zombies() {
+    addBox(60, 40, 60, 0, 20, 0, 0x050505, '#00ff00');
+    addRamp(20, 2, 60, 0, 20, 60, -Math.PI/5, 0, 0x111111, '#555555');
+    addRamp(20, 2, 60, 0, 20, -60, Math.PI/5, 0, 0x111111, '#555555');
+    
+    for(let i=0; i<40; i++) {
+        const x = (Math.random() - 0.5) * 250; 
+        const z = (Math.random() - 0.5) * 250;
+        if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+        addBox(10, 10, 10, x, 5, z, 0x1a1a1a, '#115511');
+    }
 }
 
-// --- GUN GAME MAP 1: HYDRO DOCKS ---
-function buildMap_GunGame_HydroDocks() {
-    // Intersecting Water Slips
-    addWater(260, 60, 0, 0.45, 0, { color: 0x062438 });
-    addWater(60, 260, 0, 0.45, 0, { color: 0x062438 });
+// ============================================================================
+// VERDANT LANDSCAPE MAP BUILDERS (MAP 2 FOR EACH GAMEMODE)
+// ============================================================================
 
-    // 4 Quadrant Docks
-    const docks = [
-        { x: 75, z: 75 }, { x: -75, z: 75 }, { x: 75, z: -75 }, { x: -75, z: -75 }
+// FFA Landscape: Verdant Citadel (Towers, River & Greenery)
+function buildMapLandscape_FFA(size = 400) {
+    // Reflective animated water river crossing the valley
+    addWater(75, 380, 0, 0.4, 0, { color: 0x072b38, emissive: 0x003344, opacity: 0.85 });
+
+    // 2 Concrete and Glass bridges across the river
+    addBox(75, 3, 24, 0, 3.5, 95, 0x3d434e, '#00ffaa');
+    addBox(75, 3, 24, 0, 3.5, -95, 0x3d434e, '#00ffaa');
+
+    // Central Monolithic Grey Citadel on River Island
+    addGreyTower(0, 0, 48, 75, 48, { hasRamp: false, hasJumpPad: true });
+
+    // 4 Perimeter Grey Monolith Watchtowers
+    addGreyTower(125, 125, 28, 54, 28, { hasJumpPad: true });
+    addGreyTower(-125, 125, 28, 54, 28, { hasJumpPad: true });
+    addGreyTower(125, -125, 28, 54, 28, { hasJumpPad: true });
+    addGreyTower(-125, -125, 28, 54, 28, { hasJumpPad: true });
+
+    // High-Poly Forest Groves (Deciduous Oaks, Alpine Pines, Weeping Willows)
+    const treeCoords = [
+        // North-East Grove (Pines)
+        { x: 75, z: 140, type: 'pine', s: 1.1 }, { x: 95, z: 165, type: 'pine', s: 1.3 },
+        { x: 150, z: 80, type: 'pine', s: 1.2 }, { x: 165, z: 120, type: 'pine', s: 1.0 },
+        // North-West Grove (Oaks)
+        { x: -75, z: 140, type: 'deciduous', s: 1.15 }, { x: -105, z: 160, type: 'deciduous', s: 1.25 },
+        { x: -145, z: 85, type: 'deciduous', s: 1.0 }, { x: -160, z: 125, type: 'deciduous', s: 1.2 },
+        // South-East Grove (Oaks)
+        { x: 80, z: -145, type: 'deciduous', s: 1.2 }, { x: 110, z: -160, type: 'deciduous', s: 1.1 },
+        { x: 145, z: -80, type: 'deciduous', s: 1.3 }, { x: 165, z: -130, type: 'deciduous', s: 1.05 },
+        // South-West Grove (Pines)
+        { x: -80, z: -140, type: 'pine', s: 1.2 }, { x: -110, z: -165, type: 'pine', s: 1.15 },
+        { x: -150, z: -85, type: 'pine', s: 1.3 }, { x: -165, z: -125, type: 'pine', s: 1.0 },
+        // Riverside Weeping Willows
+        { x: 48, z: 50, type: 'willow', s: 1.2 }, { x: 50, z: -50, type: 'willow', s: 1.25 },
+        { x: -48, z: 45, type: 'willow', s: 1.15 }, { x: -50, z: -45, type: 'willow', s: 1.2 },
+        { x: 52, z: 140, type: 'willow', s: 1.1 }, { x: -52, z: -140, type: 'willow', s: 1.15 }
     ];
-    docks.forEach(d => {
-        addBox(90, 8, 90, d.x, 4, d.z, 0x141e2e, '#00ffaa');
-        addMirrorBox(18, 22, 18, d.x, 19, d.z, 0x0e1622, '#ff0055', 0.97, 0.03);
+    treeCoords.forEach(t => addTree(t.x, t.z, t.s, t.type));
+
+    // High-Poly Weathered Granite Rock Clusters & Bushes
+    const rocks = [
+        { x: 38, y: 0, z: 80, sx: 4.5, sy: 3.5, sz: 5.0, rot: 0.4 },
+        { x: -38, y: 0, z: 80, sx: 5.0, sy: 4.0, sz: 4.2, rot: -0.6 },
+        { x: 38, y: 0, z: -80, sx: 4.2, sy: 3.2, sz: 4.8, rot: 1.2 },
+        { x: -38, y: 0, z: -80, sx: 5.2, sy: 4.2, sz: 4.5, rot: -1.1 },
+        { x: 100, y: 0, z: 30, sx: 6.0, sy: 4.5, sz: 5.5, rot: 0.8 },
+        { x: -100, y: 0, z: -30, sx: 5.8, sy: 4.2, sz: 5.0, rot: -0.5 }
+    ];
+    rocks.forEach(r => {
+        addRock(r.x, r.y, r.z, r.sx, r.sy, r.sz, r.rot);
+        addBush(r.x + 4, r.y, r.z + 3, 1.2);
+        addBush(r.x - 4, r.y, r.z - 3, 1.1);
     });
 
-    // Glass Ramps across the slips
-    addGlassBox(60, 2, 20, 0, 12, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(20, 2, 60, 0, 12, 0, 0x00f3ff, '#00f3ff', 0.5);
-
-    addJumpPad(75, 75, 8.3, 34);
-    addJumpPad(-75, 75, 8.3, 34);
-    addJumpPad(75, -75, 8.3, 34);
-    addJumpPad(-75, -75, 8.3, 34);
+    // Jump pads for vertical transit to tower balconies
+    addJumpPad(0, 32, 0.3, 40);
+    addJumpPad(0, -32, 0.3, 40);
+    addJumpPad(90, 0, 0.3, 38);
+    addJumpPad(-90, 0, 0.3, 38);
 }
 
-// --- GUN GAME MAP 2: GLASS MATRIX ---
-function buildMap_GunGame_GlassMatrix() {
-    // Endless glowing ocean beneath
-    addWater(280, 280, 0, 0.45, 0, { color: 0x041c2c, emissive: 0x001d2c });
+// TDM Landscape: Verdant Divide (Red & Blue Monoliths across River Gorge)
+function buildMapLandscape_TDM(size = 1000) {
+    // Expansive canyon river dividing the teams
+    addWater(130, 950, 0, 0.4, 0, { color: 0x062534, emissive: 0x003344, opacity: 0.88 });
 
-    // 3 Vertically Stacked Glass Arenas
-    addGlassBox(160, 2, 160, 0, 10, 0, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(110, 2, 110, 0, 22, 0, 0xff00ff, '#ff00ff', 0.5);
-    addGlassBox(60, 2, 60, 0, 34, 0, 0x00ffaa, '#00ffaa', 0.55);
+    // East Titan Red Grey Monolith Fortress
+    addGreyTower(450, 0, 80, 95, 80, { team: 'red', hasJumpPad: true });
+    addGreyTower(320, 180, 42, 60, 42, { team: 'red', hasJumpPad: true });
+    addGreyTower(320, -180, 42, 60, 42, { team: 'red', hasJumpPad: true });
 
-    // Mirror Pylons at the corners
-    const c = 55;
-    addMirrorBox(8, 48, 8, -c, 24, -c, 0x0a121d, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(8, 48, 8, c, 24, -c, 0x0a121d, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(8, 48, 8, -c, 24, c, 0x0a121d, '#00f3ff', 0.98, 0.02);
-    addMirrorBox(8, 48, 8, c, 24, c, 0x0a121d, '#00f3ff', 0.98, 0.02);
+    // West Titan Blue Grey Monolith Fortress
+    addGreyTower(-450, 0, 80, 95, 80, { team: 'blue', hasJumpPad: true });
+    addGreyTower(-320, 180, 42, 60, 42, { team: 'blue', hasJumpPad: true });
+    addGreyTower(-320, -180, 42, 60, 42, { team: 'blue', hasJumpPad: true });
 
-    addJumpPad(0, 0, 10.3, 36);
-    addJumpPad(40, 40, 10.3, 34);
-    addJumpPad(-40, -40, 10.3, 34);
+    // River Crossings
+    // 1. High-Altitude Glass Sky-Bridge
+    addGlassBox(140, 2.5, 26, 0, 38, 0, 0x00f3ff, '#00f3ff', 0.55);
+    // 2. North Stone Arch Bridge
+    addBox(140, 4, 30, 0, 4, 250, 0x3d434e, '#a0b4c8');
+    // 3. South Stone Arch Bridge
+    addBox(140, 4, 30, 0, 4, -250, 0x3d434e, '#a0b4c8');
+
+    // Massive Forest Groves (Pines & Deciduous)
+    const tdmTrees = [
+        // East Forest (Red side)
+        { x: 220, z: 90, type: 'pine', s: 1.3 }, { x: 240, z: 140, type: 'pine', s: 1.4 },
+        { x: 200, z: 180, type: 'deciduous', s: 1.2 }, { x: 250, z: -90, type: 'pine', s: 1.35 },
+        { x: 220, z: -150, type: 'deciduous', s: 1.25 }, { x: 200, z: -200, type: 'pine', s: 1.4 },
+        { x: 380, z: 90, type: 'pine', s: 1.2 }, { x: 380, z: -90, type: 'pine', s: 1.2 },
+        // West Forest (Blue side)
+        { x: -220, z: 90, type: 'pine', s: 1.3 }, { x: -240, z: 140, type: 'pine', s: 1.4 },
+        { x: -200, z: 180, type: 'deciduous', s: 1.2 }, { x: -250, z: -90, type: 'pine', s: 1.35 },
+        { x: -220, z: -150, type: 'deciduous', s: 1.25 }, { x: -200, z: -200, type: 'pine', s: 1.4 },
+        { x: -380, z: 90, type: 'pine', s: 1.2 }, { x: -380, z: -90, type: 'pine', s: 1.2 },
+        // Riverside Willows
+        { x: 80, z: 100, type: 'willow', s: 1.3 }, { x: 80, z: -100, type: 'willow', s: 1.3 },
+        { x: -80, z: 100, type: 'willow', s: 1.3 }, { x: -80, z: -100, type: 'willow', s: 1.3 },
+        { x: 80, z: 350, type: 'willow', s: 1.2 }, { x: -80, z: -350, type: 'willow', s: 1.2 }
+    ];
+    tdmTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
+
+    // Tactical Boulders & Low Cover
+    const tdmRocks = [
+        { x: 140, y: 0, z: 60, sx: 7, sy: 5, sz: 6, rot: 0.5 },
+        { x: -140, y: 0, z: 60, sx: 7, sy: 5, sz: 6, rot: -0.5 },
+        { x: 140, y: 0, z: -60, sx: 6, sy: 4.5, sz: 7, rot: 1.0 },
+        { x: -140, y: 0, z: -60, sx: 6, sy: 4.5, sz: 7, rot: -1.0 }
+    ];
+    tdmRocks.forEach(r => {
+        addRock(r.x, r.y, r.z, r.sx, r.sy, r.sz, r.rot);
+        addBush(r.x + 5, r.y, r.z, 1.4);
+    });
+
+    addJumpPad(200, 0, 0.4, 40);
+    addJumpPad(-200, 0, 0.4, 40);
 }
 
-// --- GUN GAME MAP 3: NEON MARINA ---
-function buildMap_GunGame_NeonMarina() {
-    addWater(270, 170, 0, 0.45, 45, { color: 0x062337 });
+// CTF Landscape: Verdant Fortress (Opposing Monolith Bases & Flag Daises)
+function buildMapLandscape_CTF(size = 1000) {
+    buildMapLandscape_TDM(size);
 
-    // North Promenade
-    addBox(270, 10, 100, 0, 5, -90, 0x141c2a, '#00ffaa');
+    // Red Flag Dais inside fortified bastion
+    addBox(36, 10, 36, 300, 5, 0, 0x2b303a, '#ff0044');
+    // Blue Flag Dais inside fortified bastion
+    addBox(36, 10, 36, -300, 5, 0, 0x2b303a, '#0077ff');
 
-    // 4 Finger Jetties jutting out into the water
-    for(let x=-100; x<=100; x+=65) {
-        addMirrorBox(18, 8, 120, x, 4, 30, 0x0d1522, '#00f3ff', 0.96, 0.04);
-        addGlassBox(18, 2, 30, x, 8, 95, 0xff00ff, '#ff00ff', 0.5);
+    const flagGeo = new THREE.CylinderGeometry(2, 2, 8, 16);
+    const flagMatRed = new THREE.MeshStandardMaterial({ color: 0xff0044, emissive: 0xff0044, emissiveIntensity: 1.2 });
+    const flagMatBlue = new THREE.MeshStandardMaterial({ color: 0x0077ff, emissive: 0x0077ff, emissiveIntensity: 1.2 });
+
+    flagMeshRed = new THREE.Mesh(flagGeo, flagMatRed);
+    flagMeshBlue = new THREE.Mesh(flagGeo, flagMatBlue);
+    flagMeshRed.position.copy(gameState.flagRed.pos);
+    flagMeshBlue.position.copy(gameState.flagBlue.pos);
+
+    scene.add(flagMeshRed);
+    scene.add(flagMeshBlue);
+    mapMeshes.push(flagMeshRed);
+    mapMeshes.push(flagMeshBlue);
+}
+
+// KOTH Landscape: Verdant Sanctuary (Central Dais inside Reflecting Lake)
+function buildMapLandscape_KOTH(size = 400) {
+    // Grand Central Reflecting Lake
+    addWater(230, 230, 0, 0.4, 0, { color: 0x072b38, emissive: 0x003344, opacity: 0.85 });
+
+    // The Hill: Elevated Stone & Glass Temple Dais in Center of Lake (matches KOTH scoring zone)
+    addBox(60, 20, 60, 0, 10, 0, 0x3d434e, '#ffff00');
+
+    // 4 Grand Causeways / Ramps leading onto the Dais from the 4 shores
+    addRamp(24, 2, 50, 0, 10, 55, -Math.PI / 8, 0, 0x2a2e37, '#ffff00');
+    addRamp(24, 2, 50, 0, 10, -55, Math.PI / 8, 0, 0x2a2e37, '#ffff00');
+    addRamp(24, 2, 50, 55, 10, 0, 0, -Math.PI / 8, 0x2a2e37, '#ffff00');
+    addRamp(24, 2, 50, -55, 10, 0, 0, Math.PI / 8, 0x2a2e37, '#ffff00');
+
+    // 4 Grey Monolithic Sniper Watchtowers on the lake shore
+    addGreyTower(125, 125, 26, 52, 26, { hasJumpPad: true });
+    addGreyTower(-125, 125, 26, 52, 26, { hasJumpPad: true });
+    addGreyTower(125, -125, 26, 52, 26, { hasJumpPad: true });
+    addGreyTower(-125, -125, 26, 52, 26, { hasJumpPad: true });
+
+    // Lakeside Weeping Willows & Lush Greenery
+    const kothTrees = [
+        { x: 120, z: 0, type: 'willow', s: 1.3 }, { x: -120, z: 0, type: 'willow', s: 1.3 },
+        { x: 0, z: 120, type: 'willow', s: 1.3 }, { x: 0, z: -120, type: 'willow', s: 1.3 },
+        { x: 145, z: 60, type: 'deciduous', s: 1.15 }, { x: -145, z: 60, type: 'deciduous', s: 1.15 },
+        { x: 145, z: -60, type: 'deciduous', s: 1.15 }, { x: -145, z: -60, type: 'deciduous', s: 1.15 },
+        { x: 60, z: 145, type: 'pine', s: 1.2 }, { x: -60, z: 145, type: 'pine', s: 1.2 },
+        { x: 60, z: -145, type: 'pine', s: 1.2 }, { x: -60, z: -145, type: 'pine', s: 1.2 }
+    ];
+    kothTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
+
+    // Shoreline Boulders
+    addRock(110, 0, 80, 5, 4, 5, 0.4);
+    addRock(-110, 0, 80, 5, 4, 5, -0.4);
+    addRock(110, 0, -80, 5, 4, 5, 0.8);
+    addRock(-110, 0, -80, 5, 4, 5, -0.8);
+}
+
+// Gun Game Landscape: Verdant Terraces (Stepped Botanical Gardens & Towers)
+function buildMapLandscape_GunGame(size = 350) {
+    // Reflecting stream in center
+    addWater(35, 320, 0, 0.4, 0, { color: 0x062534, emissive: 0x003344, opacity: 0.85 });
+
+    // Central Grey Clocktower / Spire
+    addGreyTower(0, 0, 34, 68, 34, { hasJumpPad: true });
+
+    // Stepped Garden Terrace Decks
+    addBox(80, 12, 100, 95, 6, 0, 0x2d323c, '#2d6a4f');
+    addBox(80, 12, 100, -95, 6, 0, 0x2d323c, '#2d6a4f');
+    addBox(70, 20, 70, 105, 10, 110, 0x262a32, '#a0b4c8');
+    addBox(70, 20, 70, -105, 10, 110, 0x262a32, '#a0b4c8');
+    addBox(70, 20, 70, 105, 10, -110, 0x262a32, '#a0b4c8');
+    addBox(70, 20, 70, -105, 10, -110, 0x262a32, '#a0b4c8');
+
+    // Sculpted Greenery Hedges
+    addBox(50, 4, 6, 85, 14, 25, 0x1b4332, '#2d6a4f');
+    addBox(50, 4, 6, 85, 14, -25, 0x1b4332, '#2d6a4f');
+    addBox(50, 4, 6, -85, 14, 25, 0x1b4332, '#2d6a4f');
+    addBox(50, 4, 6, -85, 14, -25, 0x1b4332, '#2d6a4f');
+
+    // High-Poly Trees & Bushes
+    const ggTrees = [
+        { x: 130, z: 40, type: 'deciduous', s: 1.1 }, { x: -130, z: 40, type: 'deciduous', s: 1.1 },
+        { x: 130, z: -40, type: 'deciduous', s: 1.1 }, { x: -130, z: -40, type: 'deciduous', s: 1.1 },
+        { x: 45, z: 80, type: 'willow', s: 1.15 }, { x: -45, z: 80, type: 'willow', s: 1.15 },
+        { x: 45, z: -80, type: 'willow', s: 1.15 }, { x: -45, z: -80, type: 'willow', s: 1.15 }
+    ];
+    ggTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
+
+    // Jump pads for fast vertical gunplay
+    addJumpPad(45, 0, 0.4, 42);
+    addJumpPad(-45, 0, 0.4, 42);
+    addJumpPad(0, 70, 0.4, 38);
+    addJumpPad(0, -70, 0.4, 38);
+}
+
+// Zombies Landscape: Overgrown Citadel (Atmospheric Forest & Survivor Catwalks)
+function buildMapLandscape_Zombies(size = 400) {
+    // Dilapidated Central Grey Bunker
+    addGreyTower(0, 0, 52, 50, 52, { hasJumpPad: true });
+
+    // 4 Corner Survivor Guard Posts
+    addGreyTower(110, 110, 30, 54, 30, { hasJumpPad: true });
+    addGreyTower(-110, 110, 30, 54, 30, { hasJumpPad: true });
+    addGreyTower(110, -110, 30, 54, 30, { hasJumpPad: true });
+    addGreyTower(-110, -110, 30, 54, 30, { hasJumpPad: true });
+
+    // Elevated Survivor Catwalks connecting the fortress
+    addBox(90, 2, 8, 55, 23, 55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, -55, 23, 55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, 55, 23, -55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, -55, 23, -55, 0x3d434e, '#00ffaa');
+
+    // Access ramps to catwalks
+    addRamp(14, 2, 45, 0, 11.5, 65, -Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
+    addRamp(14, 2, 45, 0, 11.5, -65, Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
+
+    // Dark, overgrown pine forest
+    const zombieTrees = [
+        { x: 60, z: 140, type: 'pine', s: 1.3 }, { x: 140, z: 60, type: 'pine', s: 1.35 },
+        { x: -60, z: 140, type: 'pine', s: 1.25 }, { x: -140, z: 60, type: 'pine', s: 1.4 },
+        { x: 60, z: -140, type: 'pine', s: 1.3 }, { x: 140, z: -60, type: 'pine', s: 1.3 },
+        { x: -60, z: -140, type: 'pine', s: 1.25 }, { x: -140, z: -60, type: 'pine', s: 1.4 },
+        { x: 155, z: 0, type: 'pine', s: 1.45 }, { x: -155, z: 0, type: 'pine', s: 1.45 },
+        { x: 0, z: 155, type: 'pine', s: 1.4 }, { x: 0, z: -155, type: 'pine', s: 1.4 }
+    ];
+    zombieTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
+
+    // Overgrown barricades & rocks
+    for (let i = 0; i < 18; i++) {
+        const angle = i * (Math.PI / 9);
+        const r = 85 + (i % 3) * 20;
+        const x = Math.cos(angle) * r;
+        const z = Math.sin(angle) * r;
+        addRock(x, 0, z, 3.5, 3.0, 3.5, angle);
+        addBush(x + 2, 0, z + 2, 1.2);
+    }
+}
+
+// ============================================================================
+// MASTER MAP BUILDER & DISPATCHER (EXACTLY 2 MAPS PER GAMEMODE)
+// ============================================================================
+
+function buildMap(mode, mapId = null) {
+    const rawId = mapId || gameState.map || `${mode.toLowerCase()}_original`;
+    const isLandscape = rawId.includes('landscape');
+    
+    // Size determination
+    let size = 300;
+    if (mode === 'TDM' || mode === 'CTF') size = 1200;
+    if (isLandscape) {
+        if (mode === 'TDM' || mode === 'CTF') size = 1000;
+        else size = 400;
     }
 
-    addJumpPad(-100, 80, 4.3, 35);
-    addJumpPad(100, 80, 4.3, 35);
-}
+    // Physics floor plane
+    const floorShape = new CANNON.Plane();
+    const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+    floorBody.addShape(floorShape);
+    floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+    world.addBody(floorBody);
+    mapBodies.push(floorBody);
 
-// --- ZOMBIES MAP 1: TOXIC SWAMP ---
-function buildMap_Zombies_ToxicSwamp() {
-    // Biohazard Emerald Swamp Water
-    addWater(280, 280, 0, 0.45, 0, { color: 0x062810, emissive: 0x012e09, glowColor: '#00ff44' });
+    // Visual floor plane
+    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1);
+    floorGeo.rotateX(-Math.PI/2);
 
-    // Sunken Survivor Outpost Cabins
-    addBox(55, 30, 55, 0, 15, 0, 0x0d1810, '#00ff55');
-    addRamp(18, 2, 50, 0, 15, 45, -Math.PI/6, 0, 0x162216, '#00ff55');
-
-    // 4 Mirror Obelisks with emerald reflections
-    const s = 70;
-    addMirrorBox(12, 45, 12, -s, 22.5, -s, 0x09140c, '#00ff44', 0.97, 0.03);
-    addMirrorBox(12, 45, 12, s, 22.5, -s, 0x09140c, '#00ff44', 0.97, 0.03);
-    addMirrorBox(12, 45, 12, -s, 22.5, s, 0x09140c, '#00ff44', 0.97, 0.03);
-    addMirrorBox(12, 45, 12, s, 22.5, s, 0x09140c, '#00ff44', 0.97, 0.03);
-
-    // Narrow Glass Walkways over the toxic sludge
-    addGlassBox(160, 2, 10, 0, 12, 0, 0x00ff55, '#00ff55', 0.5);
-    addGlassBox(10, 2, 160, 0, 12, 0, 0x00ff55, '#00ff55', 0.5);
-
-    addJumpPad(0, 0, 30.3, 36);
-}
-
-// --- ZOMBIES MAP 2: FLOODED FACILITY ---
-function buildMap_Zombies_FloodedFacility() {
-    // Knee-Deep Laboratory Flood Water
-    addWater(280, 280, 0, 0.5, 0, { color: 0x061e2a, emissive: 0x180303, glowColor: '#ff2244' });
-
-    // Laboratory Partition Corridors
-    for(let i=0; i<8; i++) {
-        const x = (i % 2 === 0 ? 55 : -55);
-        const z = -90 + (i * 26);
-        addBox(60, 16, 8, x, 8, z, 0x121722, '#ff0033');
+    let floorMat;
+    if (isLandscape) {
+        const grassTex = createVerdantTerrainTexture();
+        grassTex.repeat.set(size / 24, size / 24);
+        floorMat = new THREE.MeshStandardMaterial({
+            map: grassTex,
+            roughness: 0.85,
+            metalness: 0.05
+        });
+    } else {
+        const fTex = createNeonGridTexture(0x111111, '#00ffaa');
+        fTex.repeat.set(size / 5, size / 5);
+        floorMat = new THREE.MeshStandardMaterial({
+            map: fTex,
+            emissiveMap: fTex,
+            emissive: 0x00ffaa,
+            emissiveIntensity: 0.3,
+            roughness: 0.2
+        });
     }
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
+    mapMeshes.push(floorMesh);
 
-    // Elevated Survivor Gantry Catwalks
-    addGlassBox(200, 2, 14, 0, 18, 0, 0xff0055, '#ff0055', 0.55);
-    addMirrorBox(25, 45, 25, 0, 22.5, 75, 0x0a1018, '#ff0033', 0.98, 0.02);
+    // Perimeter boundary walls
+    const wallCol = isLandscape ? 0x22262d : 0x050510;
+    const wallGlow = isLandscape ? '#3a414d' : '#444444';
+    addBox(size, 250, 5, 0, 125, -size/2, wallCol, wallGlow);
+    addBox(size, 250, 5, 0, 125, size/2, wallCol, wallGlow);
+    addBox(5, 250, size, -size/2, 125, 0, wallCol, wallGlow);
+    addBox(5, 250, size, size/2, 125, 0, wallCol, wallGlow);
 
-    addJumpPad(0, 0, 0.3, 35);
-    addJumpPad(0, 75, 0.3, 38);
-}
-
-// --- ZOMBIES MAP 3: DROWNED TEMPLE ---
-function buildMap_Zombies_DrownedTemple() {
-    // Ancient flooded sanctuary
-    addWater(270, 270, 0, 0.45, 0, { color: 0x081c2e, emissive: 0x001d2d });
-
-    // Central Altar Platform (Holdout Spot)
-    addMirrorBox(55, 14, 55, 0, 7, 0, 0x141f2e, '#00f3ff', 0.96, 0.04);
-
-    // 8 Mirror Pillars forming a sacred ring
-    for(let i=0; i<8; i++) {
-        const rad = 60;
-        const a = (i / 8) * Math.PI * 2;
-        addMirrorBox(8, 42, 8, Math.cos(a) * rad, 21, Math.sin(a) * rad, 0x0c1522, '#00ffaa', 0.97, 0.03);
+    // Dispatch to the requested map variant
+    if (isLandscape) {
+        switch(mode) {
+            case 'TDM': buildMapLandscape_TDM(size); break;
+            case 'CTF': buildMapLandscape_CTF(size); break;
+            case 'KOTH': buildMapLandscape_KOTH(size); break;
+            case 'Gun Game':
+            case 'GUN_GAME': buildMapLandscape_GunGame(size); break;
+            case 'Zombies':
+            case 'ZOMBIES': buildMapLandscape_Zombies(size); break;
+            case 'FFA':
+            default: buildMapLandscape_FFA(size); break;
+        }
+    } else {
+        switch(mode) {
+            case 'TDM': buildMapOriginal_TDM(); break;
+            case 'CTF': buildMapOriginal_CTF(); break;
+            case 'KOTH': buildMapOriginal_KOTH(); break;
+            case 'Gun Game':
+            case 'GUN_GAME': buildMapOriginal_GunGame(); break;
+            case 'Zombies':
+            case 'ZOMBIES': buildMapOriginal_Zombies(); break;
+            case 'FFA':
+            default: buildMapOriginal_FFA(); break;
+        }
     }
-
-    // Elevated Perimeter Glass Walkway
-    addGlassBox(180, 2, 12, 0, 16, -65, 0x00f3ff, '#00f3ff', 0.5);
-    addGlassBox(180, 2, 12, 0, 16, 65, 0x00f3ff, '#00f3ff', 0.5);
-
-    addJumpPad(0, 0, 14.3, 38);
 }
 
 function addBox(w, h, d, x, y, z, color, glow) {

@@ -205,7 +205,7 @@
                         <option value="ZOMBIES">Infection / Zombies</option>
                     </select>
 
-                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Map (RT Water & Reflections)</label>
+                    <label class="section-label" style="font-size:11px; margin-bottom:4px;">Map (Original Classic vs Verdant Landscape)</label>
                     <select id="host-map" class="tech-select" style="margin-bottom:10px; padding:8px; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
                     </select>
 
@@ -296,10 +296,11 @@
                     <span style="font-size:12px; color:#aaa;">RTX PRESET:</span>
                     <select id="setting-rtx-preset" class="tech-select" style="padding:4px 10px; font-size:11px; width:auto; border-color:#00f3ff; color:#00f3ff; font-weight:bold;">
                         <option value="custom">Custom</option>
-                        <option value="off">Off (Vanilla)</option>
+                        <option value="off">Off (Clean Raster)</option>
+                        <option value="clarity" selected>Cinematic Clarity (Clean & Sharp)</option>
                         <option value="medium">Medium</option>
                         <option value="high">High Cinematic</option>
-                        <option value="ultra" selected>RTX ULTRA 🔥</option>
+                        <option value="ultra">RTX Ultra (Enhanced Lighting)</option>
                     </select>
                 </div>
             </div>
@@ -487,22 +488,22 @@
                             <input type="checkbox" id="setting-rtx-bloom" checked>
                             <span class="setting-title">RTX Silky Bloom & Glow (16-bit Float)</span>
                         </label>
-                        <input type="range" id="setting-bloom-strength" min="0.05" max="0.9" step="0.05" value="0.35" class="tech-range" style="width:105px;" title="Bloom Intensity">
+                        <input type="range" id="setting-bloom-strength" min="0.05" max="0.9" step="0.05" value="0.22" class="tech-range" style="width:105px;" title="Bloom Intensity">
                     </div>
 
                     <!-- SSR -->
                     <div class="setting-toggle-row">
                         <label class="switch-label">
-                            <input type="checkbox" id="setting-rtx-ssr" checked>
+                            <input type="checkbox" id="setting-rtx-ssr">
                             <span class="setting-title">RTX Water & Screen-Space Reflections (SSR)</span>
                         </label>
-                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.75" class="tech-range" style="width:105px;" title="SSR Intensity">
+                        <input type="range" id="setting-ssr-intensity" min="0.1" max="1.5" step="0.05" value="0.5" class="tech-range" style="width:105px;" title="SSR Intensity">
                     </div>
 
                     <!-- SSAO -->
                     <div class="setting-toggle-row">
                         <label class="switch-label">
-                            <input type="checkbox" id="setting-rtx-ao" checked>
+                            <input type="checkbox" id="setting-rtx-ao">
                             <span class="setting-title">RTX Ambient Occlusion (Contact Shadows)</span>
                         </label>
                         <input type="range" id="setting-ao-intensity" min="0.1" max="1.5" step="0.05" value="0.5" class="tech-range" style="width:105px;" title="AO Depth Intensity">
@@ -512,11 +513,11 @@
                     <div style="background:rgba(0, 243, 255, 0.06); border:1px solid rgba(0, 243, 255, 0.3); border-radius:6px; padding:8px 10px; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <span style="color:#00f3ff; font-weight:bold; font-size:11px; letter-spacing:1px;">HDR TONE MAPPING (ZERO BLEACH)</span>
-                            <span id="lbl-tonemapping-badge" style="background:#00ffaa; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px;">VIBRANT FILMIC</span>
+                            <span id="lbl-tonemapping-badge" style="background:#00ffaa; color:#000; font-size:9px; font-weight:900; padding:2px 6px; border-radius:3px;">PBR NEUTRAL</span>
                         </div>
                         <select id="setting-rtx-tonemapping" class="tech-select" style="padding:6px; font-size:11px; border-color:#00f3ff; color:#00f3ff; margin-bottom:4px;">
-                            <option value="vibrant" selected>Vibrant Filmic (Luminance-Preserved, Zero Bleach - Recommended)</option>
-                            <option value="neutral">Khronos PBR Neutral (True Balance)</option>
+                            <option value="neutral" selected>Khronos PBR Neutral (True Balance, Zero Bleach - Recommended)</option>
+                            <option value="vibrant">Vibrant Filmic (Luminance-Preserved)</option>
                             <option value="aces">ACES Classic (Legacy Filmic)</option>
                             <option value="off">Off (Raw HDR Output)</option>
                         </select>

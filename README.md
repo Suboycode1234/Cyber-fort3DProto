@@ -18,58 +18,64 @@
 
 ## 🌟 Key Highlights & Engineering Features
 
-### 💎 Next-Gen RTX Post-Processing & Ray Tracing Pipeline
-- **Real-Time RTX Screen-Space Raymarching & Monte Carlo Path Tracing:**
-  - Upward-directed raymarching casts reflections of neon spires, avatars, lasers, and skyboxes onto undulating water planes and mirror monoliths.
-  - Multi-tier ray tracing presets: **Path Tracing (Full GI)**, **Quality (16 Steps + Binary Search)**, **Medium (8 Steps)**, **Performance (5 Steps)**, and **Off (Pure Raster)**.
-- **Silky 16-Bit Half-Float Bloom (`THREE.HalfFloatType`):**
-  - Upgraded `EffectComposer` render target from 8-bit RGBA to 16-bit floating-point precision, eliminating 8-bit banding, quantization noise, and dirty pixelated graininess.
-  - Natural, silky smooth glow curve calibrated with clean thresholding (`0.70`) and configurable intensity (`0.35` default).
-- **Zero-Bleach Luminance-Preserving Filmic HDR Tone Mapping:**
-  - Eliminates the washed-out / chalky bleach look caused by legacy per-channel ACES compression.
-  - Maps scalar luminance $Y = 0.2126R + 0.7152G + 0.0722B$ through a filmic curve and rescales RGB by $(Y_{\text{mapped}} / Y)$, preserving 100% of vibrant cyberpunk hue and deep inky contrast.
-  - Selectable tone mapping engines: **Vibrant Filmic (Recommended)**, **Khronos PBR Neutral**, **ACES Classic**, and **Raw HDR**.
-- **AMD FidelityFX™ Super Resolution (FSR 1.0) & RCAS Filter:**
-  - Renders the scene at optimized fractional resolution (Ultra Quality 77%, Quality 67%, Balanced 59%, Performance 50%) and upscales with Robust Contrast-Adaptive Sharpening (RCAS), delivering up to **2x-3x frame rate boosts** on laptops and integrated GPUs.
-- **Hardware Detection & Auto-Optimization:**
-  - Automatically identifies user hardware (dGPU vs. 4th-Gen Intel HD 4600 / i5-4590).
-  - One-click presets for dedicated gaming GPUs (Quality RT + FSR Quality) and vintage 4th-gen Intel hardware (60 FPS locked, optimized raster).
+### 💎 Next-Gen Post-Processing & Visual Clarity Overhaul
+- **Pristine Visual Clarity & Elimination of Temporal Noise:**
+  - Completely eliminated unaccumulated screen-space Monte Carlo noise jitter and fake Sobel edge-darkening filters, restoring razor-sharp geometry silhouettes, crisp character models, and clean competitive visibility.
+  - Zero smearing, zero inverted viewport ghosting over weapons and avatars, and zero pixel crawling on silhouette borders.
+- **Official Khronos PBR Neutral HDR Tone Mapping (Zero Bleaching):**
+  - Upgraded to the official 3D Commerce Khronos PBR Neutral tone mapper, ensuring 100% true color saturation, accurate hue angles, and natural highlight roll-off.
+  - Completely eliminates the chalky, washed-out bleached look caused by legacy per-channel ACES clipping.
+  - Selectable tone mapping engines: **Khronos PBR Neutral (Recommended)**, **Vibrant Filmic**, **ACES Classic**, and **Off (Raw HDR)**.
+- **High-Threshold Silky 16-Bit Half-Float Bloom (`threshold: 0.92`):**
+  - Precision 16-bit floating-point bloom buffer (`THREE.HalfFloatType`) with an elevated `0.92` threshold and subtle `0.22` strength.
+  - Ordinary diffuse geometry (grey concrete towers, green foliage leaves, player skins, sky) remains 100% pin-sharp and clean without muddy halos. Only intense laser bolts, neon signage, muzzle flashes, and emissive cores produce an ethereal optical glow.
+- **AMD FidelityFX™ Super Resolution (FSR 1.0) & RCAS Sharpening:**
+  - Robust Contrast-Adaptive Sharpening (RCAS) delivers pin-sharp textures and foliage leaves without ringing or halo artifacts.
+  - Optional EASU spatial upsampling provides up to **2x-3x frame rate boosts** on integrated GPUs and laptops.
+- **Hardware Detection & Auto-Optimization Profiles:**
+  - Auto-detects dedicated gaming GPUs vs. integrated 4th-Gen Intel HD 4600 / i5-4590 hardware.
+  - Auto-migrates legacy settings to the **Cinematic Clarity** profile for instant 60 FPS competitive play with zero visual degradation.
 
 ---
 
-## 🗺️ 18 Dedicated Gamemode Maps (RT Water & Reflections)
+## 🗺️ 2 Maps Per Gamemode (Original Classic vs. Verdant Landscape)
 
-Every gamemode features **3 distinct, handcrafted cybernetic arenas** showcasing undulating water bodies, high-gloss mirror monoliths (`metalness: 0.96, roughness: 0.04`), and translucent glass walkways (`opacity: 0.45`):
+Every gamemode in CyberFort features **exactly 2 dedicated, handcrafted maps** selectable by hosts and offline bot matches:
+- **Map 1: Original (Classic Arena):** The beloved classic arena layout designed for pure competitive speed, vertical jump pads, and laser gunplay.
+- **Map 2: Verdant Landscape (Grey Towers & Greenery):** A showcase natural landscape featuring architectural brutalist monolithic grey towers, multi-cluster high-poly 3D trees, lush foliage bushes, weathered granite boulders, and reflective animated water rivers & lakes.
 
 ```
-┌─────────────────┬──────────────────────────┬─────────────────────────────────────────────────────────────┐
-│ Gamemode        │ Map Name (ID)            │ Atmospheric & Architectural Theme                           │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ Free For All    │ Neon Spire Basin         │ Titan skyscraper surrounded by reflective water moats       │
-│                 │ Cyber Atlantis           │ Flooded city with submerged high-tech ruins & mirror decks  │
-│                 │ Mirrored Canyon          │ Sinuous river canyon with chrome rock walls & sky bridges   │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ Team Deathmatch │ Twin Canals              │ Dual team fortresses split by a 260m reflective river       │
-│                 │ Hydro Reservoir          │ Multi-tiered hydroelectric dam with vast water basin        │
-│                 │ Cyber Haven              │ Futuristic maritime cargo port with reflecting ocean slips  │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ Capture Flag    │ Lagoon Outpost           │ Fortresses across a shimmering lagoon with glass highways   │
-│                 │ Mirror Archipelago       │ Ocean map with connected cyber islands & shallow shoals     │
-│                 │ Canal Bastion            │ Grand fortress bisected by cross canals & mirror towers     │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ King of Hill    │ Sunken Citadel           │ Capture dais centered in an expansive reflective neon lake  │
-│                 │ Mirrored Oasis           │ Step-pyramid hill with cascading water terraces & pads      │
-│                 │ Aqua Spire               │ Glass capture pavilion hovering 21m above deep water moat   │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ Gun Game        │ Hydro Docks              │ Intersecting water channels, mirror crates & glass ramps    │
-│                 │ Glass Matrix             │ 3 vertically stacked glass arenas over an endless ocean     │
-│                 │ Neon Marina              │ Reflective yacht basin with mirror berths & tight alleys    │
-├─────────────────┼──────────────────────────┼─────────────────────────────────────────────────────────────┤
-│ Zombies         │ Toxic Swamp              │ Eerie marsh with glowing bio-water & narrow boardwalks      │
-│                 │ Flooded Facility         │ Submerged research lab with knee-deep water & red alarms    │
-│                 │ Drowned Temple           │ Ancient cyber sanctuary with reflective water & altar ring  │
-└─────────────────┴──────────────────────────┴─────────────────────────────────────────────────────────────┘
+┌─────────────────┬──────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐
+│ Gamemode        │ Map Option                               │ Architectural & Environmental Features                      │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Free For All    │ Map 1: Classic Arena (Original)          │ Neon spire, ascending spiral platforms & corner pylons      │
+│                 │ Map 2: Verdant Citadel (Landscape)       │ Central island citadel tower, river gorge, bridges & forest │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Team Deathmatch │ Map 1: Classic Outpost (Original)        │ Red & Blue industrial battle stations across central spire  │
+│                 │ Map 2: Verdant Divide (Landscape)        │ Titan Red & Blue Grey Monoliths, canyon river & skybridge   │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Capture Flag    │ Map 1: Classic Bastion (Original)        │ Symmetrical fortress bases with elevated flag daises        │
+│                 │ Map 2: Verdant Fortress (Landscape)      │ Red & Blue Monolith bases, multi-lane forest & river flanks │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ King of Hill    │ Map 1: Classic Hill (Original)           │ Elevated temple dais with 4 yellow access ramps             │
+│                 │ Map 2: Verdant Sanctuary (Landscape)     │ Raised stone & glass hill dais in a reflecting crystal lake │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Gun Game        │ Map 1: Classic Docks (Original)          │ Fast-paced neon arena with 30 tactical cover blocks         │
+│                 │ Map 2: Verdant Terraces (Landscape)      │ Stepped botanical garden terraces, hedge mazes & clocktower │
+├─────────────────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Zombies         │ Map 1: Classic Asylum (Original)         │ Central defensive asylum structure & perimeter ruins        │
+│                 │ Map 2: Overgrown Citadel (Landscape)     │ Misty pine forest, abandoned grey bunker & survivor catwalks│
+└─────────────────┴──────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
 ```
+
+### 🌲 Procedural High-Poly Environmental Assets
+- **Architectural Grey Monolith Towers (`addGreyTower`):** Brutalist concrete & titanium construction with open ground breezeways, wraparound cantilevered sniper balconies with metallic railings, access ramps, rooftop parapets with crenellations, communications spires with blinking warning beacons, and creeping green ivy vines.
+- **High-Poly 3D Trees (`addTree`):** Bark cylinder trunks with root flares, solid Cannon.js physics cover collision, and multi-cluster organic canopies (`IcosahedronGeometry` / `DodecahedronGeometry`):
+  - *Deciduous Oaks:* 6 interconnected high-poly foliage domes in rich emerald, forest green, and olive hues.
+  - *Alpine Pines:* 4-tier layered conifer skirts with deep pine needle tones.
+  - *Weeping Willows:* Drooping graceful foliage masses lining the riverbanks and lake shores.
+- **Granite Boulders & Foliage Bushes (`addRock` & `addBush`):** Natural faceted stone outcroppings providing tactical shooting cover and lush hedge clusters.
+- **Animated Water Reflections (`addWater`):** Real-time animated wave vertex displacement and procedural ripple normal maps reflecting towers and sky.
 
 ---
 
