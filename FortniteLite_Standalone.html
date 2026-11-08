@@ -317,6 +317,10 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
             <span style="color:#00f3ff;">🚀</span>
             <span>[J] JUMP: <strong id="hud-jump-status" style="color:#00ffaa;">NORMAL</strong></span>
         </div>
+        <div class="tactical-badge" id="hud-swim-badge" style="display:none; border-color:rgba(56, 216, 240, 0.5); color:#38d8f0;">
+            <span style="color:#38d8f0;">🏊</span>
+            <span>SWIMMING &bull; [SPACE] Surface &bull; [C/SHIFT] Dive</span>
+        </div>
         <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
             <span>[W+R] CLIMB WALL</span>
         </div>
@@ -614,10 +618,10 @@ body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', T
                         </select>
                         <div>
                             <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
-                                <span style="color:#ccc;">RCAS Sharpness</span>
-                                <span id="lbl-fsr-sharpness" style="color:#ffaa00; font-weight:bold;">80%</span>
+                                <span style="color:#ccc;">RCAS Sharpness (Active with FSR)</span>
+                                <span id="lbl-fsr-sharpness" style="color:#ffaa00; font-weight:bold;">50%</span>
                             </div>
-                            <input type="range" id="setting-fsr-sharpness" min="0.0" max="1.0" step="0.05" value="0.8" class="tech-range">
+                            <input type="range" id="setting-fsr-sharpness" min="0.0" max="1.0" step="0.05" value="0.5" class="tech-range">
                         </div>
                         <div id="lbl-fsr-render-res" style="font-size:10px; color:#888; margin-top:4px; font-family:monospace;">
                             Render Target: 100% Native
@@ -1270,6 +1274,7 @@ let isHost = false;
 let currentGamemode = 'FFA';
 let activeWaterPlanes = [];
 let activeJumpPads = [];
+let currentMapSize = 300;
 
 // Map Catalog - Exactly 2 Maps Per Gamemode: Map 1 = Original Classic, Map 2 = Verdant Landscape (Grey Towers & Greenery)
 const MAP_CATALOG = {
@@ -1495,7 +1500,7 @@ const RTXUberShader = {
         uRayTracingMode: { value: 2 },   // 0=Off, 1=Perf, 2=Med, 3=Quality, 4=Cinematic
         uAntiAliasing: { value: 1 },     // 0=Off, 1=FXAA, 2=SMAA, 3=MSAA, 4=SSAA
         uFSRMode: { value: 0 },          // 0=Off, 1=UltraQuality, 2=Quality, 3=Balanced, 4=Performance
-        uFSRSharpness: { value: 0.5 },
+        uFSRSharpness: { value: 0.0 },
         uFSRScale: { value: 1.0 },
         uEnableSSR: { value: false },
         uSSRIntensity: { value: 0.0 },
@@ -1618,20 +1623,11 @@ const RTXUberShader = {
             return clamp(sharpCol, minCol, maxCol);
         }
 
-        // Khronos PBR Neutral Tone Mapper (Official Industry Standard: True Color Fidelity, Zero Bleaching)
-        vec3 TonemapPBRNeutral(vec3 color) {
-            const float startCompression = 0.8 - 0.04;
-            const float desaturation = 0.15;
-            float x = min(color.r, min(color.g, color.b));
-            float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
-            color -= offset;
-            float peak = max(color.r, max(color.g, color.b));
-            if (peak < startCompression) return max(vec3(0.0), color);
-            const float d = 1.0 - startCompression;
-            float newPeak = 1.0 - d * d / (peak + d - startCompression);
-            color *= newPeak / peak;
-            float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
-            return clamp(mix(color, vec3(newPeak), g), 0.0, 1.0);
+        // Reinhard-Jodie Tone Mapping: Preserves Vibrant Saturation, ZERO Bleaching in Highlights
+        vec3 TonemapReinhardJodie(vec3 col) {
+            float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            vec3 tc = col / (col + 1.0);
+            return clamp(mix(col / (luma + 1.0), tc, tc), 0.0, 1.0);
         }
 
         // Luminance-Preserving Vibrant Filmic Tone Mapping
@@ -1773,9 +1769,9 @@ const RTXUberShader = {
                 col += streak * uAnamorphicIntensity * vec3(0.2, 0.7, 1.0);
             }
 
-            // High-Fidelity HDR Tone Mapping (Khronos PBR Neutral Default: True Colors, Zero Bleaching)
+            // High-Fidelity HDR Tone Mapping (Non-Bleaching Saturation-Preserving Default)
             if (uToneMappingMode == 1) {
-                col = TonemapPBRNeutral(col);
+                col = TonemapReinhardJodie(col);
             } else if (uToneMappingMode == 0) {
                 col = TonemapVibrant(col);
             } else if (uToneMappingMode == 2 || uEnableACES) {
@@ -1794,7 +1790,8 @@ const RTXUberShader = {
             }
 
             // AMD FidelityFX Robust Contrast-Adaptive Sharpening (RCAS)
-            if (uFSRSharpness > 0.01) {
+            // Strictly applied ONLY when FSR is active (uFSRMode > 0) to eliminate artificial pixel grain on native resolution
+            if (uFSRMode > 0 && uFSRSharpness > 0.01) {
                 col = applyFSR_RCAS(col, uv, texel, uFSRSharpness);
             }
 
@@ -1967,8 +1964,9 @@ function applySettings() {
         rtxPass.uniforms.uAntiAliasing.value = aaMap[gameSettings.antiAliasing] !== undefined ? aaMap[gameSettings.antiAliasing] : 1;
         
         const fsrMap = { 'off': 0, 'ultra_quality': 1, 'quality': 2, 'balanced': 3, 'performance': 4 };
-        rtxPass.uniforms.uFSRMode.value = fsrMap[gameSettings.fsrMode] !== undefined ? fsrMap[gameSettings.fsrMode] : 0;
-        rtxPass.uniforms.uFSRSharpness.value = gameSettings.fsrSharpness !== undefined ? gameSettings.fsrSharpness : 0.8;
+        const fsrVal = fsrMap[gameSettings.fsrMode] !== undefined ? fsrMap[gameSettings.fsrMode] : 0;
+        rtxPass.uniforms.uFSRMode.value = fsrVal;
+        rtxPass.uniforms.uFSRSharpness.value = (fsrVal > 0) ? (gameSettings.fsrSharpness !== undefined ? gameSettings.fsrSharpness : 0.5) : 0.0;
         rtxPass.uniforms.uFSRScale.value = fsrScale;
         
         rtxPass.uniforms.uEnableSSR.value = gameSettings.enableSSR;
@@ -3570,17 +3568,21 @@ function getGroundHeightBelow(x, currentY, z) {
         new THREE.Vector3(x, startY, z),
         new THREE.Vector3(0, -1, 0),
         0,
-        50
+        80
     );
     const hits = ray.intersectObjects(mapMeshes, true);
     if (hits.length > 0) {
         for (let i = 0; i < hits.length; i++) {
             const h = hits[i];
+            if (h.object && h.object.userData && (h.object.userData.noGroundRay || h.object.userData.isWater)) continue;
             if (h.face && h.face.normal.y > 0.35) {
                 return h.point.y;
             }
         }
-        return hits[0].point.y;
+        for (let i = 0; i < hits.length; i++) {
+            if (hits[i].object && hits[i].object.userData && (hits[i].object.userData.noGroundRay || hits[i].object.userData.isWater)) continue;
+            return hits[i].point.y;
+        }
     }
     return 0;
 }
@@ -3768,12 +3770,12 @@ function updateBots(dt) {
             }
 
             // Barrier & Void check: bot knocked over or outside arena boundaries
-            const mapSize = (currentGamemode === 'TDM' || currentGamemode === 'CTF' || gameState.mode === 'TDM' || gameState.mode === 'CTF') ? 1200 : 300;
-            const horizBarrier = (mapSize / 2) + 2.0;
+            const mapSize = currentMapSize || ((currentGamemode === 'TDM' || currentGamemode === 'CTF' || gameState.mode === 'TDM' || gameState.mode === 'CTF') ? 1200 : 300);
+            const horizBarrier = (mapSize / 2) + 6.0;
             const botOutOfBarrier = Math.abs(bot.pos.x) > horizBarrier || 
                                    Math.abs(bot.pos.z) > horizBarrier || 
-                                   bot.pos.y < -15 || 
-                                   bot.pos.y > 260;
+                                   bot.pos.y < -35 || 
+                                   bot.pos.y > 320;
 
             if (botOutOfBarrier) {
                 bot.hp = 0;
@@ -5463,8 +5465,8 @@ function init() {
     light.position.set( 0, 150, 0 ); 
     scene.add( light );
 
-    // High fidelity main directional light with soft shadows
-    dirLight = new THREE.DirectionalLight( 0xffffff, 1.35 ); 
+    // Balanced high-fidelity main directional light with soft shadows (prevents highlight bleaching)
+    dirLight = new THREE.DirectionalLight( 0xffffff, 0.95 ); 
     dirLight.position.set( 120, 240, 100 ); 
     dirLight.castShadow = true;
     dirLight.shadow.camera.top = 220; 
@@ -5476,8 +5478,8 @@ function init() {
     dirLight.shadow.bias = -0.0005;
     scene.add( dirLight );
 
-    // Deep neon fill light
-    const fillLight = new THREE.DirectionalLight( 0x0066ff, 0.45 );
+    // Soft atmospheric fill light
+    const fillLight = new THREE.DirectionalLight( 0x4488bb, 0.30 );
     fillLight.position.set( -120, 100, -100 );
     scene.add( fillLight );
 
@@ -7134,37 +7136,61 @@ function createNeonGridTexture(hexColor, glowColor) {
 // WATER, MIRROR & POST-PROCESSING RT SHOWCASE HELPERS
 // ============================================================================
 
-function createWaterRippleTexture(accent = '#00f3ff') {
+function createSparklingWaterTexture(accent = '#40e0d0') {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = 512;
+    canvas.height = 512;
     const ctx = canvas.getContext('2d');
     
-    // Deep water cyber foundation
-    ctx.fillStyle = '#061626';
-    ctx.fillRect(0, 0, 256, 256);
+    // Clear transparent foundation with sparkling crystal light-blue tint
+    ctx.clearRect(0, 0, 512, 512);
+    const grad = ctx.createLinearGradient(0, 0, 512, 512);
+    grad.addColorStop(0, 'rgba(40, 205, 240, 0.22)');
+    grad.addColorStop(0.5, 'rgba(56, 220, 248, 0.32)');
+    grad.addColorStop(1, 'rgba(32, 185, 225, 0.25)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
     
-    // Caustic and wave light lines
-    ctx.lineWidth = 2.5;
-    for (let i = 0; i < 16; i++) {
+    // Crisp shimmering caustics network
+    ctx.lineWidth = 3.0;
+    for (let i = 0; i < 28; i++) {
         ctx.beginPath();
-        ctx.strokeStyle = (i % 2 === 0) ? accent : '#0077ff';
-        ctx.globalAlpha = 0.18 + (i % 3) * 0.08;
-        const cy = i * 16;
+        ctx.strokeStyle = (i % 2 === 0) ? 'rgba(235, 255, 255, 0.68)' : 'rgba(92, 225, 245, 0.48)';
+        const cy = i * 18.5;
         ctx.moveTo(0, cy);
-        ctx.bezierCurveTo(64, cy + 14, 192, cy - 14, 256, cy);
+        ctx.bezierCurveTo(128, cy + 24, 384, cy - 24, 512, cy);
+        ctx.stroke();
+    }
+    for (let k = 0; k < 22; k++) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(210, 250, 255, 0.38)';
+        const cx = k * 23.5;
+        ctx.moveTo(cx, 0);
+        ctx.bezierCurveTo(cx - 20, 150, cx + 20, 360, cx, 512);
         ctx.stroke();
     }
     
-    // Specular glints for SSR
-    ctx.globalAlpha = 0.45;
+    // Sharp sparkling specular sun glints & star flares
     ctx.fillStyle = '#ffffff';
-    for (let j = 0; j < 25; j++) {
-        const gx = Math.random() * 256;
-        const gy = Math.random() * 256;
+    for (let j = 0; j < 60; j++) {
+        const gx = Math.random() * 512;
+        const gy = Math.random() * 512;
+        const radius = Math.random() * 2.2 + 0.8;
         ctx.beginPath();
-        ctx.arc(gx, gy, Math.random() * 2.0 + 0.8, 0, Math.PI * 2);
+        ctx.arc(gx, gy, radius, 0, Math.PI * 2);
         ctx.fill();
+        
+        // 4-point star flare on brightest sparkles
+        if (j % 3 === 0) {
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.90)';
+            ctx.lineWidth = 1.0;
+            ctx.moveTo(gx - radius * 3.5, gy);
+            ctx.lineTo(gx + radius * 3.5, gy);
+            ctx.moveTo(gx, gy - radius * 3.5);
+            ctx.lineTo(gx, gy + radius * 3.5);
+            ctx.stroke();
+        }
     }
     
     const tex = new THREE.CanvasTexture(canvas);
@@ -7173,26 +7199,62 @@ function createWaterRippleTexture(accent = '#00f3ff') {
     return tex;
 }
 
+function createUnderwaterBubble(x, y, z) {
+    const geo = new THREE.SphereGeometry(0.18 + Math.random() * 0.15, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({
+        color: 0xd0f8ff,
+        transparent: true,
+        opacity: 0.85
+    });
+    const bubble = new THREE.Mesh(geo, mat);
+    bubble.position.set(
+        x + (Math.random() - 0.5) * 0.6,
+        y,
+        z + (Math.random() - 0.5) * 0.6
+    );
+    bubble.userData.noGroundRay = true;
+    scene.add(bubble);
+    
+    let life = 0;
+    const speedY = 3.5 + Math.random() * 2.5;
+    const anim = {
+        update(t) {
+            life += 1 / 60;
+            bubble.position.y += speedY * (1 / 60);
+            bubble.position.x += Math.sin(t * 8 + x) * 0.02;
+            bubble.scale.multiplyScalar(1.015);
+            mat.opacity = Math.max(0, 0.85 * (1 - life / 1.2));
+            if (life >= 1.2 || bubble.position.y >= -0.5) {
+                scene.remove(bubble);
+                const idx = animatedMapObjects.indexOf(anim);
+                if (idx !== -1) animatedMapObjects.splice(idx, 1);
+            }
+        }
+    };
+    animatedMapObjects.push(anim);
+}
+
 function createWaterSplash(x, y, z) {
-    const splashGeo = new THREE.RingGeometry(0.3, 1.2, 16);
+    const splashGeo = new THREE.RingGeometry(0.3, 1.4, 20);
     splashGeo.rotateX(-Math.PI / 2);
     const splashMat = new THREE.MeshBasicMaterial({
-        color: 0x00f3ff,
+        color: 0x70f0ff,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.80,
         side: THREE.DoubleSide
     });
     const ring = new THREE.Mesh(splashGeo, splashMat);
     ring.position.set(x, y + 0.08, z);
+    ring.userData.noGroundRay = true;
     scene.add(ring);
     
     let life = 0;
     const anim = {
         update(t) {
             life += 1 / 60;
-            const s = 1.0 + life * 5.0;
+            const s = 1.0 + life * 5.5;
             ring.scale.set(s, s, s);
-            splashMat.opacity = Math.max(0, 0.75 * (1.0 - life / 0.40));
+            splashMat.opacity = Math.max(0, 0.80 * (1.0 - life / 0.40));
             if (life >= 0.40) {
                 scene.remove(ring);
                 const idx = animatedMapObjects.indexOf(anim);
@@ -7203,7 +7265,7 @@ function createWaterSplash(x, y, z) {
     animatedMapObjects.push(anim);
 }
 
-function addWater(w, d, x, y, z, options = {}) {
+function addMoatWater(w, d, x, y, z, depth = 10, options = {}) {
     const segsX = Math.min(32, Math.max(8, Math.round(w / 8)));
     const segsZ = Math.min(32, Math.max(8, Math.round(d / 8)));
     const geo = new THREE.PlaneGeometry(w, d, segsX, segsZ);
@@ -7215,21 +7277,19 @@ function addWater(w, d, x, y, z, options = {}) {
         origY[i] = pos.getY(i);
     }
     
-    const waterColor = options.color !== undefined ? options.color : 0x052338;
-    const waterGlow = options.emissive !== undefined ? options.emissive : 0x003344;
-    const opacity = options.opacity !== undefined ? options.opacity : 0.82;
-    const rippleColor = options.glowColor || '#00f3ff';
-    
-    const tex = createWaterRippleTexture(rippleColor);
-    tex.repeat.set(Math.max(1, w / 16), Math.max(1, d / 16));
+    const waterColor = options.color !== undefined ? options.color : 0x38d8f0; // Sparkling crystal light blue
+    const waterGlow = options.emissive !== undefined ? options.emissive : 0x054050;
+    const opacity = options.opacity !== undefined ? options.opacity : 0.58; // Transparent clear view of moat bed
+    const causticTex = createSparklingWaterTexture(options.glowColor || '#40e0d0');
+    causticTex.repeat.set(Math.max(1, w / 16), Math.max(1, d / 16));
     
     const mat = new THREE.MeshStandardMaterial({
         color: waterColor,
         emissive: waterGlow,
         emissiveIntensity: 0.35,
-        map: tex,
-        roughness: 0.08,
-        metalness: 0.92,
+        map: causticTex,
+        roughness: 0.04,
+        metalness: 0.12,
         transparent: true,
         opacity: opacity,
         depthWrite: false
@@ -7238,24 +7298,29 @@ function addWater(w, d, x, y, z, options = {}) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
+    mesh.userData.isWater = true;
+    mesh.userData.noGroundRay = true;
     scene.add(mesh);
-    mapMeshes.push(mesh);
+    mapDecorations.push(mesh);
     
     const waterObj = {
         mesh,
         w, d, x, y, z,
+        depth: depth,
+        bedY: y - depth,
+        surfaceY: y,
         update(time) {
-            tex.offset.x = (time * 0.035) % 1;
-            tex.offset.y = (time * 0.025) % 1;
+            causticTex.offset.x = (time * 0.030) % 1;
+            causticTex.offset.y = (time * 0.020) % 1;
             const p = geo.attributes.position;
             const cnt = p.count;
-            const waveSpeed = 2.2;
+            const waveSpeed = 2.0;
             for (let i = 0; i < cnt; i++) {
                 const vx = p.getX(i);
                 const vz = p.getZ(i);
-                const wave = Math.sin(vx * 0.12 + time * waveSpeed) * 0.35 + 
-                             Math.cos(vz * 0.14 + time * (waveSpeed * 0.8)) * 0.28 +
-                             Math.sin((vx + vz) * 0.08 + time * 1.5) * 0.2;
+                const wave = Math.sin(vx * 0.12 + time * waveSpeed) * 0.28 + 
+                             Math.cos(vz * 0.14 + time * (waveSpeed * 0.8)) * 0.22 +
+                             Math.sin((vx + vz) * 0.08 + time * 1.5) * 0.15;
                 p.setY(i, origY[i] + wave);
             }
             p.needsUpdate = true;
@@ -7265,6 +7330,57 @@ function addWater(w, d, x, y, z, options = {}) {
     animatedMapObjects.push(waterObj);
     activeWaterPlanes.push(waterObj);
     return mesh;
+}
+
+function addMoat(x, z, width, length, depth = 10, options = {}) {
+    const isAlongZ = options.isAlongZ !== false; // Default river runs along Z
+    const wallCol = options.wallColor || (options.isLandscape ? 0x2d323c : 0x111624);
+    const wallGlow = options.wallGlow || (options.isLandscape ? '#3a414d' : '#00f3ff');
+    const bedCol = options.bedColor || 0x182028;
+    const bedGlow = options.bedGlow || '#203040';
+    
+    // 1. Solid Moat Bed Physics & Visual (at y = -depth)
+    addBox(width, 4, length, x, -depth - 2, z, bedCol, bedGlow);
+    
+    // 2. Solid Retaining Embankment Walls on the Left and Right
+    const wallThick = 2.0;
+    if (isAlongZ) {
+        // Left (West) wall
+        addBox(wallThick, depth, length, x - width / 2 - wallThick / 2, -depth / 2, z, wallCol, wallGlow);
+        // Right (East) wall
+        addBox(wallThick, depth, length, x + width / 2 + wallThick / 2, -depth / 2, z, wallCol, wallGlow);
+        
+        // Walkable Cobblestone Exit Ramps connecting moat bed to ground level y = 0
+        if (options.hasRamps !== false) {
+            const rampLen = depth * 2.5;
+            const angle = Math.atan2(depth, rampLen);
+            // Left bank exit ramps
+            addRamp(wallThick + 2, 1.5, rampLen, x - width / 2 + 1, -depth / 2, z + length * 0.25, angle, 0, wallCol, wallGlow);
+            addRamp(wallThick + 2, 1.5, rampLen, x - width / 2 + 1, -depth / 2, z - length * 0.25, -angle, 0, wallCol, wallGlow);
+            // Right bank exit ramps
+            addRamp(wallThick + 2, 1.5, rampLen, x + width / 2 - 1, -depth / 2, z + length * 0.25, angle, 0, wallCol, wallGlow);
+            addRamp(wallThick + 2, 1.5, rampLen, x + width / 2 - 1, -depth / 2, z - length * 0.25, -angle, 0, wallCol, wallGlow);
+        }
+    } else {
+        // North wall
+        addBox(width, depth, wallThick, x, -depth / 2, z - length / 2 - wallThick / 2, wallCol, wallGlow);
+        // South wall
+        addBox(width, depth, wallThick, x, -depth / 2, z + length / 2 + wallThick / 2, wallCol, wallGlow);
+        
+        if (options.hasRamps !== false) {
+            const rampLen = depth * 2.5;
+            const angle = Math.atan2(depth, rampLen);
+            addRamp(rampLen, 1.5, wallThick + 2, x + width * 0.25, -depth / 2, z - length / 2 + 1, 0, angle, wallCol, wallGlow);
+            addRamp(rampLen, 1.5, wallThick + 2, x - width * 0.25, -depth / 2, z + length / 2 - 1, 0, -angle, wallCol, wallGlow);
+        }
+    }
+    
+    // 3. Sparkling Clear Light Blue Water Surface at y = -0.5
+    addMoatWater(width, length, x, -0.5, z, depth, options);
+}
+
+function addWater(w, d, x, y, z, options = {}) {
+    return addMoatWater(w, d, x, y, z, options.depth || 10, options);
 }
 
 function addMirrorBox(w, h, d, x, y, z, color = 0x111624, glow = '#00f3ff', metalness = 0.96, roughness = 0.04) {
@@ -7443,11 +7559,12 @@ function addTree(x, z, scale = 1.0, type = 'deciduous') {
         );
         rootMesh.rotation.y = angle;
         rootMesh.castShadow = true;
+        rootMesh.userData.noGroundRay = true;
         scene.add(rootMesh);
-        mapMeshes.push(rootMesh);
+        mapDecorations.push(rootMesh);
     }
     
-    // 2. Multi-Cluster High-Poly Foliage Canopy
+    // 2. Multi-Cluster High-Poly Foliage Canopy (Marked noGroundRay so gravity never snaps to canopies)
     if (isPine) {
         // Layered alpine conifer skirts tapering upward
         const tiers = [
@@ -7467,8 +7584,9 @@ function addTree(x, z, scale = 1.0, type = 'deciduous') {
             coneMesh.position.set(x, t.y, z);
             coneMesh.castShadow = true;
             coneMesh.receiveShadow = true;
+            coneMesh.userData.noGroundRay = true;
             scene.add(coneMesh);
-            mapMeshes.push(coneMesh);
+            mapDecorations.push(coneMesh);
         });
     } else if (isWillow) {
         // Drooping weeping willow clusters for lakesides
@@ -7492,8 +7610,9 @@ function addTree(x, z, scale = 1.0, type = 'deciduous') {
             mesh.position.set(x + c.ox, c.oy, z + c.oz);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            mesh.userData.noGroundRay = true;
             scene.add(mesh);
-            mapMeshes.push(mesh);
+            mapDecorations.push(mesh);
         });
     } else {
         // Broad lush deciduous oak with 6 multi-cluster organic domes
@@ -7517,8 +7636,9 @@ function addTree(x, z, scale = 1.0, type = 'deciduous') {
             mesh.position.set(x + c.ox, c.oy, z + c.oz);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            mesh.userData.noGroundRay = true;
             scene.add(mesh);
-            mapMeshes.push(mesh);
+            mapDecorations.push(mesh);
         });
     }
 }
@@ -7542,8 +7662,9 @@ function addBush(x, y, z, scale = 1.0) {
         mesh.position.set(x + c.ox, y + c.oy, z + c.oz);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.userData.noGroundRay = true;
         scene.add(mesh);
-        mapMeshes.push(mesh);
+        mapDecorations.push(mesh);
     });
 }
 
@@ -7583,100 +7704,232 @@ function addVines(x, y, z, w, h, d) {
     const vineMesh = new THREE.Mesh(vineGeo, vineMat);
     vineMesh.position.set(x, y, z);
     vineMesh.castShadow = true;
+    vineMesh.userData.noGroundRay = true;
     scene.add(vineMesh);
-    mapMeshes.push(vineMesh);
+    mapDecorations.push(vineMesh);
 }
 
-// Architectural Brutalist / Modern Monolithic Grey Tower
-function addGreyTower(x, z, width, height, depth, options = {}) {
+// ============================================================================
+// MODULAR HOLLOW TACTICAL TOWER SYSTEM WITH STAIRS, SHOOT SLITS & SECRET SNIPER PERCH
+// ============================================================================
+
+function addHollowTower(x, z, width, height, depth, options = {}) {
+    const isCyber = options.style === 'cyber' || options.isCyber === true;
     const team = options.team || 'neutral';
-    let trimColor = 0xa0b4c8;
+    
     let trimHex = '#a0b4c8';
-    if (team === 'red') { trimColor = 0xff0044; trimHex = '#ff0044'; }
-    else if (team === 'blue') { trimColor = 0x0077ff; trimHex = '#0077ff'; }
+    let wallCol = 0x282c34;
+    let floorCol = 0x3d434e;
+    let beaconCol = 0x00ffaa;
+    
+    if (isCyber) {
+        wallCol = 0x111624;
+        floorCol = 0x161c2e;
+        trimHex = '#00f3ff';
+        beaconCol = 0x00f3ff;
+        if (team === 'red') { trimHex = '#ff0055'; beaconCol = 0xff0055; }
+        else if (team === 'blue') { trimHex = '#0077ff'; beaconCol = 0x0077ff; }
+    } else {
+        if (team === 'red') { trimHex = '#ff0044'; wallCol = 0x2e2528; beaconCol = 0xff0044; }
+        else if (team === 'blue') { trimHex = '#0077ff'; wallCol = 0x25282e; beaconCol = 0x0077ff; }
+    }
 
-    const steelTrimMat = new THREE.MeshStandardMaterial({
-        color: trimColor,
-        emissive: trimColor,
-        emissiveIntensity: 0.35,
-        roughness: 0.3,
-        metalness: 0.85
+    const wallThick = 1.6;
+    const halfW = width / 2;
+    const halfD = depth / 2;
+    
+    // Tower Story Elevations:
+    const floor2Y = Math.max(12, Math.round(height * 0.36)); // Mid Observation Deck
+    const floor3Y = Math.max(floor2Y + 12, Math.round(height * 0.70)); // Upper Battlement Deck
+    const roofY = height;                     // Rooftop Parapet
+    const slitH = 2.0;                        // Tactical Shoot Hole Slit Height
+    
+    // ------------------------------------------------------------------------
+    // 1. GROUND FLOOR (y = 0 to floor2Y)
+    // ------------------------------------------------------------------------
+    // Arched Entrance Doorway on Front Wall (+Z / South)
+    const doorW = width * 0.38;
+    const doorH = 9.0;
+    const frontSideW = (width - doorW) / 2;
+    
+    // Front Wall: Left Column, Right Column, Header over Door
+    addBox(frontSideW, floor2Y, wallThick, x - halfW + frontSideW / 2, floor2Y / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(frontSideW, floor2Y, wallThick, x + halfW - frontSideW / 2, floor2Y / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(doorW, floor2Y - doorH, wallThick, x, doorH + (floor2Y - doorH) / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+    
+    // Left (West) Wall on Ground Floor with Murder Slits
+    addBox(wallThick, 3.4, depth, x - halfW + wallThick / 2, 1.7, z, wallCol, trimHex);
+    const topH1 = floor2Y - (3.4 + slitH);
+    addBox(wallThick, topH1, depth, x - halfW + wallThick / 2, (3.4 + slitH) + topH1 / 2, z, wallCol, trimHex);
+    for (let s = -depth * 0.35; s <= depth * 0.35; s += depth * 0.35) {
+        addBox(wallThick, slitH, 1.8, x - halfW + wallThick / 2, 3.4 + slitH / 2, z + s, wallCol, trimHex);
+    }
+    
+    // Right (East) Wall on Ground Floor with Murder Slits
+    addBox(wallThick, 3.4, depth, x + halfW - wallThick / 2, 1.7, z, wallCol, trimHex);
+    addBox(wallThick, topH1, depth, x + halfW - wallThick / 2, (3.4 + slitH) + topH1 / 2, z, wallCol, trimHex);
+    for (let s = -depth * 0.35; s <= depth * 0.35; s += depth * 0.35) {
+        addBox(wallThick, slitH, 1.8, x + halfW - wallThick / 2, 3.4 + slitH / 2, z + s, wallCol, trimHex);
+    }
+    
+    // Rear Wall on Ground Floor with Concealed Secret Sniper Entry
+    const secretDoorW = 4.0;
+    const rearSideW = (width - secretDoorW) / 2;
+    addBox(rearSideW, floor2Y, wallThick, x - halfW + rearSideW / 2, floor2Y / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(rearSideW, floor2Y, wallThick, x + halfW - rearSideW / 2, floor2Y / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(secretDoorW, floor2Y - 7.0, wallThick, x, 7.0 + (floor2Y - 7.0) / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    
+    // Secret Sniper Alcove & Conduit behind rear wall
+    const secretAlcoveZ = z - halfD - 2.8;
+    addBox(wallThick, 8.0, 5.0, x - 2.4, 4.0, secretAlcoveZ, wallCol, trimHex);
+    addBox(wallThick, 8.0, 5.0, x + 2.4, 4.0, secretAlcoveZ, wallCol, trimHex);
+    addBox(5.0, 1.2, 5.0, x, 8.0, secretAlcoveZ, wallCol, trimHex);
+    
+    if (!isCyber) {
+        // Camouflage hanging ivy vines concealing the secret sniper entrance
+        addVines(x, 4.5, secretAlcoveZ - 2.6, 5.2, 7.0, 0.8);
+        addVines(x - 2.8, 3.5, secretAlcoveZ, 0.8, 6.0, 4.5);
+    }
+    
+    // Secret Launch Conduit directly to the high Eagle's Roost
+    const roostY = roofY + 14;
+    const launchPower = Math.sqrt(2 * 60 * (roostY - 0.4 + 3.0));
+    addJumpPad(x, secretAlcoveZ, 0.35, launchPower, { isSecret: true, name: "Sniper's Secret Conduit" });
+    
+    // ------------------------------------------------------------------------
+    // 2. FLOOR 2 (y = floor2Y): Mid Observation Deck & Murder Slits
+    // ------------------------------------------------------------------------
+    const stairHoleW = width * 0.35;
+    // Walkable floor slab with stairwell opening
+    addBox(width - stairHoleW - 1, 1.4, depth - 2, x - stairHoleW / 2, floor2Y - 0.7, z, floorCol, trimHex);
+    
+    // Walkable Interior Stairs 1 (Ground -> Floor 2) along East wall
+    addRamp(width * 0.28, 1.2, depth * 0.75, x + halfW - width * 0.18, floor2Y / 2, z - depth * 0.05, Math.atan2(floor2Y, depth * 0.75), 0, floorCol, trimHex);
+    
+    // Floor 2 Perimeter Walls with Shoot Slits on ALL 4 Sides
+    const f2H = floor3Y - floor2Y;
+    // Base parapet walls (height 3.2: chest level ballistic cover)
+    addBox(width, 3.2, wallThick, x, floor2Y + 1.6, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(width, 3.2, wallThick, x, floor2Y + 1.6, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(wallThick, 3.2, depth, x - halfW + wallThick / 2, floor2Y + 1.6, z, wallCol, trimHex);
+    addBox(wallThick, 3.2, depth, x + halfW - wallThick / 2, floor2Y + 1.6, z, wallCol, trimHex);
+    
+    // Upper wall above shoot slits
+    const topH2 = f2H - (3.2 + slitH);
+    addBox(width, topH2, wallThick, x, floor2Y + (3.2 + slitH) + topH2 / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(width, topH2, wallThick, x, floor2Y + (3.2 + slitH) + topH2 / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(wallThick, topH2, depth, x - halfW + wallThick / 2, floor2Y + (3.2 + slitH) + topH2 / 2, z, wallCol, trimHex);
+    addBox(wallThick, topH2, depth, x + halfW - wallThick / 2, floor2Y + (3.2 + slitH) + topH2 / 2, z, wallCol, trimHex);
+    
+    // Dividers creating tactical murder slits
+    [-halfW * 0.5, halfW * 0.5].forEach(ox => {
+        addBox(1.8, slitH, wallThick, x + ox, floor2Y + 3.2 + slitH / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+        addBox(1.8, slitH, wallThick, x + ox, floor2Y + 3.2 + slitH / 2, z - halfD + wallThick / 2, wallCol, trimHex);
     });
-
-    // Tier 1: Concrete Fortress Base (ground to height * 0.42)
-    const baseH = height * 0.42;
-    addBox(width, baseH, depth, x, baseH / 2, z, 0x282c34, trimHex);
-
-    // Tier 2: Wraparound Sniper Balcony / Observation Deck
-    const balcW = width * 1.25;
-    const balcD = depth * 1.25;
-    const balcY = baseH + 1.0;
-    addBox(balcW, 2.0, balcD, x, balcY, z, 0x3d434e, '#ffffff');
-
-    // Solid tactical railings around observation deck
-    const railH = 3.2;
-    addBox(balcW, railH, 1.2, x, balcY + railH/2, z - balcD/2, 0x4f5765, trimHex);
-    addBox(balcW, railH, 1.2, x, balcY + railH/2, z + balcD/2, 0x4f5765, trimHex);
-    addBox(1.2, railH, balcD, x - balcW/2, balcY + railH/2, z, 0x4f5765, trimHex);
-    addBox(1.2, railH, balcD, x + balcW/2, balcY + railH/2, z, 0x4f5765, trimHex);
-
-    // Access to Balcony: Jump pad or Ramp
-    if (options.hasRamp !== false) {
-        addRamp(14, 2, 45, x, baseH * 0.5, z + depth * 0.75, Math.PI / 8, 0, 0x2a2e37, trimHex);
-    }
-    if (options.hasJumpPad) {
-        addJumpPad(x + width * 0.45, z + depth * 0.45, 0.4, 42);
-    }
-
-    // Tier 3: Upper Monolith Shaft (baseH to height * 0.88)
-    const shaftW = width * 0.78;
-    const shaftD = depth * 0.78;
-    const shaftH = height * 0.46;
-    const shaftY = baseH + shaftH / 2;
-    addBox(shaftW, shaftH, shaftD, x, shaftY, z, 0x1f232b, trimHex);
-
-    // Tier 4: Rooftop Sniper Parapet Deck
-    const roofY = baseH + shaftH;
-    const parapetW = shaftW * 1.1;
-    const parapetD = shaftD * 1.1;
-    addBox(parapetW, 2.0, parapetD, x, roofY, z, 0x3a404c, '#ffffff');
-
-    // Crenellations for sniper cover on roof
-    addBox(parapetW, 3.5, 1.0, x, roofY + 1.75, z - parapetD/2, 0x2d323c, trimHex);
-    addBox(parapetW, 3.5, 1.0, x, roofY + 1.75, z + parapetD/2, 0x2d323c, trimHex);
-    addBox(1.0, 3.5, parapetD, x - parapetW/2, roofY + 1.75, z, 0x2d323c, trimHex);
-    addBox(1.0, 3.5, parapetD, x + parapetW/2, roofY + 1.75, z, 0x2d323c, trimHex);
-
-    // Tier 5: Communications Spire & Warning Beacon
-    const spireH = 18.0;
-    const spireGeo = new THREE.CylinderGeometry(0.4, 0.9, spireH, 8);
-    const spireMesh = new THREE.Mesh(spireGeo, steelTrimMat);
-    spireMesh.position.set(x, roofY + spireH / 2 + 1.0, z);
-    spireMesh.castShadow = true;
+    [-halfD * 0.5, halfD * 0.5].forEach(oz => {
+        addBox(wallThick, slitH, 1.8, x - halfW + wallThick / 2, floor2Y + 3.2 + slitH / 2, z + oz, wallCol, trimHex);
+        addBox(wallThick, slitH, 1.8, x + halfW - wallThick / 2, floor2Y + 3.2 + slitH / 2, z + oz, wallCol, trimHex);
+    });
+    
+    // ------------------------------------------------------------------------
+    // 3. FLOOR 3 (y = floor3Y): Upper Fortress Deck & Murder Slits
+    // ------------------------------------------------------------------------
+    addBox(width - stairHoleW - 1, 1.4, depth - 2, x + stairHoleW / 2, floor3Y - 0.7, z, floorCol, trimHex);
+    
+    // Walkable Interior Stairs 2 (Floor 2 -> Floor 3) along West wall
+    addRamp(width * 0.28, 1.2, depth * 0.75, x - halfW + width * 0.18, floor2Y + f2H / 2, z + depth * 0.05, -Math.atan2(f2H, depth * 0.75), 0, floorCol, trimHex);
+    
+    // Floor 3 Perimeter Walls with Shoot Slits
+    const f3H = roofY - floor3Y;
+    addBox(width, 3.2, wallThick, x, floor3Y + 1.6, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(width, 3.2, wallThick, x, floor3Y + 1.6, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(wallThick, 3.2, depth, x - halfW + wallThick / 2, floor3Y + 1.6, z, wallCol, trimHex);
+    addBox(wallThick, 3.2, depth, x + halfW - wallThick / 2, floor3Y + 1.6, z, wallCol, trimHex);
+    
+    const topH3 = f3H - (3.2 + slitH);
+    addBox(width, topH3, wallThick, x, floor3Y + (3.2 + slitH) + topH3 / 2, z + halfD - wallThick / 2, wallCol, trimHex);
+    addBox(width, topH3, wallThick, x, floor3Y + (3.2 + slitH) + topH3 / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(wallThick, topH3, depth, x - halfW + wallThick / 2, floor3Y + (3.2 + slitH) + topH3 / 2, z, wallCol, trimHex);
+    addBox(wallThick, topH3, depth, x + halfW - wallThick / 2, floor3Y + (3.2 + slitH) + topH3 / 2, z, wallCol, trimHex);
+    
+    // Walkable Interior Stairs 3 (Floor 3 -> Rooftop) along East wall
+    addRamp(width * 0.28, 1.2, depth * 0.75, x + halfW - width * 0.18, floor3Y + f3H / 2, z - depth * 0.05, Math.atan2(f3H, depth * 0.75), 0, floorCol, trimHex);
+    
+    // ------------------------------------------------------------------------
+    // 4. ROOFTOP BATTLEMENT (y = roofY)
+    // ------------------------------------------------------------------------
+    const balcW = width * 1.22;
+    const balcD = depth * 1.22;
+    addBox(balcW, 1.8, balcD, x, roofY - 0.9, z, floorCol, trimHex);
+    
+    // Parapet Walls around the Roof with Crenellations / Sniper Embrasures
+    const railH = 3.6;
+    addBox(balcW, railH, 1.2, x, roofY + railH / 2, z - balcD / 2, wallCol, trimHex);
+    addBox(balcW, railH, 1.2, x, roofY + railH / 2, z + balcD / 2, wallCol, trimHex);
+    addBox(1.2, railH, balcD, x - balcW / 2, roofY + railH / 2, z, wallCol, trimHex);
+    addBox(1.2, railH, balcD, x + balcW / 2, roofY + railH / 2, z, wallCol, trimHex);
+    
+    // ------------------------------------------------------------------------
+    // 5. SECRET HIGH SNIPER ROOST (THE EAGLE'S NEST at roostY = roofY + 14)
+    // ------------------------------------------------------------------------
+    const roostW = width * 0.52;
+    const roostD = depth * 0.52;
+    // Support columns holding the roost aloft
+    addBox(1.5, 14, 1.5, x - roostW / 2, roofY + 7, z - roostD / 2, wallCol, trimHex);
+    addBox(1.5, 14, 1.5, x + roostW / 2, roofY + 7, z - roostD / 2, wallCol, trimHex);
+    addBox(1.5, 14, 1.5, x - roostW / 2, roofY + 7, z + roostD / 2, wallCol, trimHex);
+    addBox(1.5, 14, 1.5, x + roostW / 2, roofY + 7, z + roostD / 2, wallCol, trimHex);
+    
+    // Roost floor slab
+    addBox(roostW, 1.4, roostD, x, roostY - 0.7, z, floorCol, trimHex);
+    
+    // Roost 360-degree tactical murder slits
+    const roostRailH = 3.2;
+    addBox(roostW, roostRailH, 0.9, x, roostY + roostRailH / 2, z - roostD / 2, wallCol, trimHex);
+    addBox(roostW, roostRailH, 0.9, x, roostY + roostRailH / 2, z + roostD / 2, wallCol, trimHex);
+    addBox(0.9, roostRailH, roostD, x - roostW / 2, roostY + roostRailH / 2, z, wallCol, trimHex);
+    addBox(0.9, roostRailH, roostD, x + roostW / 2, roostY + roostRailH / 2, z, wallCol, trimHex);
+    
+    // Roost protective roof
+    addBox(roostW * 1.15, 1.0, roostD * 1.15, x, roostY + 5.5, z, floorCol, trimHex);
+    
+    // Spire & Blinking Beacon atop Roost
+    const spireH = 12.0;
+    const spireGeo = new THREE.CylinderGeometry(0.3, 0.7, spireH, 8);
+    const spireMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.9, roughness: 0.2 });
+    const spireMesh = new THREE.Mesh(spireGeo, spireMat);
+    spireMesh.position.set(x, roostY + 6.0 + spireH / 2, z);
+    spireMesh.userData.noGroundRay = true;
     scene.add(spireMesh);
-    mapMeshes.push(spireMesh);
-
-    // Blinking Warning Beacon Light at Spire Peak
-    const beaconGeo = new THREE.SphereGeometry(1.1, 12, 12);
+    mapDecorations.push(spireMesh);
+    
+    const beaconGeo = new THREE.SphereGeometry(0.9, 12, 12);
     const beaconMat = new THREE.MeshStandardMaterial({
-        color: trimColor,
-        emissive: trimColor,
+        color: beaconCol,
+        emissive: beaconCol,
         emissiveIntensity: 1.8
     });
     const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
-    beaconMesh.position.set(x, roofY + spireH + 1.0, z);
+    beaconMesh.position.set(x, roostY + 6.0 + spireH + 0.5, z);
+    beaconMesh.userData.noGroundRay = true;
     scene.add(beaconMesh);
     mapDecorations.push(beaconMesh);
-
+    
     animatedMapObjects.push({
         update(time) {
-            beaconMat.emissiveIntensity = 1.0 + Math.sin(time * 4.5) * 0.9;
+            beaconMat.emissiveIntensity = 1.0 + Math.sin(time * 5.0) * 0.8;
         }
     });
+    
+    // Exterior corner vines for landscape towers
+    if (!isCyber) {
+        addVines(x - width * 0.48, floor2Y * 0.4, z - depth * 0.48, 3.5, floor2Y * 0.8, 3.5);
+        addVines(x + width * 0.48, floor2Y * 0.3, z + depth * 0.48, 3.5, floor2Y * 0.6, 3.5);
+    }
+}
 
-    // Creeping Vines on Tower Corners
-    addVines(x - width * 0.48, baseH * 0.35, z - depth * 0.48, 4.0, baseH * 0.7, 4.0);
-    addVines(x + width * 0.48, baseH * 0.25, z + depth * 0.48, 4.0, baseH * 0.5, 4.0);
+function addGreyTower(x, z, width, height, depth, options = {}) {
+    return addHollowTower(x, z, width, height, depth, { ...options, style: 'landscape' });
 }
 
 // ============================================================================
@@ -7684,107 +7937,32 @@ function addGreyTower(x, z, width, height, depth, options = {}) {
 // ============================================================================
 
 function buildMapOriginal_FFA() {
-    // Ground Tier Foundation
-    addBox(46, 26, 46, 0, 13, 0, 0x111624, '#00f3ff'); 
-    // Mid Tier Spire
-    addBox(28, 36, 28, 0, 44, 0, 0x141b2e, '#ff0055');
-    // High Pinnacle Observation Tier
-    addBox(14, 28, 14, 0, 76, 0, 0x0f1526, '#00f3ff');
-    
+    // Central Subterranean Cyber Coolant Moat (depth 8, crystal-clear luminous blue water)
+    addMoat(0, 0, 42, 260, 8, { isAlongZ: true, isLandscape: false, wallColor: 0x111624, wallGlow: '#00f3ff', color: 0x38d8f0 });
+
+    // 2 Cyber Crossing Bridges across the coolant trench
+    addBox(42, 2.5, 20, 0, 2.0, 65, 0x161c2e, '#00f3ff');
+    addBox(42, 2.5, 20, 0, 2.0, -65, 0x161c2e, '#00f3ff');
+
+    // Central Hollow Cyber Spire Tower with Stairs, Neon Shoot Slits & Secret Maintenance Sniper Roost
+    addHollowTower(0, 0, 42, 65, 42, { style: 'cyber', team: 'neutral' });
+
+    // 4 Corner Hollow Cyber Defense Towers with Stairs & Shoot Holes
+    const s = 70;
+    addHollowTower(-s, -s, 22, 50, 22, { style: 'cyber', team: 'neutral' });
+    addHollowTower(s, -s, 22, 50, 22, { style: 'cyber', team: 'red' });
+    addHollowTower(-s, s, 22, 50, 22, { style: 'cyber', team: 'blue' });
+    addHollowTower(s, s, 22, 50, 22, { style: 'cyber', team: 'neutral' });
+
     // Spiral Ascending Combat Platforms
-    for(let i=0; i<12; i++) {
-        const radius = 35; 
+    for (let i = 0; i < 8; i++) {
+        const radius = 55;
         const angle = i * (Math.PI / 4);
-        const x = Math.cos(angle) * radius; 
-        const z = Math.sin(angle) * radius; 
-        const y = 6 + (i * 6);
-        addBox(12, 2, 12, x, y, z, 0x1a2236, '#00ffaa');
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = 6 + (i * 5);
+        addBox(10, 2, 10, x, y, z, 0x1a2236, '#00ffaa');
     }
-
-    // Floating Holographic Torus Ring around Central Spire
-    const ringGeo = new THREE.TorusGeometry(26, 0.75, 16, 64);
-    const ringMat = new THREE.MeshStandardMaterial({
-        color: 0x00f3ff,
-        emissive: 0x00f3ff,
-        emissiveIntensity: 1.8,
-        roughness: 0.15,
-        metalness: 0.85
-    });
-    const holoRing = new THREE.Mesh(ringGeo, ringMat);
-    holoRing.position.set(0, 78, 0);
-    holoRing.rotation.x = Math.PI / 4;
-    scene.add(holoRing);
-    mapDecorations.push(holoRing);
-
-    // Floating Pulsating Cyber Power Core
-    const coreGeo = new THREE.OctahedronGeometry(5.5, 2);
-    const coreMat = new THREE.MeshStandardMaterial({
-        color: 0xff0055,
-        emissive: 0xff0055,
-        emissiveIntensity: 2.4,
-        roughness: 0.1,
-        metalness: 0.95
-    });
-    const powerCore = new THREE.Mesh(coreGeo, coreMat);
-    powerCore.position.set(0, 88, 0);
-    scene.add(powerCore);
-    mapDecorations.push(powerCore);
-
-    const coreLight = new THREE.PointLight(0xff0055, 3.5, 110);
-    coreLight.position.set(0, 88, 0);
-    scene.add(coreLight);
-    mapDecorations.push(coreLight);
-
-    animatedMapObjects.push({
-        update: (t) => {
-            holoRing.rotation.z += 0.012;
-            holoRing.rotation.y += 0.005;
-            powerCore.rotation.y += 0.02;
-            powerCore.rotation.x += 0.01;
-            const cy = 88 + Math.sin(t * 2) * 2.5;
-            powerCore.position.y = cy;
-            coreLight.position.y = cy;
-        }
-    });
-
-    // 4 Corner Cyber Defense Towers & Pylons
-    const s = 70; 
-    addBox(22, 60, 22, -s, 30, -s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, s, 30, -s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, -s, 30, s, 0x111624, '#00f3ff'); 
-    addBox(22, 60, 22, s, 30, s, 0x111624, '#00f3ff');
-
-    const pylonData = [
-        { x: -s, z: -s, color: 0x00f3ff },
-        { x: s, z: -s, color: 0xff0088 },
-        { x: -s, z: s, color: 0xffaa00 },
-        { x: s, z: s, color: 0x00ff88 }
-    ];
-    pylonData.forEach(p => {
-        const pylonMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.2, 2.0, 75, 16),
-            new THREE.MeshStandardMaterial({ color: 0x111624, metalness: 0.85, roughness: 0.25 })
-        );
-        pylonMesh.position.set(p.x, 37.5, p.z);
-        pylonMesh.castShadow = true;
-        scene.add(pylonMesh);
-        mapMeshes.push(pylonMesh);
-
-        const crownMesh = new THREE.Mesh(
-            new THREE.TorusGeometry(3.0, 0.45, 12, 32),
-            new THREE.MeshStandardMaterial({ color: p.color, emissive: p.color, emissiveIntensity: 2.0 })
-        );
-        crownMesh.position.set(p.x, 75, p.z);
-        crownMesh.rotation.x = Math.PI / 2;
-        scene.add(crownMesh);
-        mapDecorations.push(crownMesh);
-
-        animatedMapObjects.push({
-            update: () => {
-                crownMesh.rotation.z += 0.025;
-            }
-        });
-    });
 
     addJumpPad(-s, -s + 18, 0.3, 38);
     addJumpPad(s, -s + 18, 0.3, 38);
@@ -7793,61 +7971,26 @@ function buildMapOriginal_FFA() {
 }
 
 function buildMapOriginal_TDM() {
-    // Red Fortress
-    addBox(240, 60, 240, 450, 30, 0, 0x331111, '#ff0000'); 
-    addBox(80, 140, 80, 520, 70, 0, 0x440000, '#ff0000');  
-    addRamp(40, 2, 100, 310, 30, 60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
-    addRamp(40, 2, 100, 310, 30, -60, 0, -Math.PI/6, 0x222222, '#ff0000'); 
-    
-    addBox(200, 40, 30, 220, 20, 160, 0x220000, '#ff0000'); 
-    addBox(200, 40, 30, 220, 20, -160, 0x220000, '#ff0000'); 
-    addBox(40, 40, 30, 220, 20, 0, 0x220000, '#ff0000'); 
-    addBox(120, 10, 30, 220, 45, 0, 0x220000, '#ff0000'); 
-    
-    addBox(180, 2, 30, 220, 41, 160, 0x222222, '#00ffaa'); 
-    addBox(180, 2, 30, 220, 41, -160, 0x222222, '#00ffaa'); 
-    addBox(60, 80, 60, 220, 40, 280, 0x330000, '#ff0000'); 
-    addBox(60, 80, 60, 220, 40, -280, 0x330000, '#ff0000'); 
-    
-    addRamp(20, 2, 80, 250, 20, 160, 0, -Math.PI/5, 0x111111, '#ff5500');
-    addRamp(20, 2, 80, 250, 20, -160, 0, -Math.PI/5, 0x111111, '#ff5500');
-    
-    addBox(60, 25, 60, 300, 12.5, 180, 0x111111, '#ff00ff');
-    addBox(60, 25, 60, 300, 12.5, -180, 0x111111, '#ff00ff');
+    // Red Titan Fortress - Hollow with Stairs, Shoot Slits & Secret Sniper Nest
+    addHollowTower(450, 0, 65, 80, 65, { style: 'cyber', team: 'red' });
+    addHollowTower(320, 160, 35, 52, 35, { style: 'cyber', team: 'red' });
+    addHollowTower(320, -160, 35, 52, 35, { style: 'cyber', team: 'red' });
 
-    // Blue Fortress
-    addBox(240, 60, 240, -450, 30, 0, 0x111133, '#0000ff'); 
-    addBox(80, 140, 80, -520, 70, 0, 0x000044, '#0000ff');  
-    addRamp(40, 2, 100, -310, 30, 60, 0, Math.PI/6, 0x222222, '#0000ff'); 
-    addRamp(40, 2, 100, -310, 30, -60, 0, Math.PI/6, 0x222222, '#0000ff'); 
-    
-    addBox(200, 40, 30, -220, 20, 160, 0x000022, '#0000ff'); 
-    addBox(200, 40, 30, -220, 20, -160, 0x000022, '#0000ff'); 
-    addBox(40, 40, 30, -220, 20, 0, 0x000022, '#0000ff'); 
-    addBox(120, 10, 30, -220, 45, 0, 0x000022, '#0000ff'); 
-    
-    addBox(180, 2, 30, -220, 41, 160, 0x222222, '#00ffaa'); 
-    addBox(180, 2, 30, -220, 41, -160, 0x222222, '#00ffaa'); 
-    addBox(60, 80, 60, -220, 40, 280, 0x000033, '#0000ff'); 
-    addBox(60, 80, 60, -220, 40, -280, 0x000033, '#0000ff'); 
-    
-    addRamp(20, 2, 80, -250, 20, 160, 0, Math.PI/5, 0x111111, '#0055ff');
-    addRamp(20, 2, 80, -250, 20, -160, 0, Math.PI/5, 0x111111, '#0055ff');
+    // Blue Titan Fortress - Hollow with Stairs, Shoot Slits & Secret Sniper Nest
+    addHollowTower(-450, 0, 65, 80, 65, { style: 'cyber', team: 'blue' });
+    addHollowTower(-320, 160, 35, 52, 35, { style: 'cyber', team: 'blue' });
+    addHollowTower(-320, -160, 35, 52, 35, { style: 'cyber', team: 'blue' });
 
-    addBox(60, 25, 60, -300, 12.5, 180, 0x111111, '#ff00ff');
-    addBox(60, 25, 60, -300, 12.5, -180, 0x111111, '#ff00ff');
+    // Central Hollow Cyber Spire & Catwalk Bridges
+    addHollowTower(0, 0, 50, 65, 50, { style: 'cyber', team: 'neutral' });
 
-    // Central Spire
-    addBox(140, 80, 140, 0, 40, 0, 0x111111, '#ffffff'); 
-    addRamp(60, 2, 160, 110, 40, 0, 0, -Math.PI/6, 0x222222, '#ffff00'); 
-    addRamp(60, 2, 160, -110, 40, 0, 0, Math.PI/6, 0x222222, '#ffff00'); 
-    addRamp(60, 2, 160, 0, 40, 110, -Math.PI/6, 0, 0x222222, '#ffff00');  
-    addRamp(60, 2, 160, 0, 40, -110, Math.PI/6, 0, 0x222222, '#ffff00');   
-    
-    addBox(120, 15, 120, 0, 7.5, 250, 0x222222, '#ffff00'); 
-    addBox(120, 15, 120, 0, 7.5, -250, 0x222222, '#ffff00'); 
-    addBox(60, 40, 60, 0, 20, 250, 0x1a1a1a, '#ffffff');
-    addBox(60, 40, 60, 0, 20, -250, 0x1a1a1a, '#ffffff');
+    addRamp(30, 2, 80, 65, 20, 0, 0, -Math.PI / 6, 0x222222, '#ffff00');
+    addRamp(30, 2, 80, -65, 20, 0, 0, Math.PI / 6, 0x222222, '#ffff00');
+    addRamp(30, 2, 80, 0, 20, 65, -Math.PI / 6, 0, 0x222222, '#ffff00');
+    addRamp(30, 2, 80, 0, 20, -65, Math.PI / 6, 0, 0x222222, '#ffff00');
+
+    addBox(80, 15, 80, 0, 7.5, 200, 0x222222, '#ffff00');
+    addBox(80, 15, 80, 0, 7.5, -200, 0x222222, '#ffff00');
 }
 
 function buildMapOriginal_CTF() {
@@ -7868,40 +8011,49 @@ function buildMapOriginal_CTF() {
 }
 
 function buildMapOriginal_KOTH() {
+    // Central Hill Dais with Hollow Temple Tower
     addBox(80, 20, 80, 0, 10, 0, 0x222211, '#ffff00');
+    addHollowTower(0, 0, 36, 48, 36, { style: 'cyber', team: 'neutral' });
+
     addRamp(30, 2, 40, 0, 10, 60, -Math.PI/6, 0, 0x222222, '#ffff00');
     addRamp(30, 2, 40, 0, 10, -60, Math.PI/6, 0, 0x222222, '#ffff00');
     addRamp(30, 2, 40, 60, 10, 0, 0, -Math.PI/6, 0x222222, '#ffff00');
     addRamp(30, 2, 40, -60, 10, 0, 0, Math.PI/6, 0x222222, '#ffff00');
     
     const s = 100;
-    addBox(20, 10, 20, s, 5, s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, -s, 5, s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, s, 5, -s, 0x111111, '#00ffff');
-    addBox(20, 10, 20, -s, 5, -s, 0x111111, '#00ffff');
+    addHollowTower(s, s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
+    addHollowTower(-s, s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
+    addHollowTower(s, -s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
+    addHollowTower(-s, -s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
 }
 
 function buildMapOriginal_GunGame() {
-    for(let i=0; i<30; i++) {
-        const x = (Math.random() - 0.5) * 200; 
-        const z = (Math.random() - 0.5) * 200;
-        const w = 5 + Math.random() * 20; 
-        const h = 20 + Math.random() * 20;
-        addBox(w, h, 5, x, h/2, z, 0x111111, '#ff00ff');
+    // Central Hollow Combat Spire
+    addHollowTower(0, 0, 30, 52, 30, { style: 'cyber', team: 'neutral' });
+
+    for (let i = 0; i < 24; i++) {
+        const x = (Math.random() - 0.5) * 180; 
+        const z = (Math.random() - 0.5) * 180;
+        if (Math.abs(x) < 25 && Math.abs(z) < 25) continue;
+        const w = 6 + Math.random() * 16; 
+        const h = 18 + Math.random() * 18;
+        addBox(w, h, 6, x, h/2, z, 0x111111, '#ff00ff');
     }
-    addBox(200, 2, 10, 0, 30, 0, 0x111111, '#00f3ff');
-    addBox(10, 2, 200, 0, 30, 0, 0x111111, '#00f3ff');
+    addBox(180, 2, 10, 0, 26, 0, 0x111111, '#00f3ff');
+    addBox(10, 2, 180, 0, 26, 0, 0x111111, '#00f3ff');
 }
 
 function buildMapOriginal_Zombies() {
-    addBox(60, 40, 60, 0, 20, 0, 0x050505, '#00ff00');
+    // Hollow Survivor Defense Fortress with Stairs & Shoot Holes
+    addHollowTower(0, 0, 48, 54, 48, { style: 'cyber', team: 'neutral' });
+
     addRamp(20, 2, 60, 0, 20, 60, -Math.PI/5, 0, 0x111111, '#555555');
     addRamp(20, 2, 60, 0, 20, -60, Math.PI/5, 0, 0x111111, '#555555');
     
-    for(let i=0; i<40; i++) {
-        const x = (Math.random() - 0.5) * 250; 
-        const z = (Math.random() - 0.5) * 250;
-        if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+    for (let i = 0; i < 30; i++) {
+        const x = (Math.random() - 0.5) * 220; 
+        const z = (Math.random() - 0.5) * 220;
+        if (Math.abs(x) < 35 && Math.abs(z) < 35) continue;
         addBox(10, 10, 10, x, 5, z, 0x1a1a1a, '#115511');
     }
 }
@@ -7912,37 +8064,32 @@ function buildMapOriginal_Zombies() {
 
 // FFA Landscape: Verdant Citadel (Towers, River & Greenery)
 function buildMapLandscape_FFA(size = 400) {
-    // Reflective animated water river crossing the valley
-    addWater(75, 380, 0, 0.4, 0, { color: 0x072b38, emissive: 0x003344, opacity: 0.85 });
+    // Physical dug-out river moat crossing the valley (depth 10, sparkling clear light-blue water)
+    addMoat(0, 0, 75, size - 20, 10, { isAlongZ: true, isLandscape: true });
 
     // 2 Concrete and Glass bridges across the river
-    addBox(75, 3, 24, 0, 3.5, 95, 0x3d434e, '#00ffaa');
-    addBox(75, 3, 24, 0, 3.5, -95, 0x3d434e, '#00ffaa');
+    addBox(75, 3, 24, 0, 2.5, 95, 0x3d434e, '#00ffaa');
+    addBox(75, 3, 24, 0, 2.5, -95, 0x3d434e, '#00ffaa');
 
-    // Central Monolithic Grey Citadel on River Island
-    addGreyTower(0, 0, 48, 75, 48, { hasRamp: false, hasJumpPad: true });
+    // Central Hollow Monolithic Grey Citadel on River Island with Stairs, Shoot Holes & Secret Sniper Nest
+    addHollowTower(0, 0, 48, 72, 48, { style: 'landscape' });
 
-    // 4 Perimeter Grey Monolith Watchtowers
-    addGreyTower(125, 125, 28, 54, 28, { hasJumpPad: true });
-    addGreyTower(-125, 125, 28, 54, 28, { hasJumpPad: true });
-    addGreyTower(125, -125, 28, 54, 28, { hasJumpPad: true });
-    addGreyTower(-125, -125, 28, 54, 28, { hasJumpPad: true });
+    // 4 Perimeter Hollow Grey Monolith Watchtowers with Stairs, Shoot Slits & Secret Sniper Perches
+    addHollowTower(125, 125, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(-125, 125, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(125, -125, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(-125, -125, 28, 54, 28, { style: 'landscape' });
 
     // High-Poly Forest Groves (Deciduous Oaks, Alpine Pines, Weeping Willows)
     const treeCoords = [
-        // North-East Grove (Pines)
         { x: 75, z: 140, type: 'pine', s: 1.1 }, { x: 95, z: 165, type: 'pine', s: 1.3 },
         { x: 150, z: 80, type: 'pine', s: 1.2 }, { x: 165, z: 120, type: 'pine', s: 1.0 },
-        // North-West Grove (Oaks)
         { x: -75, z: 140, type: 'deciduous', s: 1.15 }, { x: -105, z: 160, type: 'deciduous', s: 1.25 },
         { x: -145, z: 85, type: 'deciduous', s: 1.0 }, { x: -160, z: 125, type: 'deciduous', s: 1.2 },
-        // South-East Grove (Oaks)
         { x: 80, z: -145, type: 'deciduous', s: 1.2 }, { x: 110, z: -160, type: 'deciduous', s: 1.1 },
         { x: 145, z: -80, type: 'deciduous', s: 1.3 }, { x: 165, z: -130, type: 'deciduous', s: 1.05 },
-        // South-West Grove (Pines)
         { x: -80, z: -140, type: 'pine', s: 1.2 }, { x: -110, z: -165, type: 'pine', s: 1.15 },
         { x: -150, z: -85, type: 'pine', s: 1.3 }, { x: -165, z: -125, type: 'pine', s: 1.0 },
-        // Riverside Weeping Willows
         { x: 48, z: 50, type: 'willow', s: 1.2 }, { x: 50, z: -50, type: 'willow', s: 1.25 },
         { x: -48, z: 45, type: 'willow', s: 1.15 }, { x: -50, z: -45, type: 'willow', s: 1.2 },
         { x: 52, z: 140, type: 'willow', s: 1.1 }, { x: -52, z: -140, type: 'willow', s: 1.15 }
@@ -7951,10 +8098,10 @@ function buildMapLandscape_FFA(size = 400) {
 
     // High-Poly Weathered Granite Rock Clusters & Bushes
     const rocks = [
-        { x: 38, y: 0, z: 80, sx: 4.5, sy: 3.5, sz: 5.0, rot: 0.4 },
-        { x: -38, y: 0, z: 80, sx: 5.0, sy: 4.0, sz: 4.2, rot: -0.6 },
-        { x: 38, y: 0, z: -80, sx: 4.2, sy: 3.2, sz: 4.8, rot: 1.2 },
-        { x: -38, y: 0, z: -80, sx: 5.2, sy: 4.2, sz: 4.5, rot: -1.1 },
+        { x: 42, y: 0, z: 80, sx: 4.5, sy: 3.5, sz: 5.0, rot: 0.4 },
+        { x: -42, y: 0, z: 80, sx: 5.0, sy: 4.0, sz: 4.2, rot: -0.6 },
+        { x: 42, y: 0, z: -80, sx: 4.2, sy: 3.2, sz: 4.8, rot: 1.2 },
+        { x: -42, y: 0, z: -80, sx: 5.2, sy: 4.2, sz: 4.5, rot: -1.1 },
         { x: 100, y: 0, z: 30, sx: 6.0, sy: 4.5, sz: 5.5, rot: 0.8 },
         { x: -100, y: 0, z: -30, sx: 5.8, sy: 4.2, sz: 5.0, rot: -0.5 }
     ];
@@ -7964,7 +8111,6 @@ function buildMapLandscape_FFA(size = 400) {
         addBush(r.x - 4, r.y, r.z - 3, 1.1);
     });
 
-    // Jump pads for vertical transit to tower balconies
     addJumpPad(0, 32, 0.3, 40);
     addJumpPad(0, -32, 0.3, 40);
     addJumpPad(90, 0, 0.3, 38);
@@ -7973,43 +8119,40 @@ function buildMapLandscape_FFA(size = 400) {
 
 // TDM Landscape: Verdant Divide (Red & Blue Monoliths across River Gorge)
 function buildMapLandscape_TDM(size = 1000) {
-    // Expansive canyon river dividing the teams
-    addWater(130, 950, 0, 0.4, 0, { color: 0x062534, emissive: 0x003344, opacity: 0.88 });
+    // Expansive canyon river dividing the teams (depth 12, crystal-clear sparkling water)
+    addMoat(0, 0, 120, size - 20, 12, { isAlongZ: true, isLandscape: true });
 
-    // East Titan Red Grey Monolith Fortress
-    addGreyTower(450, 0, 80, 95, 80, { team: 'red', hasJumpPad: true });
-    addGreyTower(320, 180, 42, 60, 42, { team: 'red', hasJumpPad: true });
-    addGreyTower(320, -180, 42, 60, 42, { team: 'red', hasJumpPad: true });
+    // East Titan Red Hollow Monolith Fortress with Stairs & Secret Roosts
+    addHollowTower(450, 0, 75, 92, 75, { style: 'landscape', team: 'red' });
+    addHollowTower(320, 180, 40, 60, 40, { style: 'landscape', team: 'red' });
+    addHollowTower(320, -180, 40, 60, 40, { style: 'landscape', team: 'red' });
 
-    // West Titan Blue Grey Monolith Fortress
-    addGreyTower(-450, 0, 80, 95, 80, { team: 'blue', hasJumpPad: true });
-    addGreyTower(-320, 180, 42, 60, 42, { team: 'blue', hasJumpPad: true });
-    addGreyTower(-320, -180, 42, 60, 42, { team: 'blue', hasJumpPad: true });
+    // West Titan Blue Hollow Monolith Fortress with Stairs & Secret Roosts
+    addHollowTower(-450, 0, 75, 92, 75, { style: 'landscape', team: 'blue' });
+    addHollowTower(-320, 180, 40, 60, 40, { style: 'landscape', team: 'blue' });
+    addHollowTower(-320, -180, 40, 60, 40, { style: 'landscape', team: 'blue' });
 
     // River Crossings
     // 1. High-Altitude Glass Sky-Bridge
-    addGlassBox(140, 2.5, 26, 0, 38, 0, 0x00f3ff, '#00f3ff', 0.55);
+    addGlassBox(130, 2.5, 26, 0, 38, 0, 0x00f3ff, '#00f3ff', 0.55);
     // 2. North Stone Arch Bridge
-    addBox(140, 4, 30, 0, 4, 250, 0x3d434e, '#a0b4c8');
+    addBox(130, 4, 30, 0, 3, 250, 0x3d434e, '#a0b4c8');
     // 3. South Stone Arch Bridge
-    addBox(140, 4, 30, 0, 4, -250, 0x3d434e, '#a0b4c8');
+    addBox(130, 4, 30, 0, 3, -250, 0x3d434e, '#a0b4c8');
 
     // Massive Forest Groves (Pines & Deciduous)
     const tdmTrees = [
-        // East Forest (Red side)
         { x: 220, z: 90, type: 'pine', s: 1.3 }, { x: 240, z: 140, type: 'pine', s: 1.4 },
         { x: 200, z: 180, type: 'deciduous', s: 1.2 }, { x: 250, z: -90, type: 'pine', s: 1.35 },
         { x: 220, z: -150, type: 'deciduous', s: 1.25 }, { x: 200, z: -200, type: 'pine', s: 1.4 },
         { x: 380, z: 90, type: 'pine', s: 1.2 }, { x: 380, z: -90, type: 'pine', s: 1.2 },
-        // West Forest (Blue side)
         { x: -220, z: 90, type: 'pine', s: 1.3 }, { x: -240, z: 140, type: 'pine', s: 1.4 },
         { x: -200, z: 180, type: 'deciduous', s: 1.2 }, { x: -250, z: -90, type: 'pine', s: 1.35 },
         { x: -220, z: -150, type: 'deciduous', s: 1.25 }, { x: -200, z: -200, type: 'pine', s: 1.4 },
         { x: -380, z: 90, type: 'pine', s: 1.2 }, { x: -380, z: -90, type: 'pine', s: 1.2 },
-        // Riverside Willows
-        { x: 80, z: 100, type: 'willow', s: 1.3 }, { x: 80, z: -100, type: 'willow', s: 1.3 },
-        { x: -80, z: 100, type: 'willow', s: 1.3 }, { x: -80, z: -100, type: 'willow', s: 1.3 },
-        { x: 80, z: 350, type: 'willow', s: 1.2 }, { x: -80, z: -350, type: 'willow', s: 1.2 }
+        { x: 75, z: 100, type: 'willow', s: 1.3 }, { x: 75, z: -100, type: 'willow', s: 1.3 },
+        { x: -75, z: 100, type: 'willow', s: 1.3 }, { x: -75, z: -100, type: 'willow', s: 1.3 },
+        { x: 75, z: 350, type: 'willow', s: 1.2 }, { x: -75, z: -350, type: 'willow', s: 1.2 }
     ];
     tdmTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
 
@@ -8055,28 +8198,28 @@ function buildMapLandscape_CTF(size = 1000) {
 
 // KOTH Landscape: Verdant Sanctuary (Central Dais inside Reflecting Lake)
 function buildMapLandscape_KOTH(size = 400) {
-    // Grand Central Reflecting Lake
-    addWater(230, 230, 0, 0.4, 0, { color: 0x072b38, emissive: 0x003344, opacity: 0.85 });
+    // Grand Central Sunken Lake (depth 10, crystal-clear sparkling light-blue water)
+    addMoat(0, 0, 230, 230, 10, { isAlongZ: true, isLandscape: true });
 
     // The Hill: Elevated Stone & Glass Temple Dais in Center of Lake (matches KOTH scoring zone)
     addBox(60, 20, 60, 0, 10, 0, 0x3d434e, '#ffff00');
 
-    // 4 Grand Causeways / Ramps leading onto the Dais from the 4 shores
+    // 4 Grand Causeways / Bridges leading onto the Dais from the 4 shores
     addRamp(24, 2, 50, 0, 10, 55, -Math.PI / 8, 0, 0x2a2e37, '#ffff00');
     addRamp(24, 2, 50, 0, 10, -55, Math.PI / 8, 0, 0x2a2e37, '#ffff00');
     addRamp(24, 2, 50, 55, 10, 0, 0, -Math.PI / 8, 0x2a2e37, '#ffff00');
     addRamp(24, 2, 50, -55, 10, 0, 0, Math.PI / 8, 0x2a2e37, '#ffff00');
 
-    // 4 Grey Monolithic Sniper Watchtowers on the lake shore
-    addGreyTower(125, 125, 26, 52, 26, { hasJumpPad: true });
-    addGreyTower(-125, 125, 26, 52, 26, { hasJumpPad: true });
-    addGreyTower(125, -125, 26, 52, 26, { hasJumpPad: true });
-    addGreyTower(-125, -125, 26, 52, 26, { hasJumpPad: true });
+    // 4 Hollow Grey Monolithic Sniper Watchtowers on the lake shore with Stairs & Secret Roosts
+    addHollowTower(125, 125, 26, 52, 26, { style: 'landscape' });
+    addHollowTower(-125, 125, 26, 52, 26, { style: 'landscape' });
+    addHollowTower(125, -125, 26, 52, 26, { style: 'landscape' });
+    addHollowTower(-125, -125, 26, 52, 26, { style: 'landscape' });
 
     // Lakeside Weeping Willows & Lush Greenery
     const kothTrees = [
-        { x: 120, z: 0, type: 'willow', s: 1.3 }, { x: -120, z: 0, type: 'willow', s: 1.3 },
-        { x: 0, z: 120, type: 'willow', s: 1.3 }, { x: 0, z: -120, type: 'willow', s: 1.3 },
+        { x: 125, z: 0, type: 'willow', s: 1.3 }, { x: -125, z: 0, type: 'willow', s: 1.3 },
+        { x: 0, z: 125, type: 'willow', s: 1.3 }, { x: 0, z: -125, type: 'willow', s: 1.3 },
         { x: 145, z: 60, type: 'deciduous', s: 1.15 }, { x: -145, z: 60, type: 'deciduous', s: 1.15 },
         { x: 145, z: -60, type: 'deciduous', s: 1.15 }, { x: -145, z: -60, type: 'deciduous', s: 1.15 },
         { x: 60, z: 145, type: 'pine', s: 1.2 }, { x: -60, z: 145, type: 'pine', s: 1.2 },
@@ -8085,19 +8228,19 @@ function buildMapLandscape_KOTH(size = 400) {
     kothTrees.forEach(t => addTree(t.x, t.z, t.s, t.type));
 
     // Shoreline Boulders
-    addRock(110, 0, 80, 5, 4, 5, 0.4);
-    addRock(-110, 0, 80, 5, 4, 5, -0.4);
-    addRock(110, 0, -80, 5, 4, 5, 0.8);
-    addRock(-110, 0, -80, 5, 4, 5, -0.8);
+    addRock(120, 0, 80, 5, 4, 5, 0.4);
+    addRock(-120, 0, 80, 5, 4, 5, -0.4);
+    addRock(120, 0, -80, 5, 4, 5, 0.8);
+    addRock(-120, 0, -80, 5, 4, 5, -0.8);
 }
 
 // Gun Game Landscape: Verdant Terraces (Stepped Botanical Gardens & Towers)
 function buildMapLandscape_GunGame(size = 350) {
-    // Reflecting stream in center
-    addWater(35, 320, 0, 0.4, 0, { color: 0x062534, emissive: 0x003344, opacity: 0.85 });
+    // Reflecting stream in center (depth 8, crystal-clear sparkling water)
+    addMoat(0, 0, 40, size - 20, 8, { isAlongZ: true, isLandscape: true });
 
-    // Central Grey Clocktower / Spire
-    addGreyTower(0, 0, 34, 68, 34, { hasJumpPad: true });
+    // Central Hollow Grey Clocktower with Stairs, Shoot Slits & Secret Sniper Roost
+    addHollowTower(0, 0, 34, 68, 34, { style: 'landscape' });
 
     // Stepped Garden Terrace Decks
     addBox(80, 12, 100, 95, 6, 0, 0x2d323c, '#2d6a4f');
@@ -8131,24 +8274,24 @@ function buildMapLandscape_GunGame(size = 350) {
 
 // Zombies Landscape: Overgrown Citadel (Atmospheric Forest & Survivor Catwalks)
 function buildMapLandscape_Zombies(size = 400) {
-    // Dilapidated Central Grey Bunker
-    addGreyTower(0, 0, 52, 50, 52, { hasJumpPad: true });
+    // Dilapidated Central Hollow Grey Bunker with Stairs, Shoot Slits & Secret Sniper Roost
+    addHollowTower(0, 0, 48, 54, 48, { style: 'landscape' });
 
-    // 4 Corner Survivor Guard Posts
-    addGreyTower(110, 110, 30, 54, 30, { hasJumpPad: true });
-    addGreyTower(-110, 110, 30, 54, 30, { hasJumpPad: true });
-    addGreyTower(110, -110, 30, 54, 30, { hasJumpPad: true });
-    addGreyTower(-110, -110, 30, 54, 30, { hasJumpPad: true });
+    // 4 Corner Hollow Survivor Guard Posts with Stairs & Shoot Holes
+    addHollowTower(110, 110, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(-110, 110, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(110, -110, 28, 54, 28, { style: 'landscape' });
+    addHollowTower(-110, -110, 28, 54, 28, { style: 'landscape' });
 
     // Elevated Survivor Catwalks connecting the fortress
-    addBox(90, 2, 8, 55, 23, 55, 0x3d434e, '#00ffaa');
-    addBox(90, 2, 8, -55, 23, 55, 0x3d434e, '#00ffaa');
-    addBox(90, 2, 8, 55, 23, -55, 0x3d434e, '#00ffaa');
-    addBox(90, 2, 8, -55, 23, -55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, 55, 20, 55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, -55, 20, 55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, 55, 20, -55, 0x3d434e, '#00ffaa');
+    addBox(90, 2, 8, -55, 20, -55, 0x3d434e, '#00ffaa');
 
     // Access ramps to catwalks
-    addRamp(14, 2, 45, 0, 11.5, 65, -Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
-    addRamp(14, 2, 45, 0, 11.5, -65, Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
+    addRamp(14, 2, 45, 0, 10, 65, -Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
+    addRamp(14, 2, 45, 0, 10, -65, Math.PI / 7, 0, 0x2a2e37, '#00ffaa');
 
     // Dark, overgrown pine forest
     const zombieTrees = [
@@ -8187,43 +8330,49 @@ function buildMap(mode, mapId = null) {
         if (mode === 'TDM' || mode === 'CTF') size = 1000;
         else size = 400;
     }
+    currentMapSize = size;
 
-    // Physics floor plane
-    const floorShape = new CANNON.Plane();
-    const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
-    floorBody.addShape(floorShape);
-    floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
-    world.addBody(floorBody);
-    mapBodies.push(floorBody);
+    // Segmented Ground Generation with Physical Moat / Dugout Gaps (NO infinite CANNON.Plane)
+    const floorGlow = isLandscape ? '#terrain_grass' : '#00ffaa';
+    const floorCol = isLandscape ? 0x22262d : 0x111111;
 
-    // Visual floor plane
-    const floorGeo = new THREE.PlaneGeometry(size, size, 1, 1);
-    floorGeo.rotateX(-Math.PI/2);
-
-    let floorMat;
+    // Determine moat gap for current map:
+    let moatGapW = 0;
+    let isSunkenLake = false;
     if (isLandscape) {
-        const grassTex = createVerdantTerrainTexture();
-        grassTex.repeat.set(size / 24, size / 24);
-        floorMat = new THREE.MeshStandardMaterial({
-            map: grassTex,
-            roughness: 0.85,
-            metalness: 0.05
-        });
+        if (mode === 'FFA') moatGapW = 75;
+        else if (mode === 'TDM' || mode === 'CTF') moatGapW = 120;
+        else if (mode === 'KOTH') isSunkenLake = true;
+        else if (mode === 'Gun Game' || mode === 'GUN_GAME') moatGapW = 40;
     } else {
-        const fTex = createNeonGridTexture(0x111111, '#00ffaa');
-        fTex.repeat.set(size / 5, size / 5);
-        floorMat = new THREE.MeshStandardMaterial({
-            map: fTex,
-            emissiveMap: fTex,
-            emissive: 0x00ffaa,
-            emissiveIntensity: 0.3,
-            roughness: 0.2
-        });
+        if (mode === 'FFA') moatGapW = 42;
     }
-    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    floorMesh.receiveShadow = true;
-    scene.add(floorMesh);
-    mapMeshes.push(floorMesh);
+
+    if (isSunkenLake) {
+        // Sunken Central Lake Dugout for KOTH: 230x230 cutout in center
+        const lakeSize = 230;
+        const shoreLen = (size - lakeSize) / 2;
+        // North Shore
+        addBox(size, 4, shoreLen, 0, -2, (size + lakeSize) / 4, floorCol, floorGlow);
+        // South Shore
+        addBox(size, 4, shoreLen, 0, -2, -(size + lakeSize) / 4, floorCol, floorGlow);
+        // West Shore (between N & S)
+        addBox(shoreLen, 4, lakeSize, -(size + lakeSize) / 4, -2, 0, floorCol, floorGlow);
+        // East Shore (between N & S)
+        addBox(shoreLen, 4, lakeSize, (size + lakeSize) / 4, -2, 0, floorCol, floorGlow);
+        // Center Dais Island (for KOTH capture zone)
+        addBox(70, 4, 70, 0, -2, 0, floorCol, floorGlow);
+    } else if (moatGapW > 0) {
+        // River / Moat Dugout running along Z across center
+        const slabW = (size - moatGapW) / 2;
+        // West Ground Slab (top at y = 0)
+        addBox(slabW, 4, size, -size / 4 - moatGapW / 4, -2, 0, floorCol, floorGlow);
+        // East Ground Slab (top at y = 0)
+        addBox(slabW, 4, size, size / 4 + moatGapW / 4, -2, 0, floorCol, floorGlow);
+    } else {
+        // Solid ground slab (top at y = 0)
+        addBox(size, 4, size, 0, -2, 0, floorCol, floorGlow);
+    }
 
     // Perimeter boundary walls
     const wallCol = isLandscape ? 0x22262d : 0x050510;
@@ -8269,9 +8418,20 @@ function addBox(w, h, d, x, y, z, color, glow) {
     world.addBody(body);
 
     const geo = new THREE.BoxGeometry(w, h, d); 
-    const tex = createNeonGridTexture(color, glow); 
-    tex.repeat.set(Math.max(1, w/10), Math.max(1, h/10));
-    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); 
+    let mat;
+    if (glow === '#terrain_grass') {
+        const grassTex = createVerdantTerrainTexture();
+        grassTex.repeat.set(Math.max(1, w / 24), Math.max(1, d / 24));
+        mat = new THREE.MeshStandardMaterial({
+            map: grassTex,
+            roughness: 0.85,
+            metalness: 0.05
+        });
+    } else {
+        const tex = createNeonGridTexture(color, glow); 
+        tex.repeat.set(Math.max(1, w/10), Math.max(1, h/10));
+        mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: color, emissiveIntensity: 0.5 }); 
+    }
     const mesh = new THREE.Mesh(geo, mat); 
     mesh.position.set(x, y, z); 
     mesh.castShadow = true; 
@@ -8279,6 +8439,7 @@ function addBox(w, h, d, x, y, z, color, glow) {
     scene.add(mesh); 
     mapMeshes.push(mesh); 
     mapBodies.push(body);
+    return mesh;
 }
 
 function addRamp(w, h, d, x, y, z, angleX, angleZ, color, glow) {
@@ -8392,11 +8553,17 @@ function animate() {
         }
         
         let isGrounded = false;
-        if (playerBody.position.y <= 1.6) isGrounded = true;
-        else { 
-            downRay.set(playerBody.position, downVector); 
-            downRay.far = 1.7; 
-            if (downRay.intersectObjects(mapMeshes).length > 0) isGrounded = true; 
+        downRay.set(playerBody.position, downVector); 
+        downRay.far = 1.8; 
+        const groundHits = downRay.intersectObjects(mapMeshes);
+        for (let i = 0; i < groundHits.length; i++) {
+            const obj = groundHits[i].object;
+            if (obj && obj.userData && (obj.userData.noGroundRay || obj.userData.isWater)) continue;
+            isGrounded = true;
+            break;
+        }
+        if (!isGrounded && !inWater && Math.abs(playerBody.position.y - 1.0) < 0.6) {
+            isGrounded = true;
         }
         if (isGrounded && jumpAntiGravityTimer <= 0) myJumpsLeft = myJumps;
 
@@ -8483,37 +8650,86 @@ function animate() {
                     myJumpsLeft = myJumps;
                     playTone(520, 'sine', 0.18, 0.3);
                     setTimeout(() => playTone(880, 'sine', 0.25, 0.35), 60);
+                    if (jp.isSecret && !jp.hasNotified) {
+                        jp.hasNotified = true;
+                        adminLog("🏆 SECRET DISCOVERED: Sniper's Eagle Perch!");
+                        setTimeout(() => { jp.hasNotified = false; }, 8000);
+                    }
                 }
             }
         }
 
-        // Check Water Wading Drag & Dynamic Splash
+        // Check Water Volume & Deep Swimming Physics
         let inWater = false;
-        let waterSurfaceY = 0;
+        let activeWater = null;
         for (let i = 0; i < activeWaterPlanes.length; i++) {
             const wp = activeWaterPlanes[i];
-            if (Math.abs(playerBody.position.x - wp.x) <= wp.w / 2 &&
-                Math.abs(playerBody.position.z - wp.z) <= wp.d / 2 &&
-                playerBody.position.y <= wp.y + 1.6 && playerBody.position.y >= wp.y - 4.5) {
+            const inX = Math.abs(playerBody.position.x - wp.x) <= (wp.w / 2) + 0.6;
+            const inZ = Math.abs(playerBody.position.z - wp.z) <= (wp.d / 2) + 0.6;
+            const sY = wp.surfaceY !== undefined ? wp.surfaceY : wp.y;
+            const bY = wp.bedY !== undefined ? wp.bedY : wp.y - 15.0;
+            const inY = playerBody.position.y <= sY + 0.9 && playerBody.position.y >= bY - 2.0;
+            if (inX && inZ && inY) {
                 inWater = true;
-                waterSurfaceY = wp.y;
+                activeWater = wp;
                 break;
             }
         }
-        if (inWater) {
-            playerBody.velocity.x *= 0.94;
-            playerBody.velocity.z *= 0.94;
-            if (Math.random() < 0.20 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2)) {
-                createWaterSplash(playerBody.position.x, waterSurfaceY, playerBody.position.z);
+        
+        const hudSwim = document.getElementById('hud-swim-badge');
+        if (inWater && activeWater) {
+            const sY = activeWater.surfaceY !== undefined ? activeWater.surfaceY : activeWater.y;
+            const waterDepth = sY - playerBody.position.y;
+            
+            // Deep water fluid drag
+            playerBody.velocity.x *= 0.92;
+            playerBody.velocity.z *= 0.92;
+            playerBody.velocity.y *= 0.88;
+            
+            // Buoyancy force (balances gravity of -60 so player naturally floats near surface)
+            playerBody.force.y += playerBody.mass * 62.0;
+            
+            // Swimming vertical controls:
+            // Press Space (Jump) to swim up toward the surface
+            if (keys[' '] || moveUp) {
+                playerBody.velocity.y = Math.min(playerBody.velocity.y + 16.0 * (1/60), 8.5);
             }
+            // Press C / Shift / Ctrl (Crouch) to dive down toward the moat bed
+            if (keys['c'] || keys['C'] || keys['Shift'] || keys['Control']) {
+                playerBody.velocity.y = Math.max(playerBody.velocity.y - 16.0 * (1/60), -8.5);
+            }
+            
+            // Natural surface treading: if near surface and not diving, stabilize head above water
+            if (Math.abs(playerBody.position.y - (sY + 0.1)) < 0.45 && !keys['c'] && !keys['Shift']) {
+                playerBody.velocity.y = Math.max(playerBody.velocity.y * 0.7, 0.0);
+            }
+            
+            // Allow leaping out of water when at surface
+            if (playerBody.position.y >= sY - 0.5) {
+                myJumpsLeft = myJumps;
+            }
+            
+            // Submerged bubble particles
+            if (waterDepth > 0.4 && Math.random() < 0.22) {
+                createUnderwaterBubble(playerBody.position.x, playerBody.position.y + 0.4, playerBody.position.z);
+            }
+            // Surface splash when breaking through water
+            if (Math.abs(waterDepth) < 0.4 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2 || Math.abs(playerBody.velocity.y) > 2)) {
+                if (Math.random() < 0.20) {
+                    createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
+                }
+            }
+            if (hudSwim) hudSwim.style.display = 'flex';
+        } else {
+            if (hudSwim) hudSwim.style.display = 'none';
         }
 
-        const mapSize = (gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300;
-        const barrierLimit = (mapSize / 2) + 2.0;
+        const mapSize = currentMapSize || ((gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300);
+        const barrierLimit = (mapSize / 2) + 6.0;
         const isOutOfBarrier = Math.abs(playerBody.position.x) > barrierLimit || 
                               Math.abs(playerBody.position.z) > barrierLimit || 
-                              playerBody.position.y < -10 || 
-                              playerBody.position.y > 260;
+                              playerBody.position.y < -35 || 
+                              playerBody.position.y > 320;
 
         if (isOutOfBarrier) {
             if (!isSmiteInvincible && !isDead) {

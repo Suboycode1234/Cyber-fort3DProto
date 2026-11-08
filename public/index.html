@@ -56,6 +56,10 @@
             <span style="color:#00f3ff;">🚀</span>
             <span>[J] JUMP: <strong id="hud-jump-status" style="color:#00ffaa;">NORMAL</strong></span>
         </div>
+        <div class="tactical-badge" id="hud-swim-badge" style="display:none; border-color:rgba(56, 216, 240, 0.5); color:#38d8f0;">
+            <span style="color:#38d8f0;">🏊</span>
+            <span>SWIMMING &bull; [SPACE] Surface &bull; [C/SHIFT] Dive</span>
+        </div>
         <div class="tactical-badge" style="border-color:rgba(255,255,255,0.2); color:#aaa;">
             <span>[W+R] CLIMB WALL</span>
         </div>
@@ -353,10 +357,10 @@
                         </select>
                         <div>
                             <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
-                                <span style="color:#ccc;">RCAS Sharpness</span>
-                                <span id="lbl-fsr-sharpness" style="color:#ffaa00; font-weight:bold;">80%</span>
+                                <span style="color:#ccc;">RCAS Sharpness (Active with FSR)</span>
+                                <span id="lbl-fsr-sharpness" style="color:#ffaa00; font-weight:bold;">50%</span>
                             </div>
-                            <input type="range" id="setting-fsr-sharpness" min="0.0" max="1.0" step="0.05" value="0.8" class="tech-range">
+                            <input type="range" id="setting-fsr-sharpness" min="0.0" max="1.0" step="0.05" value="0.5" class="tech-range">
                         </div>
                         <div id="lbl-fsr-render-res" style="font-size:10px; color:#888; margin-top:4px; font-family:monospace;">
                             Render Target: 100% Native

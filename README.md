@@ -19,19 +19,16 @@
 ## 🌟 Key Highlights & Engineering Features
 
 ### 💎 Next-Gen Post-Processing & Visual Clarity Overhaul
-- **Pristine Visual Clarity & Elimination of Temporal Noise:**
-  - Completely eliminated unaccumulated screen-space Monte Carlo noise jitter and fake Sobel edge-darkening filters, restoring razor-sharp geometry silhouettes, crisp character models, and clean competitive visibility.
+- **Pristine Visual Clarity & Elimination of Temporal / FSR Noise:**
+  - Strictly gated AMD FidelityFX™ RCAS sharpening to only execute when FSR spatial upsampling is actively engaged (`gameSettings.fsrMode !== 'off'`). When running at native resolution, sharpening is bypassed entirely, eliminating all high-frequency pixel grain, noise speckling, and edge halo artifacts.
   - Zero smearing, zero inverted viewport ghosting over weapons and avatars, and zero pixel crawling on silhouette borders.
-- **Official Khronos PBR Neutral HDR Tone Mapping (Zero Bleaching):**
-  - Upgraded to the official 3D Commerce Khronos PBR Neutral tone mapper, ensuring 100% true color saturation, accurate hue angles, and natural highlight roll-off.
-  - Completely eliminates the chalky, washed-out bleached look caused by legacy per-channel ACES clipping.
-  - Selectable tone mapping engines: **Khronos PBR Neutral (Recommended)**, **Vibrant Filmic**, **ACES Classic**, and **Off (Raw HDR)**.
+- **Reinhard-Jodie HDR Tone Mapping (Zero Bleaching & Vibrant Chrominance):**
+  - Upgraded to the **Reinhard-Jodie** tone mapping operator, which calculates luminance-weighted color blending to preserve full chrominance and saturation in highlights.
+  - Completely eliminates the chalky, washed-out bleached appearance under bright sunlight that previously afflicted Khronos PBR Neutral and ACES highlights.
+  - Calibrated directional sunlight and ambient illumination for rich, deep contrast, lush foliage greens, and crystalline water glints.
 - **High-Threshold Silky 16-Bit Half-Float Bloom (`threshold: 0.92`):**
   - Precision 16-bit floating-point bloom buffer (`THREE.HalfFloatType`) with an elevated `0.92` threshold and subtle `0.22` strength.
   - Ordinary diffuse geometry (grey concrete towers, green foliage leaves, player skins, sky) remains 100% pin-sharp and clean without muddy halos. Only intense laser bolts, neon signage, muzzle flashes, and emissive cores produce an ethereal optical glow.
-- **AMD FidelityFX™ Super Resolution (FSR 1.0) & RCAS Sharpening:**
-  - Robust Contrast-Adaptive Sharpening (RCAS) delivers pin-sharp textures and foliage leaves without ringing or halo artifacts.
-  - Optional EASU spatial upsampling provides up to **2x-3x frame rate boosts** on integrated GPUs and laptops.
 - **Hardware Detection & Auto-Optimization Profiles:**
   - Auto-detects dedicated gaming GPUs vs. integrated 4th-Gen Intel HD 4600 / i5-4590 hardware.
   - Auto-migrates legacy settings to the **Cinematic Clarity** profile for instant 60 FPS competitive play with zero visual degradation.
@@ -68,23 +65,32 @@ Every gamemode in CyberFort features **exactly 2 dedicated, handcrafted maps** s
 └─────────────────┴──────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
-### 🌲 Procedural High-Poly Environmental Assets
-- **Architectural Grey Monolith Towers (`addGreyTower`):** Brutalist concrete & titanium construction with open ground breezeways, wraparound cantilevered sniper balconies with metallic railings, access ramps, rooftop parapets with crenellations, communications spires with blinking warning beacons, and creeping green ivy vines.
-- **High-Poly 3D Trees (`addTree`):** Bark cylinder trunks with root flares, solid Cannon.js physics cover collision, and multi-cluster organic canopies (`IcosahedronGeometry` / `DodecahedronGeometry`):
+### 🌲 Procedural High-Poly Environmental Assets & Fortifications
+- **Hollow Walkable Monolith & Cyber Towers (`addHollowTower` / `addGreyTower`):**
+  - **Walkable Multi-Story Interiors:** Both Verdant Landscape brutalist monoliths and Classic Cyber towers feature open, walkable hollow interiors spanning 4 full levels.
+  - **Interior Staircases & Ramps:** Wide 30-degree interior ramps with anti-slip treads connect every floor, allowing players to ascend from ground level to high rooftop battlements while maintaining full sprint and combat readiness.
+  - **Tactical Shoot Holes & Murder Slits:** Defensive perimeter walls on every floor feature recessed tactical embrasures and narrow murder slits at chest height, providing superior firing angles onto moats and courtyards while protecting occupants from enemy fire.
+  - **Secret Sniper Entrances & The Eagle's Nest Roost:** Hidden rear alcoves (camouflaged behind hanging ivy vines in Landscape maps or reinforced cyber plating in Classic maps) conceal secret vertical jump-pad conduits. Finding and stepping into the secret conduit instantly launches the player to the highest **Eagle's Nest Sniper Perch** (`y = height + 14`) with a 360-degree panoramic vantage point, defensive blast canopy, and combat discovery achievement banner.
+- **Physical Dug-Out Water Moats & Crystal Waterways (`addMoat` & `addMoatWater`):**
+  - **Excavated Physical Trenches:** Replaced flat water planes with authentic physical dugout moats excavated 6 to 10 units below ground level. Features solid underwater bed collision (`y = -depth`), perimeter retaining embankment walls, and stone access ramps for tactical ingress/egress.
+  - **Sparkling Clear Light-Blue Water Texture:** Generated procedural sparkling clear water using a transparent foundation, light-blue crystalline gradient, dual-layer shimmering caustics network, and specular star glints.
+- **High-Poly 3D Trees (`addTree`):** Bark cylinder trunks with root flares, solid Cannon.js physics trunk collision, and multi-cluster organic canopies (`IcosahedronGeometry` / `DodecahedronGeometry`):
   - *Deciduous Oaks:* 6 interconnected high-poly foliage domes in rich emerald, forest green, and olive hues.
   - *Alpine Pines:* 4-tier layered conifer skirts with deep pine needle tones.
   - *Weeping Willows:* Drooping graceful foliage masses lining the riverbanks and lake shores.
+  - *Zero Floating Snapping:* Foliage meshes and water planes are explicitly excluded from ground raycasting (`userData.noGroundRay = true`), ensuring neither players nor AI bots ever float or snap onto tree canopies in midair.
 - **Granite Boulders & Foliage Bushes (`addRock` & `addBush`):** Natural faceted stone outcroppings providing tactical shooting cover and lush hedge clusters.
-- **Animated Water Reflections (`addWater`):** Real-time animated wave vertex displacement and procedural ripple normal maps reflecting towers and sky.
 
 ---
 
-## 🌊 Interactive Physics & Combat Systems
+## 🌊 Interactive Physics, Deep Swimming & Combat Systems
 
+- **Dynamic Deep-Water Swimming Mechanics:**
+  - **Submersion Detection & Fluid Buoyancy:** When entering water moats or deep lakes, the physics engine dynamically applies an upward buoyant force (`playerBody.mass * 62.0`) to balance gravity, keeping swimmers naturally buoyant near the surface.
+  - **Full 3D Swim Movement:** Press **Space** to swim upward and breach the surface; press **C** or **Shift** to dive down toward sunken trenches and moat beds.
+  - **Hydrodynamic Drag & Underwater VFX:** Fluid damping smooths horizontal velocity while procedural rising air bubbles (`createUnderwaterBubble`), expanding splash rings, and an on-screen **"🏊 SWIMMING"** HUD badge activate automatically.
 - **Dynamic Undulating Water Waves:**
   - Water planes animate sinusoidal undulating vertices in real-time (`geo.computeVertexNormals()`), creating dynamic liquid ripples that refract and mirror the world.
-- **Fluid Wading Drag & Splash Physics:**
-  - Players wading through water experience slight realistic hydrodynamic drag (`velocity * 0.94`) and trigger procedural expanding splash rings and particles.
 - **Interactive Concentric Jump Pads:**
   - Stepping onto high-poly jump pads instantly propels players skyward (`velocity.y = 38`), playing dual-tone cyber synth audio and granting aerial maneuverability.
 - **Full Tactical Hold-F Grapple Hook:**
@@ -95,7 +101,7 @@ Every gamemode in CyberFort features **exactly 2 dedicated, handcrafted maps** s
   - Press `J` anytime to toggle between **Normal E-Sports Jump** (instant, crisp, gravity-grounded) and **Floaty Anti-Gravity Jump** (extended lunar hang-time).
 - **KOTH Combat Balance:**
   - King of the Hill exclusive loadout: **Knockback Rifle** (zero damage, controlled kinetic displacement) and **Knock Stick** (devastating melee launch stick to knock enemies into the water).
-  - Out-of-barrier boundary check prevents players from being flung into the void.
+  - Dynamic map boundary and barrier sizing prevents players and bots from being flung into the void.
 
 ---
 
@@ -105,8 +111,8 @@ Every gamemode in CyberFort features **exactly 2 dedicated, handcrafted maps** s
 |:---:|:---|
 | **W, A, S, D** | Walk / Strafe Movement |
 | **Shift** | Tactical Sprint |
-| **Space** | Jump (Double Jump supported) |
-| **Ctrl / C** | Slide / Crouch |
+| **Space** | Jump (Double Jump supported) / **Surface (Swim Up)** |
+| **Ctrl / C** | Slide / Crouch / **Dive (Swim Down)** |
 | **W + R** | Wall-Run / Wall-Climb |
 | **Hold F** | Grapple Hook (Hold to fully pull to point) |
 | **J** | Toggle Jump Physics Mode (**Normal** vs **Floaty**) |
