@@ -207,6 +207,7 @@ let myKothScore = 0;
 let isHost = false;
 let currentGamemode = 'FFA';
 let activeWaterPlanes = [];
+let activeJumpPads = [];
 
 // Map Catalog - Exactly 2 Maps Per Gamemode: Map 1 = Original Classic, Map 2 = Verdant Landscape (Grey Towers & Greenery)
 const MAP_CATALOG = {
@@ -692,7 +693,7 @@ const RTXUberShader = {
             // Clean RTX Specular Sheen (Zero Temporal Noise, Zero Muddy Inverted Ghosting)
             if (uRayTracingMode > 0) {
                 float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-                float specBoost = smoothstep(0.72, 1.0, luma) * 0.14 * float(min(3, uRayTracingMode));
+                float specBoost = smoothstep(0.72, 1.0, luma) * 0.14 * min(3.0, float(uRayTracingMode));
                 col += col * specBoost;
             }
 
@@ -4535,14 +4536,7 @@ function resumeGame() {
 
     rtxPass = new THREE.ShaderPass( RTXUberShader );
 
-    const isHalfFloat = renderer.capabilities.isWebGL2 || (renderer.extensions && renderer.extensions.has('OES_texture_half_float'));
-    const composerTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        format: THREE.RGBAFormat,
-        type: isHalfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType
-    });
-    composer = new THREE.EffectComposer( renderer, composerTarget ); 
+    composer = new THREE.EffectComposer( renderer ); 
     composer.addPass( renderScene ); 
     composer.addPass( bloomPass );
     composer.addPass( rtxPass );
