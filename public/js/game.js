@@ -2947,7 +2947,7 @@ let reconnectRetryCounts = {};
 let isConnecting = false;
 let heartbeatTimer = null;
 
-// STUN & OpenRelay TURN ICE Servers for robust NAT/firewall traversal & P2P mesh
+// Ultra-fast Google & Cloudflare Anycast STUN servers for instant ICE candidate gathering
 const PEER_CONFIG = {
     debug: 1,
     config: {
@@ -2955,24 +2955,7 @@ const PEER_CONFIG = {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun.services.mozilla.com' },
-            { urls: 'stun:global.stun.twilio.com:3478' },
-            { urls: 'stun:openrelay.metered.ca:80' },
-            {
-                urls: 'turn:openrelay.metered.ca:80',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            },
-            {
-                urls: 'turn:openrelay.metered.ca:443',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            },
-            {
-                urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            }
+            { urls: 'stun:stun.cloudflare.com:3478' }
         ],
         iceCandidatePoolSize: 10
     }
@@ -3133,7 +3116,7 @@ async function fetchLobbies() {
         div.onclick = (e) => {
             e.stopPropagation();
             if (!ensureCustomNametag()) return;
-            joinMatch(l.roomCode || l.hostPeerId);
+            joinMatch(l.hostPeerId || l.roomCode);
         };
         sl.appendChild(div);
     });
@@ -3605,7 +3588,8 @@ function hostMatch(customRoomCode = null) {
     }
 
     setConnectionStatus(`Hosting ${isPublicRoom ? 'Public' : 'Private'} Room [${code}]...`);
-    initPeer(fullHostId, (id) => {
+    const hostInitId = isPublicRoom ? null : fullHostId;
+    initPeer(hostInitId, (id) => {
         isHost = true;
         hostPeerId = myPeerId;
         roomPeerIds = [myPeerId];
@@ -3661,10 +3645,24 @@ function joinMatch(targetInput) {
     }
     isConnecting = true;
 
-    const targetId = normalizePeerId(targetInput);
-    const cleanCode = formatRoomCode(targetId);
+    const trimmed = String(targetInput).trim();
+    const cleanCode = formatRoomCode(trimmed);
 
-    setConnectionStatus(`Connecting to room [${cleanCode}]...`);
+    // Resolve target host ID:
+    // 1. If cleanCode matches an active lobby in lobbiesMap, use its direct hostPeerId
+    // 2. Otherwise if it's already a Peer ID (UUID or custom string with hyphen), use as-is
+    // 3. Fallback to normalizePeerId
+    let targetId = trimmed;
+    if (lobbiesMap.has(cleanCode)) {
+        const l = lobbiesMap.get(cleanCode);
+        if (l && l.hostPeerId) {
+            targetId = l.hostPeerId;
+        }
+    } else if (!targetId.includes('-') && targetId.length <= 8) {
+        targetId = normalizePeerId(targetId);
+    }
+
+    setConnectionStatus(`Connecting to [${cleanCode || targetId.substring(0, 10)}]...`);
 
     let joinTimeoutTimer = null;
 
