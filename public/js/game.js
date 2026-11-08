@@ -209,6 +209,8 @@ let isHost = false;
 let currentGamemode = 'FFA';
 let activeWaterPlanes = [];
 let activeJumpPads = [];
+let activePortals = [];
+let activeEasterEggs = [];
 let currentMapSize = 300;
 
 // Map Catalog - Exactly 2 Maps Per Gamemode: Map 1 = Original Classic, Map 2 = Verdant Landscape (Grey Towers & Greenery)
@@ -1623,6 +1625,24 @@ function getSmiteAudio() {
     } catch(e) {
         return null;
     }
+}
+
+function playTone(freq = 440, type = 'sine', duration = 0.2, volume = 0.3) {
+    const ctx = getSmiteAudio();
+    if (!ctx) return;
+    try {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+    } catch(e) {}
 }
 
 function playSmiteStrikeSound() {
@@ -4235,6 +4255,8 @@ function initGamemode(mode, isNewGame = true, mapId = null) {
     animatedMapObjects = [];
     activeWaterPlanes = [];
     activeJumpPads = [];
+    activePortals = [];
+    activeEasterEggs = [];
     buildMap(mode, gameState.map);
     respawn();
     updateMatchHUD();
@@ -6087,55 +6109,109 @@ function createSparklingWaterTexture(accent = '#40e0d0') {
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
     
-    // Clear transparent foundation with sparkling crystal light-blue tint
+    // Clear transparent foundation with natural sparkling crystal light-blue tint
     ctx.clearRect(0, 0, 512, 512);
     const grad = ctx.createLinearGradient(0, 0, 512, 512);
-    grad.addColorStop(0, 'rgba(40, 205, 240, 0.22)');
-    grad.addColorStop(0.5, 'rgba(56, 220, 248, 0.32)');
-    grad.addColorStop(1, 'rgba(32, 185, 225, 0.25)');
+    grad.addColorStop(0, 'rgba(40, 210, 245, 0.22)');
+    grad.addColorStop(0.5, 'rgba(56, 225, 250, 0.32)');
+    grad.addColorStop(1, 'rgba(32, 190, 230, 0.25)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);
     
-    // Crisp shimmering caustics network
-    ctx.lineWidth = 3.0;
-    for (let i = 0; i < 28; i++) {
+    // Organic Voronoi-like cellular liquid caustics (NO grid / perpendicular lines)
+    // Draw smooth curved pools and elliptical caustics rings
+    const seedPoints = [
+        { x: 90, y: 80, r: 55 }, { x: 230, y: 70, r: 65 }, { x: 390, y: 95, r: 50 },
+        { x: 150, y: 190, r: 70 }, { x: 320, y: 210, r: 75 }, { x: 460, y: 180, r: 55 },
+        { x: 80, y: 340, r: 60 }, { x: 240, y: 350, r: 80 }, { x: 410, y: 330, r: 65 },
+        { x: 160, y: 460, r: 70 }, { x: 350, y: 450, r: 60 }, { x: 480, y: 470, r: 50 }
+    ];
+
+    for (let i = 0; i < seedPoints.length; i++) {
+        const p = seedPoints[i];
+        const radGrad = ctx.createRadialGradient(p.x, p.y, p.r * 0.2, p.x, p.y, p.r);
+        radGrad.addColorStop(0, 'rgba(235, 255, 255, 0.45)');
+        radGrad.addColorStop(0.65, 'rgba(110, 240, 255, 0.25)');
+        radGrad.addColorStop(1.0, 'rgba(40, 210, 245, 0.0)');
+        ctx.fillStyle = radGrad;
         ctx.beginPath();
-        ctx.strokeStyle = (i % 2 === 0) ? 'rgba(235, 255, 255, 0.68)' : 'rgba(92, 225, 245, 0.48)';
-        const cy = i * 18.5;
-        ctx.moveTo(0, cy);
-        ctx.bezierCurveTo(128, cy + 24, 384, cy - 24, 512, cy);
-        ctx.stroke();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
     }
-    for (let k = 0; k < 22; k++) {
+
+    // Shimmering organic liquid caustics loops (closed organic curves)
+    ctx.lineWidth = 2.4;
+    for (let c = 0; c < 16; c++) {
+        const ox = (c * 67 + 31) % 512;
+        const oy = (c * 89 + 53) % 512;
+        const radius = 25 + (c % 5) * 8;
         ctx.beginPath();
-        ctx.strokeStyle = 'rgba(210, 250, 255, 0.38)';
-        const cx = k * 23.5;
-        ctx.moveTo(cx, 0);
-        ctx.bezierCurveTo(cx - 20, 150, cx + 20, 360, cx, 512);
+        ctx.strokeStyle = (c % 2 === 0) ? 'rgba(240, 255, 255, 0.42)' : 'rgba(120, 245, 255, 0.32)';
+        for (let a = 0; a <= Math.PI * 2 + 0.1; a += Math.PI / 4) {
+            const rOffset = Math.sin(a * 3 + c) * 6;
+            const px = ox + Math.cos(a) * (radius + rOffset);
+            const py = oy + Math.sin(a) * (radius + rOffset);
+            if (a === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
         ctx.stroke();
     }
     
     // Sharp sparkling specular sun glints & star flares
     ctx.fillStyle = '#ffffff';
-    for (let j = 0; j < 60; j++) {
-        const gx = Math.random() * 512;
-        const gy = Math.random() * 512;
-        const radius = Math.random() * 2.2 + 0.8;
+    for (let j = 0; j < 50; j++) {
+        const gx = ((j * 137.5) % 500) + 6;
+        const gy = ((j * 269.3) % 500) + 6;
+        const radius = (j % 4 === 0) ? 2.5 : 1.2;
         ctx.beginPath();
         ctx.arc(gx, gy, radius, 0, Math.PI * 2);
         ctx.fill();
         
         // 4-point star flare on brightest sparkles
-        if (j % 3 === 0) {
+        if (j % 4 === 0) {
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.90)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
             ctx.lineWidth = 1.0;
-            ctx.moveTo(gx - radius * 3.5, gy);
-            ctx.lineTo(gx + radius * 3.5, gy);
-            ctx.moveTo(gx, gy - radius * 3.5);
-            ctx.lineTo(gx, gy + radius * 3.5);
+            ctx.moveTo(gx - radius * 3.0, gy);
+            ctx.lineTo(gx + radius * 3.0, gy);
+            ctx.moveTo(gx, gy - radius * 3.0);
+            ctx.lineTo(gx, gy + radius * 3.0);
             ctx.stroke();
         }
+    }
+    
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
+function createWaterNormalTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Flat normal map base (RGB 128, 128, 255 = Vec3(0, 0, 1))
+    ctx.fillStyle = '#8080ff';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Perturb with smooth organic ripple normal gradients
+    for (let i = 0; i < 35; i++) {
+        const cx = (i * 73) % 256;
+        const cy = (i * 109) % 256;
+        const rad = 20 + (i % 6) * 6;
+        const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
+        // Vary R & G slightly to create subtle surface tilt
+        const rVal = 128 + Math.round(Math.sin(i * 1.5) * 35);
+        const gVal = 128 + Math.round(Math.cos(i * 1.5) * 35);
+        grad.addColorStop(0, `rgba(${rVal}, ${gVal}, 255, 0.45)`);
+        grad.addColorStop(1, 'rgba(128, 128, 255, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.fill();
     }
     
     const tex = new THREE.CanvasTexture(canvas);
@@ -6222,19 +6298,24 @@ function addMoatWater(w, d, x, y, z, depth = 10, options = {}) {
         origY[i] = pos.getY(i);
     }
     
-    const waterColor = options.color !== undefined ? options.color : 0x38d8f0; // Sparkling crystal light blue
-    const waterGlow = options.emissive !== undefined ? options.emissive : 0x054050;
-    const opacity = options.opacity !== undefined ? options.opacity : 0.58; // Transparent clear view of moat bed
+    const waterColor = options.color !== undefined ? options.color : 0x24b8e0; // Sparkling crystal light blue
+    const waterGlow = options.emissive !== undefined ? options.emissive : 0x033844;
+    const opacity = options.opacity !== undefined ? options.opacity : 0.65; // Transparent view of moat bed with surface reflection
     const causticTex = createSparklingWaterTexture(options.glowColor || '#40e0d0');
-    causticTex.repeat.set(Math.max(1, w / 16), Math.max(1, d / 16));
+    causticTex.repeat.set(Math.max(1, w / 22), Math.max(1, d / 22));
+    
+    const normalTex = createWaterNormalTexture();
+    normalTex.repeat.set(Math.max(1, w / 18), Math.max(1, d / 18));
     
     const mat = new THREE.MeshStandardMaterial({
         color: waterColor,
         emissive: waterGlow,
-        emissiveIntensity: 0.35,
+        emissiveIntensity: 0.28,
         map: causticTex,
-        roughness: 0.04,
-        metalness: 0.12,
+        normalMap: normalTex,
+        normalScale: new THREE.Vector2(0.35, 0.35),
+        roughness: 0.08,
+        metalness: 0.52,
         transparent: true,
         opacity: opacity,
         depthWrite: false
@@ -6255,8 +6336,10 @@ function addMoatWater(w, d, x, y, z, depth = 10, options = {}) {
         bedY: y - depth,
         surfaceY: y,
         update(time) {
-            causticTex.offset.x = (time * 0.030) % 1;
-            causticTex.offset.y = (time * 0.020) % 1;
+            causticTex.offset.x = (time * 0.022) % 1;
+            causticTex.offset.y = (time * 0.016) % 1;
+            normalTex.offset.x = (time * 0.018) % 1;
+            normalTex.offset.y = (time * 0.026) % 1;
             const p = geo.attributes.position;
             const cnt = p.count;
             const waveSpeed = 2.0;
@@ -6655,6 +6738,202 @@ function addVines(x, y, z, w, h, d) {
 }
 
 // ============================================================================
+// INTERACTIVE SECRET PORTAL, ISOLATED SNIPER NEST & EASTER EGG SYSTEMS
+// ============================================================================
+
+function addSecretPortal(x, y, z, targetX, targetY, targetZ, options = {}) {
+    const isExit = options.isExit === true;
+    const portalCol = options.color || (isExit ? 0x00ffaa : 0x00f3ff);
+    
+    // Glowing ground ring
+    const ringGeo = new THREE.RingGeometry(0.7, 1.9, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: portalCol,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.position.set(x, y + 0.08, z);
+    ringMesh.userData.noGroundRay = true;
+    scene.add(ringMesh);
+    mapDecorations.push(ringMesh);
+    
+    // Vertical ethereal particle cylinder / light beam
+    const beamGeo = new THREE.CylinderGeometry(1.6, 1.6, 4.0, 16, 1, true);
+    const beamMat = new THREE.MeshBasicMaterial({
+        color: portalCol,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    beamMesh.position.set(x, y + 2.0, z);
+    beamMesh.userData.noGroundRay = true;
+    scene.add(beamMesh);
+    mapDecorations.push(beamMesh);
+    
+    const portalObj = {
+        x, y, z,
+        targetX, targetY, targetZ,
+        options,
+        mesh: ringMesh,
+        beamMesh,
+        cooldown: 0,
+        update(time) {
+            ringMesh.rotation.z = time * 2.0;
+            beamMat.opacity = 0.25 + Math.sin(time * 5.0) * 0.15;
+            if (this.cooldown > 0) this.cooldown -= 1/60;
+        }
+    };
+    animatedMapObjects.push(portalObj);
+    activePortals.push(portalObj);
+    return portalObj;
+}
+
+function addIsolatedSniperSanctuary(towerX, towerZ, towerHeight, options = {}) {
+    const isCyber = options.style === 'cyber' || options.isCyber === true;
+    const nestW = 22.0;
+    const nestD = 22.0;
+    const nestH = 7.5;
+    
+    // Suspended high in the sky, isolated from the tower so nobody can reach it from outside
+    const nestX = towerX + 48;
+    const nestY = towerHeight + 28;
+    const nestZ = towerZ - 48;
+    
+    const wallCol = isCyber ? 0x111624 : 0x22262d;
+    const floorCol = isCyber ? 0x161c2e : 0x2d323c;
+    const trimHex = isCyber ? '#00f3ff' : '#00ffaa';
+    
+    // 1. Isolated Floor Slab
+    addBox(nestW, 1.6, nestD, nestX, nestY - 0.8, nestZ, floorCol, trimHex);
+    
+    // Transparent glass floor section in center (8x8) to observe the battlefield
+    const glassGeo = new THREE.PlaneGeometry(8, 8);
+    glassGeo.rotateX(-Math.PI / 2);
+    const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x00f3ff,
+        transparent: true,
+        opacity: 0.45,
+        roughness: 0.05,
+        metalness: 0.9,
+        side: THREE.DoubleSide
+    });
+    const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+    glassMesh.position.set(nestX, nestY + 0.05, nestZ);
+    glassMesh.userData.noGroundRay = true;
+    scene.add(glassMesh);
+    mapDecorations.push(glassMesh);
+    
+    // 2. Fortified Perimeter Walls with 360-Degree Sniper Murder Slits
+    const slitH = 1.8;
+    const baseWallH = 2.8;
+    const topWallH = nestH - (baseWallH + slitH);
+    
+    // Lower chest cover
+    addBox(nestW, baseWallH, 1.4, nestX, nestY + baseWallH / 2, nestZ - nestD / 2, wallCol, trimHex);
+    addBox(nestW, baseWallH, 1.4, nestX, nestY + baseWallH / 2, nestZ + nestD / 2, wallCol, trimHex);
+    addBox(1.4, baseWallH, nestD, nestX - nestW / 2, nestY + baseWallH / 2, nestZ, wallCol, trimHex);
+    addBox(1.4, baseWallH, nestD, nestX + nestW / 2, nestY + baseWallH / 2, nestZ, wallCol, trimHex);
+    
+    // Upper wall above shoot slits
+    addBox(nestW, topWallH, 1.4, nestX, nestY + baseWallH + slitH + topWallH / 2, nestZ - nestD / 2, wallCol, trimHex);
+    addBox(nestW, topWallH, 1.4, nestX, nestY + baseWallH + slitH + topWallH / 2, nestZ + nestD / 2, wallCol, trimHex);
+    addBox(1.4, topWallH, nestD, nestX - nestW / 2, nestY + baseWallH + slitH + topWallH / 2, nestZ, wallCol, trimHex);
+    addBox(1.4, topWallH, nestD, nestX + nestW / 2, nestY + baseWallH + slitH + topWallH / 2, nestZ, wallCol, trimHex);
+    
+    // Slit pillar dividers
+    [-nestW * 0.28, nestW * 0.28].forEach(ox => {
+        addBox(1.6, slitH, 1.4, nestX + ox, nestY + baseWallH + slitH / 2, nestZ - nestD / 2, wallCol, trimHex);
+        addBox(1.6, slitH, 1.4, nestX + ox, nestY + baseWallH + slitH / 2, nestZ + nestD / 2, wallCol, trimHex);
+    });
+    [-nestD * 0.28, nestD * 0.28].forEach(oz => {
+        addBox(1.4, slitH, 1.6, nestX - nestW / 2, nestY + baseWallH + slitH / 2, nestZ + oz, wallCol, trimHex);
+        addBox(1.4, slitH, 1.6, nestX + nestW / 2, nestY + baseWallH + slitH / 2, nestZ + oz, wallCol, trimHex);
+    });
+    
+    // 3. Blast-Proof Heavy Canopy Roof
+    addBox(nestW + 2, 1.4, nestD + 2, nestX, nestY + nestH + 0.7, nestZ, floorCol, trimHex);
+    
+    // 4. Return Portal inside Sanctuary (in corner)
+    addSecretPortal(nestX - 7.0, nestY, nestZ - 7.0, towerX, 1.5, towerZ + 18, {
+        isExit: true,
+        message: "Redeployed from Sniper Sanctuary to Arena Floor!"
+    });
+    
+    // 5. Exclusive Arsenal Cache inside Sanctuary
+    addEasterEgg(nestX + 6.0, nestY + 1.2, nestZ + 6.0, "Ghost Sniper Arsenal", 150, 'relic');
+    
+    return { nestX, nestY, nestZ };
+}
+
+function addEasterEgg(x, y, z, name, rewardCoins = 150, type = 'relic', options = {}) {
+    let mesh;
+    if (type === 'duck') {
+        const duckGroup = new THREE.Group();
+        const duckMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.85, roughness: 0.15, emissive: 0xffaa00, emissiveIntensity: 0.4 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.5), duckMat);
+        duckGroup.add(body);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.75, 0.75), duckMat);
+        head.position.set(0, 0.75, 0.45);
+        duckGroup.add(head);
+        const billMat = new THREE.MeshStandardMaterial({ color: 0xff5500, emissive: 0xff3300, emissiveIntensity: 0.5 });
+        const bill = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.2, 0.55), billMat);
+        bill.position.set(0, 0.55, 0.95);
+        duckGroup.add(bill);
+        duckGroup.position.set(x, y, z);
+        duckGroup.userData.noGroundRay = true;
+        scene.add(duckGroup);
+        mapDecorations.push(duckGroup);
+        mesh = duckGroup;
+    } else if (type === 'matrix') {
+        const boxGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x00ff44, wireframe: true, emissive: 0x00ff44, emissiveIntensity: 1.2 });
+        mesh = new THREE.Mesh(boxGeo, boxMat);
+        mesh.position.set(x, y, z);
+        mesh.userData.noGroundRay = true;
+        scene.add(mesh);
+        mapDecorations.push(mesh);
+    } else if (type === 'crystals') {
+        const cGroup = new THREE.Group();
+        for (let i = 0; i < 5; i++) {
+            const cGeo = new THREE.ConeGeometry(0.35 + i * 0.08, 1.8 + i * 0.3, 5);
+            const cMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, emissive: 0x00a0ff, emissiveIntensity: 1.5, transparent: true, opacity: 0.85 });
+            const cMesh = new THREE.Mesh(cGeo, cMat);
+            cMesh.position.set(Math.sin(i * 1.3) * 0.7, 0.9, Math.cos(i * 1.3) * 0.7);
+            cMesh.rotation.set((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3);
+            cGroup.add(cMesh);
+        }
+        cGroup.position.set(x, y, z);
+        cGroup.userData.noGroundRay = true;
+        scene.add(cGroup);
+        mapDecorations.push(cGroup);
+        mesh = cGroup;
+    } else {
+        const relicGeo = new THREE.OctahedronGeometry(1.2, 0);
+        const relicMat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xff8800, emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.1 });
+        mesh = new THREE.Mesh(relicGeo, relicMat);
+        mesh.position.set(x, y, z);
+        mesh.userData.noGroundRay = true;
+        scene.add(mesh);
+        mapDecorations.push(mesh);
+    }
+    
+    const animObj = {
+        mesh,
+        update(time) {
+            mesh.rotation.y = time * 2.0;
+            mesh.position.y = y + Math.sin(time * 3.0 + x) * 0.35;
+        }
+    };
+    animatedMapObjects.push(animObj);
+    activeEasterEggs.push({ x, y, z, name, rewardCoins, mesh, collected: false });
+}
+
+// ============================================================================
 // MODULAR HOLLOW TACTICAL TOWER SYSTEM WITH STAIRS, SHOOT SLITS & SECRET SNIPER PERCH
 // ============================================================================
 
@@ -6717,56 +6996,62 @@ function addHollowTower(x, z, width, height, depth, options = {}) {
         addBox(wallThick, slitH, 1.8, x + halfW - wallThick / 2, 3.4 + slitH / 2, z + s, wallCol, trimHex);
     }
     
-    // Rear Wall on Ground Floor with Concealed Secret Sniper Entry
-    const secretDoorW = 4.0;
+    // Rear Wall on Ground Floor with Truly Concealed Secret Sniper Entry
+    const secretDoorW = 3.6;
     const rearSideW = (width - secretDoorW) / 2;
     addBox(rearSideW, floor2Y, wallThick, x - halfW + rearSideW / 2, floor2Y / 2, z - halfD + wallThick / 2, wallCol, trimHex);
     addBox(rearSideW, floor2Y, wallThick, x + halfW - rearSideW / 2, floor2Y / 2, z - halfD + wallThick / 2, wallCol, trimHex);
-    addBox(secretDoorW, floor2Y - 7.0, wallThick, x, 7.0 + (floor2Y - 7.0) / 2, z - halfD + wallThick / 2, wallCol, trimHex);
+    addBox(secretDoorW, floor2Y - 6.5, wallThick, x, 6.5 + (floor2Y - 6.5) / 2, z - halfD + wallThick / 2, wallCol, trimHex);
     
-    // Secret Sniper Alcove & Conduit behind rear wall
-    const secretAlcoveZ = z - halfD - 2.8;
-    addBox(wallThick, 8.0, 5.0, x - 2.4, 4.0, secretAlcoveZ, wallCol, trimHex);
-    addBox(wallThick, 8.0, 5.0, x + 2.4, 4.0, secretAlcoveZ, wallCol, trimHex);
-    addBox(5.0, 1.2, 5.0, x, 8.0, secretAlcoveZ, wallCol, trimHex);
+    // Concealed Secret Alcove behind rear wall
+    const secretAlcoveZ = z - halfD - 3.2;
+    addBox(wallThick, 7.5, 5.5, x - 2.5, 3.75, secretAlcoveZ, wallCol, trimHex);
+    addBox(wallThick, 7.5, 5.5, x + 2.5, 3.75, secretAlcoveZ, wallCol, trimHex);
+    addBox(5.5, 1.2, 5.5, x, 7.5, secretAlcoveZ, wallCol, trimHex);
     
     if (!isCyber) {
-        // Camouflage hanging ivy vines concealing the secret sniper entrance
-        addVines(x, 4.5, secretAlcoveZ - 2.6, 5.2, 7.0, 0.8);
-        addVines(x - 2.8, 3.5, secretAlcoveZ, 0.8, 6.0, 4.5);
+        // Camouflage hanging ivy vines completely concealing the secret entrance
+        addVines(x, 4.0, secretAlcoveZ - 2.8, 5.6, 7.5, 1.0);
+        addVines(x - 2.8, 3.5, secretAlcoveZ, 1.0, 6.5, 5.0);
+        addVines(x + 2.8, 3.5, secretAlcoveZ, 1.0, 6.5, 5.0);
     }
     
-    // Secret Launch Conduit directly to the high Eagle's Roost
-    const roostY = roofY + 14;
-    const launchPower = Math.sqrt(2 * 60 * (roostY - 0.4 + 3.0));
-    addJumpPad(x, secretAlcoveZ, 0.35, launchPower, { isSecret: true, name: "Sniper's Secret Conduit" });
+    // Generate the Isolated Ghost Sniper Sanctuary high in the sky!
+    const sanctuary = addIsolatedSniperSanctuary(x, z, height, options);
+    
+    // Secret Infiltration Portal inside the concealed alcove
+    addSecretPortal(x, 0.3, secretAlcoveZ, sanctuary.nestX, sanctuary.nestY + 1.5, sanctuary.nestZ, {
+        isSecret: true,
+        message: "🏆 SECRET DISCOVERED: Infiltrated the Isolated Sniper Sanctuary! (+150 Coins)",
+        rewardWeapon: 'sniper'
+    });
+    
+    // Central Ground Floor Express Core Lift (instantly lofts player straight to rooftop battlement!)
+    addJumpPad(x, z, 0.35, Math.sqrt(2 * 60 * (roofY + 3.0)), { name: "Tower Core Express Lift" });
     
     // ------------------------------------------------------------------------
     // 2. FLOOR 2 (y = floor2Y): Mid Observation Deck & Murder Slits
     // ------------------------------------------------------------------------
-    const stairHoleW = width * 0.35;
-    // Walkable floor slab with stairwell opening
+    const stairHoleW = width * 0.36;
+    // Walkable floor slab with stairwell opening on East side
     addBox(width - stairHoleW - 1, 1.4, depth - 2, x - stairHoleW / 2, floor2Y - 0.7, z, floorCol, trimHex);
     
     // Walkable Interior Stairs 1 (Ground -> Floor 2) along East wall
-    addRamp(width * 0.28, 1.2, depth * 0.75, x + halfW - width * 0.18, floor2Y / 2, z - depth * 0.05, Math.atan2(floor2Y, depth * 0.75), 0, floorCol, trimHex);
+    addRamp(width * 0.30, 1.2, depth * 0.80, x + halfW - width * 0.18, floor2Y / 2, z - depth * 0.05, Math.atan2(floor2Y, depth * 0.80), 0, floorCol, trimHex);
     
     // Floor 2 Perimeter Walls with Shoot Slits on ALL 4 Sides
     const f2H = floor3Y - floor2Y;
-    // Base parapet walls (height 3.2: chest level ballistic cover)
     addBox(width, 3.2, wallThick, x, floor2Y + 1.6, z + halfD - wallThick / 2, wallCol, trimHex);
     addBox(width, 3.2, wallThick, x, floor2Y + 1.6, z - halfD + wallThick / 2, wallCol, trimHex);
     addBox(wallThick, 3.2, depth, x - halfW + wallThick / 2, floor2Y + 1.6, z, wallCol, trimHex);
     addBox(wallThick, 3.2, depth, x + halfW - wallThick / 2, floor2Y + 1.6, z, wallCol, trimHex);
     
-    // Upper wall above shoot slits
     const topH2 = f2H - (3.2 + slitH);
     addBox(width, topH2, wallThick, x, floor2Y + (3.2 + slitH) + topH2 / 2, z + halfD - wallThick / 2, wallCol, trimHex);
     addBox(width, topH2, wallThick, x, floor2Y + (3.2 + slitH) + topH2 / 2, z - halfD + wallThick / 2, wallCol, trimHex);
     addBox(wallThick, topH2, depth, x - halfW + wallThick / 2, floor2Y + (3.2 + slitH) + topH2 / 2, z, wallCol, trimHex);
     addBox(wallThick, topH2, depth, x + halfW - wallThick / 2, floor2Y + (3.2 + slitH) + topH2 / 2, z, wallCol, trimHex);
     
-    // Dividers creating tactical murder slits
     [-halfW * 0.5, halfW * 0.5].forEach(ox => {
         addBox(1.8, slitH, wallThick, x + ox, floor2Y + 3.2 + slitH / 2, z + halfD - wallThick / 2, wallCol, trimHex);
         addBox(1.8, slitH, wallThick, x + ox, floor2Y + 3.2 + slitH / 2, z - halfD + wallThick / 2, wallCol, trimHex);
@@ -6779,12 +7064,12 @@ function addHollowTower(x, z, width, height, depth, options = {}) {
     // ------------------------------------------------------------------------
     // 3. FLOOR 3 (y = floor3Y): Upper Fortress Deck & Murder Slits
     // ------------------------------------------------------------------------
+    // Walkable floor slab with stairwell opening on West side
     addBox(width - stairHoleW - 1, 1.4, depth - 2, x + stairHoleW / 2, floor3Y - 0.7, z, floorCol, trimHex);
     
     // Walkable Interior Stairs 2 (Floor 2 -> Floor 3) along West wall
-    addRamp(width * 0.28, 1.2, depth * 0.75, x - halfW + width * 0.18, floor2Y + f2H / 2, z + depth * 0.05, -Math.atan2(f2H, depth * 0.75), 0, floorCol, trimHex);
+    addRamp(width * 0.30, 1.2, depth * 0.80, x - halfW + width * 0.18, floor2Y + f2H / 2, z + depth * 0.05, -Math.atan2(f2H, depth * 0.80), 0, floorCol, trimHex);
     
-    // Floor 3 Perimeter Walls with Shoot Slits
     const f3H = roofY - floor3Y;
     addBox(width, 3.2, wallThick, x, floor3Y + 1.6, z + halfD - wallThick / 2, wallCol, trimHex);
     addBox(width, 3.2, wallThick, x, floor3Y + 1.6, z - halfD + wallThick / 2, wallCol, trimHex);
@@ -6798,14 +7083,28 @@ function addHollowTower(x, z, width, height, depth, options = {}) {
     addBox(wallThick, topH3, depth, x + halfW - wallThick / 2, floor3Y + (3.2 + slitH) + topH3 / 2, z, wallCol, trimHex);
     
     // Walkable Interior Stairs 3 (Floor 3 -> Rooftop) along East wall
-    addRamp(width * 0.28, 1.2, depth * 0.75, x + halfW - width * 0.18, floor3Y + f3H / 2, z - depth * 0.05, Math.atan2(f3H, depth * 0.75), 0, floorCol, trimHex);
+    addRamp(width * 0.30, 1.2, depth * 0.80, x + halfW - width * 0.18, floor3Y + f3H / 2, z - depth * 0.05, Math.atan2(f3H, depth * 0.80), 0, floorCol, trimHex);
     
     // ------------------------------------------------------------------------
-    // 4. ROOFTOP BATTLEMENT (y = roofY)
+    // 4. ROOFTOP BATTLEMENT (y = roofY) WITH OPEN STAIRWELL HATCHWAY
     // ------------------------------------------------------------------------
-    const balcW = width * 1.22;
-    const balcD = depth * 1.22;
-    addBox(balcW, 1.8, balcD, x, roofY - 0.9, z, floorCol, trimHex);
+    const balcW = width * 1.25;
+    const balcD = depth * 1.25;
+    const stairHatchW = width * 0.38;
+    const stairHatchD = depth * 0.55;
+    
+    // West Main Rooftop Deck Slab
+    const westBalcW = balcW - stairHatchW;
+    addBox(westBalcW, 1.8, balcD, x - stairHatchW / 2, roofY - 0.9, z, floorCol, trimHex);
+    
+    // East North & South Deck Slabs outside the Stairwell Opening
+    const hatchMargD = (balcD - stairHatchD) / 2;
+    addBox(stairHatchW, 1.8, hatchMargD, x + balcW / 2 - stairHatchW / 2, roofY - 0.9, z + balcD / 2 - hatchMargD / 2, floorCol, trimHex);
+    addBox(stairHatchW, 1.8, hatchMargD, x + balcW / 2 - stairHatchW / 2, roofY - 0.9, z - balcD / 2 + hatchMargD / 2, floorCol, trimHex);
+    
+    // Interior stairwell protective railing so players don't fall back down accidentally
+    addBox(stairHatchW, 1.4, 0.8, x + balcW / 2 - stairHatchW / 2, roofY + 0.7, z + stairHatchD / 2, wallCol, trimHex);
+    addBox(0.8, 1.4, stairHatchD, x + balcW / 2 - stairHatchW, roofY + 0.7, z, wallCol, trimHex);
     
     // Parapet Walls around the Roof with Crenellations / Sniper Embrasures
     const railH = 3.6;
@@ -6814,31 +7113,30 @@ function addHollowTower(x, z, width, height, depth, options = {}) {
     addBox(1.2, railH, balcD, x - balcW / 2, roofY + railH / 2, z, wallCol, trimHex);
     addBox(1.2, railH, balcD, x + balcW / 2, roofY + railH / 2, z, wallCol, trimHex);
     
+    // Rooftop Elevator Lift Pad to the Eagle's Nest
+    addJumpPad(x, z - depth * 0.22, roofY + 0.35, Math.sqrt(2 * 60 * 16), { name: "Eagle's Nest Ascender" });
+    
     // ------------------------------------------------------------------------
-    // 5. SECRET HIGH SNIPER ROOST (THE EAGLE'S NEST at roostY = roofY + 14)
+    // 5. HIGH SNIPER ROOST (THE EAGLE'S NEST at roostY = roofY + 14)
     // ------------------------------------------------------------------------
+    const roostY = roofY + 14;
     const roostW = width * 0.52;
     const roostD = depth * 0.52;
-    // Support columns holding the roost aloft
     addBox(1.5, 14, 1.5, x - roostW / 2, roofY + 7, z - roostD / 2, wallCol, trimHex);
     addBox(1.5, 14, 1.5, x + roostW / 2, roofY + 7, z - roostD / 2, wallCol, trimHex);
     addBox(1.5, 14, 1.5, x - roostW / 2, roofY + 7, z + roostD / 2, wallCol, trimHex);
     addBox(1.5, 14, 1.5, x + roostW / 2, roofY + 7, z + roostD / 2, wallCol, trimHex);
     
-    // Roost floor slab
     addBox(roostW, 1.4, roostD, x, roostY - 0.7, z, floorCol, trimHex);
     
-    // Roost 360-degree tactical murder slits
     const roostRailH = 3.2;
     addBox(roostW, roostRailH, 0.9, x, roostY + roostRailH / 2, z - roostD / 2, wallCol, trimHex);
     addBox(roostW, roostRailH, 0.9, x, roostY + roostRailH / 2, z + roostD / 2, wallCol, trimHex);
     addBox(0.9, roostRailH, roostD, x - roostW / 2, roostY + roostRailH / 2, z, wallCol, trimHex);
     addBox(0.9, roostRailH, roostD, x + roostW / 2, roostY + roostRailH / 2, z, wallCol, trimHex);
     
-    // Roost protective roof
     addBox(roostW * 1.15, 1.0, roostD * 1.15, x, roostY + 5.5, z, floorCol, trimHex);
     
-    // Spire & Blinking Beacon atop Roost
     const spireH = 12.0;
     const spireGeo = new THREE.CylinderGeometry(0.3, 0.7, spireH, 8);
     const spireMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.9, roughness: 0.2 });
@@ -6866,7 +7164,6 @@ function addHollowTower(x, z, width, height, depth, options = {}) {
         }
     });
     
-    // Exterior corner vines for landscape towers
     if (!isCyber) {
         addVines(x - width * 0.48, floor2Y * 0.4, z - depth * 0.48, 3.5, floor2Y * 0.8, 3.5);
         addVines(x + width * 0.48, floor2Y * 0.3, z + depth * 0.48, 3.5, floor2Y * 0.6, 3.5);
@@ -6913,6 +7210,18 @@ function buildMapOriginal_FFA() {
     addJumpPad(s, -s + 18, 0.3, 38);
     addJumpPad(-s, s - 18, 0.3, 38);
     addJumpPad(s, s - 18, 0.3, 38);
+
+    // Easter Eggs & Secret Spots:
+    // 1. Subterranean Coolant Vault (swim down into the glowing water!)
+    addEasterEgg(0, -5.5, 0, "Coolant Vault Cyber Crystals", 250, 'crystals');
+    // 2. High Spire Pinnacle Golden Duck (rooftop needle)
+    addEasterEgg(0, 65 + 14 + 19, 0, "Spire Pinnacle Golden Duck", 500, 'duck');
+    // 3. Matrix Glitch Node on corner platform
+    addEasterEgg(-85, 2.5, 85, "Overclocked Matrix Glitch Node", 250, 'matrix');
+    // 4. Forgotten Cyber Prototype Relic hidden behind Red defense tower
+    addEasterEgg(s + 12, 1.5, -s - 12, "Forgotten Cyber Prototype Relic", 300, 'relic');
+    // 5. Secret Skybeam Conduit Portal from the depths of the moat up to the highest spiral platform
+    addSecretPortal(0, -6.5, -95, 0, 44, -55, { isSecret: true, message: "⚡ Coolant Flow Skybeam Surge!" });
 }
 
 function buildMapOriginal_TDM() {
@@ -6936,6 +7245,21 @@ function buildMapOriginal_TDM() {
 
     addBox(80, 15, 80, 0, 7.5, 200, 0x222222, '#ffff00');
     addBox(80, 15, 80, 0, 7.5, -200, 0x222222, '#ffff00');
+
+    // Easter Eggs & Secret Spots:
+    // 1. Under-catwalk Sub-Matrix Core
+    addEasterEgg(0, 1.8, 0, "Catwalk Sub-Matrix Core", 350, 'matrix');
+    // 2. Red Titan Apex Relic
+    addEasterEgg(450, 80 + 14 + 19, 0, "Red Titan Apex Relic", 400, 'relic');
+    // 3. Blue Titan Apex Relic
+    addEasterEgg(-450, 80 + 14 + 19, 0, "Blue Titan Apex Relic", 400, 'relic');
+    // 4. North Catwalk Skyway Vantage Duck
+    addEasterEgg(0, 17, 200, "Skyway Vantage Golden Duck", 350, 'duck');
+    // 5. South Catwalk Void Walker Crystals
+    addEasterEgg(0, 17, -200, "Void Walker Cyber Crystals", 250, 'crystals');
+    // 6. Secret Flank Teleport Conduit
+    addSecretPortal(0, 15.5, 230, 0, 15.5, -230, { isSecret: true, message: "⚡ Flank Warp: North to South Catwalk!" });
+    addSecretPortal(0, 15.5, -230, 0, 15.5, 230, { isSecret: true, message: "⚡ Flank Warp: South to North Catwalk!" });
 }
 
 function buildMapOriginal_CTF() {
@@ -6953,6 +7277,10 @@ function buildMapOriginal_CTF() {
     scene.add(flagMeshBlue);
     mapMeshes.push(flagMeshRed); 
     mapMeshes.push(flagMeshBlue);
+
+    // CTF Secret Infiltration Tunnels
+    addSecretPortal(450, 1.5, 55, 320, 2.0, 140, { isSecret: true, message: "🚩 Red Forward Infiltration Conduit!" });
+    addSecretPortal(-450, 1.5, 55, -320, 2.0, 140, { isSecret: true, message: "🚩 Blue Forward Infiltration Conduit!" });
 }
 
 function buildMapOriginal_KOTH() {
@@ -6970,6 +7298,18 @@ function buildMapOriginal_KOTH() {
     addHollowTower(-s, s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
     addHollowTower(s, -s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
     addHollowTower(-s, -s, 20, 38, 20, { style: 'cyber', team: 'neutral' });
+
+    // Easter Eggs & Secret Spots:
+    // 1. King of the Hill Pinnacle Golden Duck
+    addEasterEgg(0, 48 + 14 + 19, 0, "King of the Hill Golden Duck", 500, 'duck');
+    // 2. Subterranean Under-Dais Matrix Core
+    addEasterEgg(0, 1.5, 45, "Under-Dais Matrix Core", 250, 'matrix');
+    // 3. Subterranean Under-Dais Luminous Crystals
+    addEasterEgg(0, 1.5, -45, "Under-Dais Luminous Crystals", 250, 'crystals');
+    // 4. Corner Bastion Relic
+    addEasterEgg(s, 38 + 14 + 19, s, "Corner Bastion Apex Relic", 300, 'relic');
+    // 5. Secret Infiltration Slipway: Instant Hill access from corner tower
+    addSecretPortal(-s + 18, 1.0, -s + 18, 0, 22.0, 0, { isSecret: true, message: "👑 Secret Flank Warp: Instant Hill Access!" });
 }
 
 function buildMapOriginal_GunGame() {
@@ -6986,6 +7326,17 @@ function buildMapOriginal_GunGame() {
     }
     addBox(180, 2, 10, 0, 26, 0, 0x111111, '#00f3ff');
     addBox(10, 2, 180, 0, 26, 0, 0x111111, '#00f3ff');
+
+    // Easter Eggs & Secret Spots:
+    // 1. Central Spire Master Golden Duck
+    addEasterEgg(0, 52 + 14 + 19, 0, "Gunsmith Master Golden Duck", 500, 'duck');
+    // 2. Floating Crossbeam Glitch Relay
+    addEasterEgg(0, 28, 0, "Glitch Sector Relay Matrix", 300, 'matrix');
+    // 3. High Arena Corner Crystals & Relic
+    addEasterEgg(65, 27, 65, "Skyline Crystal Cache", 250, 'crystals');
+    addEasterEgg(-65, 27, -65, "Forgotten Arsenal Relic", 350, 'relic');
+    // 4. Secret Gunsmith Skyway Leap Portal
+    addSecretPortal(75, 1.0, -75, -75, 28.0, 75, { isSecret: true, message: "⚡ Gunsmith Skyway Leap!" });
 }
 
 function buildMapOriginal_Zombies() {
@@ -7001,6 +7352,18 @@ function buildMapOriginal_Zombies() {
         if (Math.abs(x) < 35 && Math.abs(z) < 35) continue;
         addBox(10, 10, 10, x, 5, z, 0x1a1a1a, '#115511');
     }
+
+    // Easter Eggs & Secret Spots:
+    // 1. Survivor Fortress Apex Golden Duck
+    addEasterEgg(0, 54 + 14 + 19, 0, "Survivor Legendary Duck", 500, 'duck');
+    // 2. Subterranean Bunker Antidote Crypt
+    addEasterEgg(0, 2.0, 45, "Hidden Antidote Crypt", 350, 'crystals');
+    // 3. Lost Quarantine Matrix under south ramp
+    addEasterEgg(0, 2.0, -45, "Lost Quarantine Matrix", 300, 'matrix');
+    // 4. Far wilderness outpost relic
+    addEasterEgg(95, 2.0, 95, "Outpost Alpha Relic", 350, 'relic');
+    // 5. Emergency Rooftop Evacuation Conduit
+    addSecretPortal(0, 1.0, 18, 0, 54 + 2.0, 0, { isSecret: true, message: "🚨 Emergency Evacuation to Rooftop Battlement!" });
 }
 
 // ============================================================================
@@ -7060,6 +7423,18 @@ function buildMapLandscape_FFA(size = 400) {
     addJumpPad(0, -32, 0.3, 40);
     addJumpPad(90, 0, 0.3, 38);
     addJumpPad(-90, 0, 0.3, 38);
+
+    // Easter Eggs & Secret Spots:
+    // 1. Sunken River Grotto (dive deep into the river with C/Shift to collect!)
+    addEasterEgg(0, -6.5, 0, "Sunken River Grotto Crystals", 350, 'crystals');
+    // 2. Riverbank Weeping Willow Cyber Duck
+    addEasterEgg(55, 1.8, -55, "Riverbank Cyber Duck", 300, 'duck');
+    // 3. Citadel Apex Relic (highest point of the monolithic grey tower)
+    addEasterEgg(0, 72 + 14 + 19, 0, "Citadel Apex Relic", 500, 'relic');
+    // 4. Granite Hollow Matrix Node hidden inside rock cluster
+    addEasterEgg(102, 2.0, 32, "Granite Hollow Matrix Node", 250, 'matrix');
+    // 5. Secret Submerged River Conduit Portal straight to Citadel Rooftop
+    addSecretPortal(0, -7.5, 60, 0, 72 + 2.0, 0, { isSecret: true, message: "🌊 Submerged River Conduit: Emerged on Citadel Roof!" });
 }
 
 // TDM Landscape: Verdant Divide (Red & Blue Monoliths across River Gorge)
@@ -7115,6 +7490,21 @@ function buildMapLandscape_TDM(size = 1000) {
 
     addJumpPad(200, 0, 0.4, 40);
     addJumpPad(-200, 0, 0.4, 40);
+
+    // Easter Eggs & Secret Spots:
+    // 1. Gorge Riverbed Luminous Crystals (deep swimming dive!)
+    addEasterEgg(0, -9.0, 0, "Gorge Riverbed Luminous Crystals", 400, 'crystals');
+    // 2. High Glass Skybridge Aviator Duck
+    addEasterEgg(0, 41, 0, "Skybridge Aviator Golden Duck", 450, 'duck');
+    // 3. Crimson Monolith Apex Relic
+    addEasterEgg(450, 92 + 14 + 19, 0, "Crimson Monolith Relic", 500, 'relic');
+    // 4. Cobalt Monolith Apex Relic
+    addEasterEgg(-450, 92 + 14 + 19, 0, "Cobalt Monolith Relic", 500, 'relic');
+    // 5. Gorge Boulder Matrix Core
+    addEasterEgg(145, 2.0, 65, "Gorge Boulder Matrix Core", 300, 'matrix');
+    // 6. Secret River Vortex Portals straight onto the high glass skybridge!
+    addSecretPortal(0, -9.0, 220, 0, 40, 20, { isSecret: true, message: "🌀 River Vortex Lift to High Skybridge!" });
+    addSecretPortal(0, -9.0, -220, 0, 40, -20, { isSecret: true, message: "🌀 River Vortex Lift to High Skybridge!" });
 }
 
 // CTF Landscape: Verdant Fortress (Opposing Monolith Bases & Flag Daises)
@@ -7139,6 +7529,10 @@ function buildMapLandscape_CTF(size = 1000) {
     scene.add(flagMeshBlue);
     mapMeshes.push(flagMeshRed);
     mapMeshes.push(flagMeshBlue);
+
+    // CTF Secret Infiltration Forest Flank Paths
+    addSecretPortal(300, 1.5, 45, 130, 4.0, 240, { isSecret: true, message: "🚩 Red Forest Flank Path!" });
+    addSecretPortal(-300, 1.5, 45, -130, 4.0, 240, { isSecret: true, message: "🚩 Blue Forest Flank Path!" });
 }
 
 // KOTH Landscape: Verdant Sanctuary (Central Dais inside Reflecting Lake)
@@ -7177,6 +7571,18 @@ function buildMapLandscape_KOTH(size = 400) {
     addRock(-120, 0, 80, 5, 4, 5, -0.4);
     addRock(120, 0, -80, 5, 4, 5, 0.8);
     addRock(-120, 0, -80, 5, 4, 5, -0.8);
+
+    // Easter Eggs & Secret Spots:
+    // 1. Lake Bed Ancient Crystals (swimming dive into lake)
+    addEasterEgg(45, -7.0, 45, "Lake Bed Ancient Crystals", 350, 'crystals');
+    // 2. Sunken Sanctuary Relic
+    addEasterEgg(-45, -7.0, -45, "Sunken Sanctuary Relic", 350, 'relic');
+    // 3. Sanctuary Hill Trophy Duck
+    addEasterEgg(0, 24, 0, "Sanctuary Hill Trophy Duck", 500, 'duck');
+    // 4. Willows Glade Matrix Node
+    addEasterEgg(130, 2.0, 0, "Willows Glade Matrix Node", 250, 'matrix');
+    // 5. Secret Submerged Underwater Causeway Tunnel
+    addSecretPortal(0, -7.5, 90, 0, 22, 10, { isSecret: true, message: "🌊 Submerged Causeway Lift onto the Hill!" });
 }
 
 // Gun Game Landscape: Verdant Terraces (Stepped Botanical Gardens & Towers)
@@ -7215,6 +7621,18 @@ function buildMapLandscape_GunGame(size = 350) {
     addJumpPad(-45, 0, 0.4, 42);
     addJumpPad(0, 70, 0.4, 38);
     addJumpPad(0, -70, 0.4, 38);
+
+    // Easter Eggs & Secret Spots:
+    // 1. Clocktower Master Duck
+    addEasterEgg(0, 68 + 14 + 19, 0, "Clocktower Master Duck", 500, 'duck');
+    // 2. Stream Bed Shimmer Crystals (swim down in center stream)
+    addEasterEgg(0, -5.5, 50, "Stream Bed Shimmer Crystals", 300, 'crystals');
+    // 3. Terrace Garden Matrix Node
+    addEasterEgg(105, 22, 110, "Terrace Garden Matrix Node", 250, 'matrix');
+    // 4. Forgotten Sculptor Relic
+    addEasterEgg(-105, 22, -110, "Forgotten Sculptor Relic", 350, 'relic');
+    // 5. Hedge Maze Translocation Warp
+    addSecretPortal(85, 14.5, 30, -85, 14.5, -30, { isSecret: true, message: "🌿 Hedge Maze Translocation!" });
 }
 
 // Zombies Landscape: Overgrown Citadel (Atmospheric Forest & Survivor Catwalks)
@@ -7258,6 +7676,18 @@ function buildMapLandscape_Zombies(size = 400) {
         addRock(x, 0, z, 3.5, 3.0, 3.5, angle);
         addBush(x + 2, 0, z + 2, 1.2);
     }
+
+    // Easter Eggs & Secret Spots:
+    // 1. Dilapidated Bunker Apex Golden Duck
+    addEasterEgg(0, 54 + 14 + 19, 0, "Last Stand Golden Duck", 500, 'duck');
+    // 2. Survivor Skyway Relic
+    addEasterEgg(0, 22.5, 0, "Survivor Skyway Relic", 400, 'relic');
+    // 3. Hermit Pine Glade Crystals
+    addEasterEgg(145, 1.8, -65, "Hermit Pine Glade Crystals", 350, 'crystals');
+    // 4. Abandoned Quarantine Matrix
+    addEasterEgg(-145, 1.8, 65, "Abandoned Quarantine Matrix", 350, 'matrix');
+    // 5. Secret Bunker Underground Escape Tunnel
+    addSecretPortal(0, 1.5, 28, 110, 20.0, 110, { isSecret: true, message: "🚨 Guardpost Escape Route!" });
 }
 
 // ============================================================================
@@ -7519,44 +7949,65 @@ function animate() {
             const sY = activeWater.surfaceY !== undefined ? activeWater.surfaceY : activeWater.y;
             const waterDepth = sY - playerBody.position.y;
             
-            // Deep water fluid drag
-            playerBody.velocity.x *= 0.92;
-            playerBody.velocity.z *= 0.92;
-            playerBody.velocity.y *= 0.88;
+            // Allow continuous jumps while swimming
+            myJumpsLeft = myJumps;
             
-            // Buoyancy force (balances gravity of -60 so player naturally floats near surface)
-            playerBody.force.y += playerBody.mass * 62.0;
+            // Base fluid damping
+            playerBody.velocity.x *= 0.94;
+            playerBody.velocity.z *= 0.94;
+            playerBody.velocity.y *= 0.92;
+            
+            // Natural neutral buoyancy balances gravity (-60) so swimmer naturally floats near surface
+            playerBody.force.y += playerBody.mass * 60.0;
             
             // Swimming vertical controls:
             const isSwimmingUp = moveUp || keys['Space'] || keys[' '] || false;
             const isSwimmingDown = moveDown || isCrouching || keys['KeyC'] || keys['c'] || keys['C'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['ControlLeft'] || false;
             
-            if (isSwimmingUp) {
-                playerBody.velocity.y = Math.min(playerBody.velocity.y + 16.0 * (1/60), 8.5);
-            }
-            if (isSwimmingDown) {
-                playerBody.velocity.y = Math.max(playerBody.velocity.y - 16.0 * (1/60), -8.5);
+            // Full 3D Camera-Directed Swimming (pitch angle dives & surfaces naturally)
+            const look3D = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+            const right3D = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+            
+            let swimVec = new THREE.Vector3(0, 0, 0);
+            if (moveForward) swimVec.add(look3D);
+            if (moveBackward) swimVec.sub(look3D);
+            if (moveLeft) swimVec.sub(right3D);
+            if (moveRight) swimVec.add(right3D);
+            
+            if (isSwimmingUp) swimVec.y += 1.4;
+            if (isSwimmingDown) swimVec.y -= 1.4;
+            
+            const swimSpeed = mySpeed * 1.12;
+            if (swimVec.lengthSq() > 0.01) {
+                swimVec.normalize();
+                playerBody.velocity.x = swimVec.x * swimSpeed;
+                playerBody.velocity.z = swimVec.z * swimSpeed;
+                playerBody.velocity.y = swimVec.y * (isSwimmingUp || isSwimmingDown ? 15.0 : 12.0);
+            } else {
+                // Natural surface treading: if near surface and idle, stabilize head above water
+                if (Math.abs(playerBody.position.y - (sY - 0.2)) < 0.6 && !isSwimmingDown) {
+                    playerBody.velocity.y = (sY - 0.2 - playerBody.position.y) * 4.0;
+                }
             }
             
-            // Natural surface treading: if near surface and not diving, stabilize head above water
-            if (Math.abs(playerBody.position.y - (sY + 0.1)) < 0.45 && !isSwimmingDown) {
-                playerBody.velocity.y = Math.max(playerBody.velocity.y * 0.7, 0.0);
-            }
-            
-            // Allow leaping out of water when at surface
-            if (playerBody.position.y >= sY - 0.5) {
-                myJumpsLeft = myJumps;
+            // Surface Breach / Ledge Vault Boost:
+            // When near water line, pressing Space powers player out of water onto shore or bridge!
+            if (playerBody.position.y >= sY - 0.9 && isSwimmingUp) {
+                playerBody.velocity.y = Math.max(playerBody.velocity.y, 22.0);
+                if (moveForward) {
+                    playerBody.velocity.x += look3D.x * 12.0;
+                    playerBody.velocity.z += look3D.z * 12.0;
+                }
+                createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
             }
             
             // Submerged bubble particles
-            if (waterDepth > 0.4 && Math.random() < 0.22) {
-                createUnderwaterBubble(playerBody.position.x, playerBody.position.y + 0.4, playerBody.position.z);
+            if (waterDepth > 0.4 && Math.random() < 0.24) {
+                createUnderwaterBubble(playerBody.position.x, playerBody.position.y + 0.35, playerBody.position.z);
             }
             // Surface splash when breaking through water
-            if (Math.abs(waterDepth) < 0.4 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2 || Math.abs(playerBody.velocity.y) > 2)) {
-                if (Math.random() < 0.20) {
-                    createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
-                }
+            if (Math.abs(waterDepth) < 0.45 && Math.random() < 0.18 && (Math.abs(playerBody.velocity.x) > 1 || Math.abs(playerBody.velocity.z) > 1)) {
+                createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
             }
             if (hudSwim) hudSwim.style.display = 'flex';
         } else {
@@ -7671,6 +8122,53 @@ function animate() {
         }
 
 
+        // Check Interactive Secret Portals
+        for (let i = 0; i < activePortals.length; i++) {
+            const portal = activePortals[i];
+            if (portal.cooldown > 0) continue;
+            const dist = Math.hypot(playerBody.position.x - portal.x, playerBody.position.z - portal.z);
+            if (dist < 3.2 && Math.abs(playerBody.position.y - portal.y) < 3.0) {
+                portal.cooldown = 3.5;
+                playerBody.position.set(portal.targetX, portal.targetY, portal.targetZ);
+                playerBody.velocity.set(0, 0, 0);
+                
+                playTone(440, 'sine', 0.15, 0.35);
+                setTimeout(() => playTone(880, 'sine', 0.25, 0.4), 80);
+                
+                if (portal.options.message) {
+                    adminLog(portal.options.message);
+                }
+                
+                if (portal.options.rewardWeapon && !myOwnedWeapons.includes(portal.options.rewardWeapon)) {
+                    myOwnedWeapons.push(portal.options.rewardWeapon);
+                    myInventory[currentSlot] = portal.options.rewardWeapon;
+                    updateHotbarUI();
+                    if (typeof window.equipSlot === 'function') window.equipSlot(currentSlot);
+                }
+            }
+        }
+
+        // Check Easter Egg Collection
+        for (let i = 0; i < activeEasterEggs.length; i++) {
+            const egg = activeEasterEggs[i];
+            if (egg.collected) continue;
+            const dist = Math.hypot(playerBody.position.x - egg.x, playerBody.position.z - egg.z);
+            if (dist < 3.5 && Math.abs(playerBody.position.y - egg.y) < 3.0) {
+                egg.collected = true;
+                scene.remove(egg.mesh);
+                myCoins += egg.rewardCoins;
+                updateUI();
+                saveLocalProfile();
+                
+                playTone(523.25, 'sine', 0.18, 0.4);
+                setTimeout(() => playTone(659.25, 'sine', 0.22, 0.45), 90);
+                setTimeout(() => playTone(783.99, 'sine', 0.32, 0.5), 180);
+                setTimeout(() => playTone(1046.50, 'sine', 0.45, 0.55), 270);
+                
+                adminLog(`🏆 EASTER EGG FOUND: ${egg.name}! (+${egg.rewardCoins} Coins)`);
+            }
+        }
+
         const mapSize = currentMapSize || ((gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300);
         const barrierLimit = (mapSize / 2) + 6.0;
         const isOutOfBarrier = Math.abs(playerBody.position.x) > barrierLimit || 
@@ -7710,7 +8208,7 @@ function animate() {
         }
         inputDir.normalize();
         
-        if (inputDir.lengthSq() > 0) {
+        if (!inWater && inputDir.lengthSq() > 0) {
             let tryVelX = inputDir.x * mySpeed;
             let tryVelZ = inputDir.z * mySpeed;
             
@@ -7734,15 +8232,15 @@ function animate() {
                 playerBody.velocity.x *= 0.94;
                 playerBody.velocity.z *= 0.94;
             }
-        } else if (isCrouching && isGrounded) {
+        } else if (!inWater && isCrouching && isGrounded) {
             playerBody.velocity.x = 0; 
             playerBody.velocity.z = 0;
-        } else if (isGrounded) {
+        } else if (!inWater && isGrounded) {
             playerBody.velocity.x *= 0.82;
             playerBody.velocity.z *= 0.82;
             if (Math.abs(playerBody.velocity.x) < 0.05) playerBody.velocity.x = 0;
             if (Math.abs(playerBody.velocity.z) < 0.05) playerBody.velocity.z = 0;
-        } else {
+        } else if (!inWater) {
             playerBody.velocity.x *= 0.985;
             playerBody.velocity.z *= 0.985;
         }

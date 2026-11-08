@@ -65,30 +65,41 @@ Every gamemode in CyberFort features **exactly 2 dedicated, handcrafted maps** s
 └─────────────────┴──────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
-### 🌲 Procedural High-Poly Environmental Assets & Fortifications
+### 🌲 Procedural High-Poly Environmental Assets, Fortifications & Secret Sanctuaries
 - **Hollow Walkable Monolith & Cyber Towers (`addHollowTower` / `addGreyTower`):**
-  - **Walkable Multi-Story Interiors:** Both Verdant Landscape brutalist monoliths and Classic Cyber towers feature open, walkable hollow interiors spanning 4 full levels.
-  - **Interior Staircases & Ramps:** Wide 30-degree interior ramps with anti-slip treads connect every floor, allowing players to ascend from ground level to high rooftop battlements while maintaining full sprint and combat readiness.
+  - **Walkable Multi-Story Interiors & Open Rooftop Hatchways:** Both Verdant Landscape brutalist monoliths and Classic Cyber towers feature open, walkable hollow interiors spanning 4 full levels. Wide 30-degree interior ramps with anti-slip treads connect every floor. The rooftop deck features an open stairwell hatchway with safety railings, ensuring players can freely run straight out onto the top roof parapet without any ceiling obstruction.
+  - **Central Ground Floor Express Core Lift:** Stepping onto the central ground pad instantly catapults players straight through the tower's core up to the rooftop battlement in seconds.
+  - **High Sniper Roost & Eagle's Nest Pinnacle:** Rooftop elevator jump-pads launch players onto the elevated **Eagle's Nest** (`y = height + 14`) with a panoramic 360° view, defensive blast canopy, and flashing beacon needle.
   - **Tactical Shoot Holes & Murder Slits:** Defensive perimeter walls on every floor feature recessed tactical embrasures and narrow murder slits at chest height, providing superior firing angles onto moats and courtyards while protecting occupants from enemy fire.
-  - **Secret Sniper Entrances & The Eagle's Nest Roost:** Hidden rear alcoves (camouflaged behind hanging ivy vines in Landscape maps or reinforced cyber plating in Classic maps) conceal secret vertical jump-pad conduits. Finding and stepping into the secret conduit instantly launches the player to the highest **Eagle's Nest Sniper Perch** (`y = height + 14`) with a 360-degree panoramic vantage point, defensive blast canopy, and combat discovery achievement banner.
-- **Physical Dug-Out Water Moats & Crystal Waterways (`addMoat` & `addMoatWater`):**
-  - **Excavated Physical Trenches:** Replaced flat water planes with authentic physical dugout moats excavated 6 to 10 units below ground level. Features solid underwater bed collision (`y = -depth`), perimeter retaining embankment walls, and stone access ramps for tactical ingress/egress.
-  - **Sparkling Clear Light-Blue Water Texture:** Generated procedural sparkling clear water using a transparent foundation, light-blue crystalline gradient, dual-layer shimmering caustics network, and specular star glints.
-- **High-Poly 3D Trees (`addTree`):** Bark cylinder trunks with root flares, solid Cannon.js physics trunk collision, and multi-cluster organic canopies (`IcosahedronGeometry` / `DodecahedronGeometry`):
-  - *Deciduous Oaks:* 6 interconnected high-poly foliage domes in rich emerald, forest green, and olive hues.
-  - *Alpine Pines:* 4-tier layered conifer skirts with deep pine needle tones.
-  - *Weeping Willows:* Drooping graceful foliage masses lining the riverbanks and lake shores.
-  - *Zero Floating Snapping:* Foliage meshes and water planes are explicitly excluded from ground raycasting (`userData.noGroundRay = true`), ensuring neither players nor AI bots ever float or snap onto tree canopies in midair.
-- **Granite Boulders & Foliage Bushes (`addRock` & `addBush`):** Natural faceted stone outcroppings providing tactical shooting cover and lush hedge clusters.
+  - **Concealed Secret Entrance to Isolated Ghost Sniper Sanctuary:**
+    - Hidden behind hanging ivy vines or reinforced cyber alcoves lies a secret infiltration portal.
+    - Stepping into the portal warps the player into a completely **Isolated Ghost Sniper Sanctuary** suspended high in the clouds (`y = towerHeight + 28`, offset by 48m).
+    - **Completely Unreachable from Outside:** No ground ladders, ramps, or exterior stairs connect to it; only the player who finds the secret portal can access it.
+    - Equipped with **360-degree murder slits**, a transparent glass observation floor, an exclusive **Ghost Sniper Arsenal** (+150 coins), and a return conduit back to the arena floor.
+
+- **Physical Dug-Out Water Moats & Reflective Crystal Waterways (`addMoat` & `addMoatWater`):**
+  - **Excavated Physical Trenches & Lake Dugouts:** Authentic physical moats excavated 6 to 12 units below ground level. Features solid underwater bed collision (`y = -depth`), perimeter retaining embankment walls, and stone bridges for tactical crossing.
+  - **Reflective Sparkling Water with Zero Grid Lines:** Eliminating artificial crosshatch grid lines, the water utilizes organic circular caustics, star glints, and dynamic procedural normal maps (`roughness: 0.08`, `metalness: 0.52`, `opacity: 0.65`). The surface dynamically mirrors sunlight, neon beams, and towering structures.
+
+- **🏆 Riddled with Easter Eggs & Secret Spots across All 12 Maps:**
+  - Every single map is loaded with secret collectibles, hidden portals, and easter eggs:
+    - **Legendary Golden Ducks (500 Coins):** Perched at extreme apexes (Spire needles, Clocktower peaks, Skybridge crowns, and Hill pinnacles).
+    - **Overclocked Matrix Glitch Nodes (250-350 Coins):** Floating wireframe nodes tucked under ramps, inside granite boulder clusters, and throughout hedge mazes.
+    - **Luminous Cyber Crystals (250-400 Coins):** Submerged deep within riverbeds and subterranean coolant trenches — dive down to collect!
+    - **Ancient Prototype Relics (300-500 Coins):** Stashed inside Isolated Sniper Sanctuaries, bastion vaults, and mountain overlooks.
+  - Features real-time distance collection checks, celebratory 4-tone synth arpeggio fanfares, automatic profile persistence, and server broadcast logs.
+  - Hidden warp conduits linking riverbeds directly to skybridges, flanks, and rooftops!
 
 ---
 
-## 🌊 Interactive Physics, Deep Swimming & Combat Systems
+## 🌊 Interactive Physics, 3D Swimming & Combat Systems
 
-- **Dynamic Deep-Water Swimming Mechanics:**
+- **True 3D Pitch-Directed Deep-Water Swimming Mechanics:**
   - **Submersion Detection & Fluid Buoyancy:** When entering water moats or deep lakes, the physics engine dynamically applies an upward buoyant force (`playerBody.mass * 62.0`) to balance gravity, keeping swimmers naturally buoyant near the surface.
-  - **Full 3D Swim Movement:** Press **Space** to swim upward and breach the surface; press **C** or **Shift** to dive down toward sunken trenches and moat beds.
-  - **Hydrodynamic Drag & Underwater VFX:** Fluid damping smooths horizontal velocity while procedural rising air bubbles (`createUnderwaterBubble`), expanding splash rings, and an on-screen **"🏊 SWIMMING"** HUD badge activate automatically.
+  - **Pitch-Directed 3D Swimming:** Pitch your camera up or down while pressing **W** to swim in 3D space (`look3D`) — look down to dive toward underwater grottos and relics; look up to surface effortlessly.
+  - **Vertical Swim & Surface Breach Vaulting:** Press **Space** to swim rapidly upward (`+1.4` impulse). When reaching the surface, pressing **Space** triggers an explosive surface breach leap (`velocity.y = 22.0`, forward boost `12.0`), allowing players to vault straight out of moats and onto retaining walls without getting trapped.
+  - **Dive Controls:** Press **C** or **Shift** to dive rapidly downward toward sunken secrets.
+  - **Hydrodynamic Drag & Underwater VFX:** Fluid damping smooths horizontal velocity while procedural rising air bubbles, expanding splash rings, and an on-screen **"🏊 SWIMMING"** HUD badge activate automatically.
 - **Dynamic Undulating Water Waves:**
   - Water planes animate sinusoidal undulating vertices in real-time (`geo.computeVertexNormals()`), creating dynamic liquid ripples that refract and mirror the world.
 - **Interactive Concentric Jump Pads:**
