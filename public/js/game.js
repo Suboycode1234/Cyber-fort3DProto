@@ -159,7 +159,8 @@ function optimizeForDedicatedGPU() {
 // Core Three.js & Physics Systems
 let camera, scene, renderer, controls, composer;
 let world, physicsMaterial, playerBody;
-let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false, canJump = false;
+let keys = {};
 
 // Player Stats & State
 let myHp = 100, myMaxHp = 100, myCoins = 0;
@@ -5188,6 +5189,11 @@ function updateUI() {
 }
 
 function onKeyDown(e) {
+    keys[e.code] = true;
+    keys[e.key] = true;
+    if (e.code === 'Space') moveUp = true;
+    if (e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ControlLeft' || e.code === 'ControlRight') moveDown = true;
+
     if (isSmiteCinematicActive) {
         if (e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyQ' || e.code === 'Enter') {
             e.preventDefault();
@@ -5275,6 +5281,11 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
+    keys[e.code] = false;
+    keys[e.key] = false;
+    if (e.code === 'Space') moveUp = false;
+    if (e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ControlLeft' || e.code === 'ControlRight') moveDown = false;
+
     if (e.code === 'KeyR') isWallRunning = false;
     if (e.code === 'KeyF') {
         isHoldingGrapple = false;
@@ -7486,6 +7497,72 @@ function animate() {
             updateGamepads();
         }
         
+        // 1. Water Volume & Deep Swimming Detection (evaluated before ground raycasting)
+        let inWater = false;
+        let activeWater = null;
+        for (let i = 0; i < activeWaterPlanes.length; i++) {
+            const wp = activeWaterPlanes[i];
+            const inX = Math.abs(playerBody.position.x - wp.x) <= (wp.w / 2) + 0.6;
+            const inZ = Math.abs(playerBody.position.z - wp.z) <= (wp.d / 2) + 0.6;
+            const planeSY = wp.surfaceY !== undefined ? wp.surfaceY : wp.y;
+            const planeBY = wp.bedY !== undefined ? wp.bedY : wp.y - 15.0;
+            const inY = playerBody.position.y <= planeSY + 0.9 && playerBody.position.y >= planeBY - 2.0;
+            if (inX && inZ && inY) {
+                inWater = true;
+                activeWater = wp;
+                break;
+            }
+        }
+        
+        const hudSwim = document.getElementById('hud-swim-badge');
+        if (inWater && activeWater) {
+            const sY = activeWater.surfaceY !== undefined ? activeWater.surfaceY : activeWater.y;
+            const waterDepth = sY - playerBody.position.y;
+            
+            // Deep water fluid drag
+            playerBody.velocity.x *= 0.92;
+            playerBody.velocity.z *= 0.92;
+            playerBody.velocity.y *= 0.88;
+            
+            // Buoyancy force (balances gravity of -60 so player naturally floats near surface)
+            playerBody.force.y += playerBody.mass * 62.0;
+            
+            // Swimming vertical controls:
+            const isSwimmingUp = moveUp || keys['Space'] || keys[' '] || false;
+            const isSwimmingDown = moveDown || isCrouching || keys['KeyC'] || keys['c'] || keys['C'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['ControlLeft'] || false;
+            
+            if (isSwimmingUp) {
+                playerBody.velocity.y = Math.min(playerBody.velocity.y + 16.0 * (1/60), 8.5);
+            }
+            if (isSwimmingDown) {
+                playerBody.velocity.y = Math.max(playerBody.velocity.y - 16.0 * (1/60), -8.5);
+            }
+            
+            // Natural surface treading: if near surface and not diving, stabilize head above water
+            if (Math.abs(playerBody.position.y - (sY + 0.1)) < 0.45 && !isSwimmingDown) {
+                playerBody.velocity.y = Math.max(playerBody.velocity.y * 0.7, 0.0);
+            }
+            
+            // Allow leaping out of water when at surface
+            if (playerBody.position.y >= sY - 0.5) {
+                myJumpsLeft = myJumps;
+            }
+            
+            // Submerged bubble particles
+            if (waterDepth > 0.4 && Math.random() < 0.22) {
+                createUnderwaterBubble(playerBody.position.x, playerBody.position.y + 0.4, playerBody.position.z);
+            }
+            // Surface splash when breaking through water
+            if (Math.abs(waterDepth) < 0.4 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2 || Math.abs(playerBody.velocity.y) > 2)) {
+                if (Math.random() < 0.20) {
+                    createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
+                }
+            }
+            if (hudSwim) hudSwim.style.display = 'flex';
+        } else {
+            if (hudSwim) hudSwim.style.display = 'none';
+        }
+
         let isGrounded = false;
         downRay.set(playerBody.position, downVector); 
         downRay.far = 1.8; 
@@ -7593,70 +7670,6 @@ function animate() {
             }
         }
 
-        // Check Water Volume & Deep Swimming Physics
-        let inWater = false;
-        let activeWater = null;
-        for (let i = 0; i < activeWaterPlanes.length; i++) {
-            const wp = activeWaterPlanes[i];
-            const inX = Math.abs(playerBody.position.x - wp.x) <= (wp.w / 2) + 0.6;
-            const inZ = Math.abs(playerBody.position.z - wp.z) <= (wp.d / 2) + 0.6;
-            const sY = wp.surfaceY !== undefined ? wp.surfaceY : wp.y;
-            const bY = wp.bedY !== undefined ? wp.bedY : wp.y - 15.0;
-            const inY = playerBody.position.y <= sY + 0.9 && playerBody.position.y >= bY - 2.0;
-            if (inX && inZ && inY) {
-                inWater = true;
-                activeWater = wp;
-                break;
-            }
-        }
-        
-        const hudSwim = document.getElementById('hud-swim-badge');
-        if (inWater && activeWater) {
-            const sY = activeWater.surfaceY !== undefined ? activeWater.surfaceY : activeWater.y;
-            const waterDepth = sY - playerBody.position.y;
-            
-            // Deep water fluid drag
-            playerBody.velocity.x *= 0.92;
-            playerBody.velocity.z *= 0.92;
-            playerBody.velocity.y *= 0.88;
-            
-            // Buoyancy force (balances gravity of -60 so player naturally floats near surface)
-            playerBody.force.y += playerBody.mass * 62.0;
-            
-            // Swimming vertical controls:
-            // Press Space (Jump) to swim up toward the surface
-            if (keys[' '] || moveUp) {
-                playerBody.velocity.y = Math.min(playerBody.velocity.y + 16.0 * (1/60), 8.5);
-            }
-            // Press C / Shift / Ctrl (Crouch) to dive down toward the moat bed
-            if (keys['c'] || keys['C'] || keys['Shift'] || keys['Control']) {
-                playerBody.velocity.y = Math.max(playerBody.velocity.y - 16.0 * (1/60), -8.5);
-            }
-            
-            // Natural surface treading: if near surface and not diving, stabilize head above water
-            if (Math.abs(playerBody.position.y - (sY + 0.1)) < 0.45 && !keys['c'] && !keys['Shift']) {
-                playerBody.velocity.y = Math.max(playerBody.velocity.y * 0.7, 0.0);
-            }
-            
-            // Allow leaping out of water when at surface
-            if (playerBody.position.y >= sY - 0.5) {
-                myJumpsLeft = myJumps;
-            }
-            
-            // Submerged bubble particles
-            if (waterDepth > 0.4 && Math.random() < 0.22) {
-                createUnderwaterBubble(playerBody.position.x, playerBody.position.y + 0.4, playerBody.position.z);
-            }
-            // Surface splash when breaking through water
-            if (Math.abs(waterDepth) < 0.4 && (Math.abs(playerBody.velocity.x) > 2 || Math.abs(playerBody.velocity.z) > 2 || Math.abs(playerBody.velocity.y) > 2)) {
-                if (Math.random() < 0.20) {
-                    createWaterSplash(playerBody.position.x, sY, playerBody.position.z);
-                }
-            }
-            if (hudSwim) hudSwim.style.display = 'flex';
-        } else {
-            if (hudSwim) hudSwim.style.display = 'none';
-        }
 
         const mapSize = currentMapSize || ((gameState.mode === 'TDM' || gameState.mode === 'CTF' || currentGamemode === 'TDM' || currentGamemode === 'CTF') ? 1200 : 300);
         const barrierLimit = (mapSize / 2) + 6.0;
